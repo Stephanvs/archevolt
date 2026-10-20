@@ -38,7 +38,9 @@ Create a deploy hook for `main` named `Archevolt releases`:
 
 In GitHub, open **Settings > Secrets and variables > Actions**. Add a repository secret named `DOCS_DEPLOY_HOOK_URL` containing that URL. The release workflow calls it after publication. The separate documentation workflow also calls it after a human publishes, edits, or deletes a release, and supports manual runs.
 
-`GITHUB_TOKEN` is optional for this public repository. Blume can fetch the published releases without authentication. To avoid GitHub's lower unauthenticated request limits, optionally add a persistent, read-only token to the Cloudflare build environment. A fine-grained token needs access to `Stephanvs/archevolt` with **Contents: Read-only**. Store it as a Cloudflare secret. The temporary Actions token cannot authenticate a later Cloudflare build.
+Configure `GITHUB_TOKEN` as a secret in both Cloudflare build environments, **Production** and **Previews Base**. Use a persistent fine-grained GitHub token restricted to `Stephanvs/archevolt` with **Contents: Read-only**. The temporary Actions token cannot authenticate a later Cloudflare build.
+
+Public release fetching can work without authentication, but Cloudflare builds should authenticate to avoid depending on anonymous GitHub API access from shared hosts.
 
 The `build` script preserves output in `artifacts/logs/docs-build.txt` and fails if Blume reports an unavailable source or an offline cache. Cloudflare must run this script so a failed release fetch cannot deploy a stale or empty changelog. An accepted hook means a build was requested; check the Cloudflare build log for deployment completion.
 
