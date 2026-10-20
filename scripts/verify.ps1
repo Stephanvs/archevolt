@@ -1,7 +1,11 @@
 #Requires -Version 7.2
 [CmdletBinding()]
 param(
-    [string[]] $Skip = @()
+    [string[]] $Skip = @(),
+    [ValidatePattern('^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$')]
+    [string] $PackageVersion = '0.1.0',
+    [ValidatePattern('^(?:[0-9a-fA-F]{40})?$')]
+    [string] $SourceRevisionId = ''
 )
 
 Set-StrictMode -Version Latest
@@ -17,6 +21,10 @@ $ConsumerLibrary = Join-Path $Root 'tests/PackageLibrary'
 $ConsumerPackages = Join-Path $Artifacts 'consumer-packages'
 $Rid = [System.Runtime.InteropServices.RuntimeInformation]::RuntimeIdentifier
 $ExeSuffix = $IsWindows ? '.exe' : ''
+$BuildArguments = @("-p:Version=$PackageVersion", "-p:ArchevoltPackageVersion=$PackageVersion")
+if ($SourceRevisionId) {
+    $BuildArguments += "-p:SourceRevisionId=$SourceRevisionId"
+}
 
 function Remove-Tree([string[]] $Paths) {
     $comparison = $IsWindows ? [StringComparison]::OrdinalIgnoreCase : [StringComparison]::Ordinal
@@ -75,7 +83,7 @@ function Assert-NoTrimWarnings([string[]] $Output) {
     }
 }
 
-# Archevolt keeps one version across builds, so a cached copy of the same version would satisfy restore with a stale package.
+# A cached copy of the requested version could satisfy restore with a stale package.
 function Reset-Consumer {
     Remove-Tree @($ConsumerPackages, (Join-Path $Consumer 'bin'), (Join-Path $Consumer 'obj'),
         (Join-Path $ConsumerLibrary 'bin'), (Join-Path $ConsumerLibrary 'obj'))
@@ -84,7 +92,7 @@ function Reset-Consumer {
 function Invoke-AotPublishAndRun([string] $Log, [string] $Project, [string] $Name, [string[]] $ExtraArguments = @()) {
     $out = Join-Path $Artifacts "publish/$Name-aot"
     Remove-Tree @($out)
-    $publish = Invoke-Logged $Log 'dotnet' (@('publish', $Project, '-c', 'Release', '-r', $Rid, '-o', $out) + $ExtraArguments)
+    $publish = Invoke-Logged $Log 'dotnet' (@('publish', $Project, '-c', 'Release', '-r', $Rid, '-o', $out) + $BuildArguments + $ExtraArguments)
     Assert-NoTrimWarnings $publish
     if (Test-Path -LiteralPath (Join-Path $out "$Name.dll")) {
         throw "publish output contains $Name.dll, so it is not a native AOT image"
@@ -96,15 +104,15 @@ $Steps = [ordered]@{
     'restore-build' = {
         param([string] $Log)
         Remove-Tree @((Join-Path $Artifacts 'bin'), (Join-Path $Artifacts 'obj'))
-        $null = Invoke-Logged $Log 'dotnet' @('build', 'Archevolt.slnx', '-c', 'Release', '-warnaserror')
+        $null = Invoke-Logged $Log 'dotnet' (@('build', 'Archevolt.slnx', '-c', 'Release', '-warnaserror') + $BuildArguments)
     }
     'test' = {
         param([string] $Log)
-        $null = Invoke-Logged $Log 'dotnet' @('test', '--solution', 'Archevolt.slnx', '-c', 'Release')
+        $null = Invoke-Logged $Log 'dotnet' (@('test', '--solution', 'Archevolt.slnx', '-c', 'Release') + $BuildArguments)
     }
     'archeoids-headless' = {
         param([string] $Log)
-        $output = Invoke-Logged $Log 'dotnet' @('run', '--project', 'samples/Archeoids', '-c', 'Release', '--', '--verify')
+        $output = Invoke-Logged $Log 'dotnet' (@('run', '--project', 'samples/Archeoids', '-c', 'Release') + $BuildArguments + @('--', '--verify'))
         if ($output -notcontains 'archeoids=ok checks=5') {
             throw "stdout lacked 'archeoids=ok checks=5'"
         }
@@ -112,7 +120,7 @@ $Steps = [ordered]@{
     'pack' = {
         param([string] $Log)
         Remove-Tree @($Packages)
-        $null = Invoke-Logged $Log 'dotnet' @('pack', 'src/Archevolt/Archevolt.csproj', '-c', 'Release', '-o', $Packages)
+        $null = Invoke-Logged $Log 'dotnet' (@('pack', 'src/Archevolt/Archevolt.csproj', '-c', 'Release', '-o', $Packages) + $BuildArguments)
     }
     'package-contents' = {
         param([string] $Log)
@@ -141,6 +149,16 @@ $Steps = [ordered]@{
                 $reader.Dispose()
             }
             $nuspec.OuterXml | Add-Content -LiteralPath $Log
+            $metadata = $nuspec.SelectSingleNode('/*[local-name()="package"]/*[local-name()="metadata"]')
+            if ($metadata.id -ne 'Archevolt') {
+                throw "expected package ID Archevolt, found $($metadata.id)"
+            }
+            if ($metadata.version -ne $PackageVersion) {
+                throw "expected package version $PackageVersion, found $($metadata.version)"
+            }
+            if ($SourceRevisionId -and $metadata.repository.commit -ne $SourceRevisionId) {
+                throw "expected repository commit $SourceRevisionId, found $($metadata.repository.commit)"
+            }
             $dependencies = @($nuspec.GetElementsByTagName('dependency') | ForEach-Object { $_.GetAttribute('id') })
             if ($dependencies) {
                 throw "package declares dependencies: $($dependencies -join ', ')"
@@ -153,8 +171,8 @@ $Steps = [ordered]@{
     'consumer-jit' = {
         param([string] $Log)
         Reset-Consumer
-        $null = Invoke-Logged $Log 'dotnet' @('restore', $Consumer)
-        Assert-Ecs (Invoke-Logged $Log 'dotnet' @('run', '--project', $Consumer, '-c', 'Release', '--no-restore'))
+        $null = Invoke-Logged $Log 'dotnet' (@('restore', $Consumer) + $BuildArguments)
+        Assert-Ecs (Invoke-Logged $Log 'dotnet' (@('run', '--project', $Consumer, '-c', 'Release', '--no-restore') + $BuildArguments))
     }
     'consumer-aot' = {
         param([string] $Log)
@@ -167,7 +185,7 @@ $Steps = [ordered]@{
     }
     'performance-smoke' = {
         param([string] $Log)
-        $output = Invoke-Logged $Log 'dotnet' @('run', '--project', 'benchmarks/Archevolt.Benchmarks', '-c', 'Release', '--', '--quick')
+        $output = Invoke-Logged $Log 'dotnet' (@('run', '--project', 'benchmarks/Archevolt.Benchmarks', '-c', 'Release') + $BuildArguments + @('--', '--quick'))
         $measurements = @($output | Where-Object { $_ -match '^generated-(each|query),' })
         if ($measurements.Count -ne 4) {
             throw 'expected serial and parallel allocation measurements for generated Each and query traversal'
@@ -226,4 +244,7 @@ finally {
     $env:Path = $originalPath
 }
 
+if ($failures -eq 0 -and $skipped -notcontains 'package-contents') {
+    Write-Output (Join-Path $Packages "Archevolt.$PackageVersion.nupkg")
+}
 exit ($failures -eq 0 ? 0 : 1)

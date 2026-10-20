@@ -16,5 +16,6 @@
     <Authors>Stephan van Stekelenburg</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/Stephanvs/archevolt</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 </Project>

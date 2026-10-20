@@ -7,8 +7,9 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <IsAotCompatible>true</IsAotCompatible>
     <RestorePackagesPath>$(MSBuildThisFileDirectory)../../artifacts/consumer-packages</RestorePackagesPath>
+    <ArchevoltPackageVersion Condition="'$(ArchevoltPackageVersion)' == ''">0.1.0</ArchevoltPackageVersion>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Archevolt" Version="0.1.0" />
+    <PackageReference Include="Archevolt" Version="$(ArchevoltPackageVersion)" />
   </ItemGroup>
 </Project>
