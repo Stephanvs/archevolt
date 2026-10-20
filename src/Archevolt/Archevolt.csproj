@@ -1,0 +1,29 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <PackageId>Archevolt</PackageId>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <Description>A standalone, Bevy-inspired entity component system for .NET 10 and C# 14.</Description>
+    <IsPackable>true</IsPackable>
+    <IsAotCompatible>true</IsAotCompatible>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);PackGenerator</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+
+  <Import Project="..\..\shared\Scheduling\Scheduling.props" />
+
+  <ItemGroup>
+    <ProjectReference Include="..\Archevolt.Generators\Archevolt.Generators.csproj" ReferenceOutputAssembly="false" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <Target Name="PackGenerator">
+    <MSBuild Projects="@(ProjectReference)" Targets="GetTargetPath" RemoveProperties="TargetFramework">
+      <Output TaskParameter="TargetOutputs" ItemName="_GeneratorAssembly" />
+    </MSBuild>
+    <ItemGroup>
+      <TfmSpecificPackageFile Include="@(_GeneratorAssembly)" PackagePath="analyzers/dotnet/cs" />
+    </ItemGroup>
+  </Target>
+
+</Project>

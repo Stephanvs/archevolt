@@ -1,6 +1,6 @@
 # Archevolt implementation plan
 
-Status: design and staged implementation plan. The production ECS and source generator are not implemented yet.
+Status: implemented. Windows and Linux build/test/package checks and Windows NativeAOT checks pass. The acceptance evidence, performance measurements, and remaining validation limits are recorded in `.audit/acceptance.md`; this document remains the target contract.
 
 Archevolt is a standalone, Bevy-inspired entity component system for .NET 10 and C# 14. Its runtime depends only on the .NET standard library. There are no BRUTAL dependencies, including no dependency on its memory utilities, collections, numerics, or job scheduler.
 
@@ -95,6 +95,8 @@ public static class Program
 ```
 
 `Moving` is a concrete generated query, with a stack-only enumerator and row. `row.Position` returns `ref Position`; `row.Velocity` returns `ref readonly Velocity`. Component field names can have explicit aliases when simple type names collide. Query declarations are reusable across systems, while each system instance owns its own query state and change cursor.
+
+Generated declarations stay in the namespace of their user-written declaration. Global-namespace declarations remain in the global namespace. Do not introduce a separate generated namespace. Put generated invokers and helpers inside their partial owner where possible.
 
 Systems remain ordinary synchronous methods. Parameters declare access, as in Bevy. A system runs once per schedule invocation and controls its own query loops. Resources are separate from entity components. Applications own the main loop and can run fixed-update, simulation, and render-preparation schedules independently.
 

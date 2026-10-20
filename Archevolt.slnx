@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/Archevolt.Benchmarks/Archevolt.Benchmarks.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/Archevolt.Particles/Archevolt.Particles.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Archevolt.Generators/Archevolt.Generators.csproj" />
+    <Project Path="src/Archevolt/Archevolt.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Archevolt.Generators.Tests/Archevolt.Generators.Tests.csproj" />
+    <Project Path="tests/Archevolt.Tests/Archevolt.Tests.csproj" />
+  </Folder>
+</Solution>
