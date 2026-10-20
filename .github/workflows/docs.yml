@@ -1,0 +1,26 @@
+name: Rebuild release documentation
+
+on:
+  release:
+    types: [published, edited, deleted]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rebuild:
+    if: github.event_name == 'release' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: main
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 24
+      - run: npm install --global pnpm@12.5.1
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/release.mjs docs
+        env:
+          DOCS_DEPLOY_HOOK_URL: ${{ secrets.DOCS_DEPLOY_HOOK_URL }}

@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: archevolt-release
+  queue: max
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 24
+      - run: npm install --global pnpm@12.5.1
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run test:release
+      - name: Verify and stage the release
+        id: prepare
+        run: node scripts/release.mjs prepare
+      - name: Sign in to NuGet
+        if: steps.prepare.outputs.publish == 'true'
+        uses: NuGet/login@ebc737b6fc418a6ca0073cf116ec8dc156d8b81e
+        id: nuget
+        with:
+          user: ${{ vars.NUGET_USER || 'Stephanvs' }}
+      - name: Publish the verified package and release notes
+        if: steps.prepare.outputs.publish == 'true'
+        run: node scripts/release.mjs publish
+        env:
+          NUGET_API_KEY: ${{ steps.nuget.outputs.NUGET_API_KEY }}
+      - name: Rebuild the documentation
+        run: node scripts/release.mjs docs
+        env:
+          DOCS_DEPLOY_HOOK_URL: ${{ secrets.DOCS_DEPLOY_HOOK_URL }}
+      - name: Keep verification logs
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: release-verification
+          path: artifacts/logs
+          if-no-files-found: ignore
