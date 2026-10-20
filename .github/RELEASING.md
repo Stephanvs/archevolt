@@ -22,6 +22,8 @@ The policy must permit creation of the first `Archevolt` package and publication
 
 Use the existing Cloudflare project that serves `https://archevolt.dev`. Set its production branch to `main` and build command to `pnpm run build`. For Pages, the build output directory is `dist`. Keep the existing Workers deploy command if the site uses Workers Builds.
 
+The checked-in `wrangler.jsonc` configures the existing `archevolt` Worker to serve `dist`, including Blume's custom `404.html`, and includes the required Preview configuration. The current `npx wrangler deploy` and `npx wrangler preview` commands read this file without extra configuration flags. See [Workers Preview configuration](https://developers.cloudflare.com/workers/previews/configuration/#wrangler-configuration-file).
+
 Set these build variables in Cloudflare's **Settings > Builds > Variables and secrets** for both **Production** and **Previews Base**:
 
 | Variable | Value |
