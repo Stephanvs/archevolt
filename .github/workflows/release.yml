@@ -45,7 +45,7 @@ jobs:
         id: nuget
         with:
           user: ${{ vars.NUGET_USER || 'Stephanvs' }}
-      - name: Publish the verified package and release notes
+      - name: Publish the verified package, symbols, and release notes
         if: steps.prepare.outputs.publish == 'true'
         run: node scripts/release.mjs publish
         env:

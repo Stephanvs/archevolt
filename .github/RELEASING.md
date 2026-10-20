@@ -2,7 +2,7 @@
 
 Pushes to `main` run `.github/workflows/release.yml`. The first package is `Archevolt` 0.1.0. Later releases inspect every commit since the last published release. A breaking `!` or `BREAKING CHANGE:` footer selects a major version, including before 1.0. A `feat` selects a minor version. Every other nonempty range selects a patch version. Direct commits that do not follow Conventional Commits still appear in the notes.
 
-The workflow runs all nine verification gates on Windows, including clean package consumers under JIT and NativeAOT. It then reserves an annotated `vX.Y.Z` tag at the tested commit and uploads the package to a draft GitHub release. Only after the public NuGet package matches the staged package does it publish that release. Blume reads these published release notes as the changelog.
+The workflow runs all nine verification gates on Windows, including clean package consumers under JIT and NativeAOT. It then reserves an annotated `vX.Y.Z` tag at the tested commit and uploads both the `.nupkg` and Source Link `.snupkg` to a draft GitHub release. It publishes the release only after the public NuGet package matches the staged package and NuGet accepts the separate symbol upload. Symbol indexing can finish later. Blume reads these published release notes as the changelog.
 
 ## Configure NuGet trusted publishing
 
@@ -54,13 +54,13 @@ After NuGet accepts the upload, validation and indexing can take up to an hour. 
 
 | Last completed operation | Retry behavior |
 | --- | --- |
-| Verification | Verifies again if no package asset was staged. |
+| Verification | Verifies again if either package asset is missing, checking rebuilt files against the reserved digests. |
 | Tag reservation | Reuses the tag and its notes, then creates or reuses the draft. |
-| Package upload to draft | Downloads and reuses those original package bytes. |
-| NuGet push | Confirms the public package, ignoring only NuGet's repository signature when comparing ZIP entries. |
+| Package upload to draft | Downloads and reuses both original package files, uploading only missing assets. |
+| NuGet push | Confirms the public package, ignoring only NuGet's repository signature when comparing ZIP entries, then pushes symbols separately with duplicate handling. A failed symbol upload leaves the release in draft. |
 | GitHub release publication | Skips all package operations and retries the Cloudflare hook. |
 
-A reserved release at another commit blocks later package versions. Rerun the original run first. The tag's final `Archevolt-Package-SHA256` trailer binds the verified package's sorted entry names and content hashes, excluding the NuGet repository signature. Recovery checks that digest before reusing an asset or accepting a rebuilt package. ZIP timestamps and compression do not affect the digest.
+A reserved release at another commit blocks later package versions. Rerun the original run first. The tag's `Archevolt-Package-SHA256` and `Archevolt-Symbols-SHA256` trailers bind each verified package's sorted entry names and content hashes, excluding the NuGet repository signature. Recovery checks these digests before reusing assets or accepting rebuilt packages. ZIP timestamps and compression do not affect the digests. Older reservations without a symbols trailer retain their original package-only recovery behavior.
 
 Do not move or delete its tag, replace its package asset, or publish the draft manually. A replaced draft asset or a different package already present on NuGet fails confirmation and leaves the GitHub release draft for investigation. Before publication, the driver restores the draft's canonical tag, source commit, title, notes, and stable-release status.
 

@@ -29,6 +29,19 @@ async function fixture(t, { isolatedScripts = false } = {}) {
       response.end(state.assets.get(Number(asset[1])));
       return;
     }
+    if (url.pathname === "/nuget/package") {
+      response.end(state.nugetPackage);
+      return;
+    }
+    if (request.method === "PATCH" && url.pathname === "/repos/fixture/archevolt/releases/2") {
+      const chunks = [];
+      for await (const chunk of request) chunks.push(chunk);
+      const release = state.releases.find((entry) => entry.id === 2);
+      Object.assign(release, JSON.parse(Buffer.concat(chunks)));
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify(release));
+      return;
+    }
     if (url.pathname === "/repos/fixture/archevolt/releases") {
       if (request.method === "POST") {
         const chunks = [];
@@ -46,7 +59,7 @@ async function fixture(t, { isolatedScripts = false } = {}) {
     if (url.pathname === "/uploads/2/assets") {
       const chunks = [];
       for await (const chunk of request) chunks.push(chunk);
-      const asset = { id: 7, name: url.searchParams.get("name") };
+      const asset = { id: 7 + state.assets.size, name: url.searchParams.get("name") };
       state.assets.set(asset.id, Buffer.concat(chunks));
       state.releases.find((release) => release.id === 2).assets.push(asset);
       response.setHeader("content-type", "application/json");
@@ -74,7 +87,7 @@ async function fixture(t, { isolatedScripts = false } = {}) {
     await copyFile(packageScript, join(directory, "scripts/verify-package.ps1"));
     await symlink(fileURLToPath(new URL("../node_modules", import.meta.url)), join(directory, "node_modules"), "junction");
   }
-  const cli = (action) => execute(process.execPath, [script, action], { cwd: directory, env });
+  const cli = (action, extraEnv = {}) => execute(process.execPath, [script, action], { cwd: directory, env: { ...env, ...extraEnv } });
   const commit = (message) => {
     git("commit", "--allow-empty", "-m", message);
     return git("rev-parse", "HEAD");
@@ -169,15 +182,15 @@ test("uncommitted source files cannot be staged as a release", async (t) => {
   assert.deepEqual(repo.state.writes, []);
 });
 
-async function makePackage(directory, name, sha, { signature = false, payload = "assembly", version = "0.1.0" } = {}) {
+async function makePackage(directory, name, sha, { signature = false, payload = "assembly", version = "0.1.0", extension = "nupkg" } = {}) {
   const contents = join(directory, `${name}-contents`);
   await mkdir(contents);
   await writeFile(join(contents, "Archevolt.nuspec"), `<package><metadata><id>Archevolt</id><version>${version}</version><repository type="git" commit="${sha}" /></metadata></package>`);
-  await writeFile(join(contents, "Archevolt.dll"), payload);
+  await writeFile(join(contents, extension === "snupkg" ? "Archevolt.pdb" : "Archevolt.dll"), payload);
   if (signature) await writeFile(join(contents, ".signature.p7s"), "NuGet repository signature");
   const script = join(directory, "zip.ps1");
   await writeFile(script, "param($Source, $Destination)\nAdd-Type -AssemblyName System.IO.Compression.ZipFile\n[System.IO.Compression.ZipFile]::CreateFromDirectory($Source, $Destination)\n");
-  const path = join(directory, `${name}.nupkg`);
+  const path = join(directory, `${name}.${extension}`);
   await execute("pwsh", ["-NoProfile", "-File", script, contents, path]);
   return path;
 }
@@ -186,20 +199,26 @@ async function digestPackage(path, sha) {
   return (await execute("pwsh", ["-NoProfile", "-File", packageScript, "-Package", path, "-PackageVersion", "0.1.0", "-SourceRevisionId", sha, "-Fingerprint"])).stdout.trim();
 }
 
-test("a staged release retry downloads the original package without replacing the asset", async (t) => {
+test("a staged release retry downloads both original packages without replacing assets", async (t) => {
   const repo = await fixture(t);
   const sha = repo.commit("Initial implementation");
   const remote = join(repo.directory, "origin.git");
   repo.git("init", "--bare", remote);
   repo.git("remote", "add", "origin", remote);
   const original = await makePackage(repo.directory, "original", sha);
+  const symbols = await makePackage(repo.directory, "symbols", sha, { extension: "snupkg" });
   const digest = await digestPackage(original, sha);
-  repo.git("tag", "-a", "v0.1.0", "-m", `The tested release notes.\n\nArchevolt-Package-SHA256: ${digest}`);
+  const symbolsDigest = await digestPackage(symbols, sha);
+  repo.git("tag", "-a", "v0.1.0", "-m", `The tested release notes.\n\nArchevolt-Package-SHA256: ${digest}\nArchevolt-Symbols-SHA256: ${symbolsDigest}`);
   repo.state.assets.set(7, await readFile(original));
-  repo.state.releases.push({ id: 2, tag_name: "v0.1.0", draft: true, assets: [{ id: 7, name: "Archevolt.0.1.0.nupkg" }] });
+  repo.state.assets.set(8, await readFile(symbols));
+  repo.state.releases.push({ id: 2, tag_name: "v0.1.0", draft: true, assets: [
+    { id: 7, name: "Archevolt.0.1.0.nupkg" }, { id: 8, name: "Archevolt.0.1.0.snupkg" },
+  ] });
   const result = await repo.cli("prepare");
   assert.match(result.stdout, /"publish": true/u);
   assert.deepEqual(await readFile(join(repo.directory, "artifacts/release/Archevolt.0.1.0.nupkg")), await readFile(original));
+  assert.deepEqual(await readFile(join(repo.directory, "artifacts/release/Archevolt.0.1.0.snupkg")), await readFile(symbols));
   assert.deepEqual(repo.state.writes, []);
   assert.equal(repo.git("--git-dir", remote, "rev-parse", "v0.1.0^{commit}"), sha);
 });
@@ -224,11 +243,13 @@ test("a lost upload response resumes the original draft and package after verifi
   repo.git("init", "--bare", remote);
   repo.git("remote", "add", "origin", remote);
   const original = await makePackage(repo.directory, "seed", sha);
+  const symbols = await makePackage(repo.directory, "symbols", sha, { extension: "snupkg" });
   await writeFile(join(repo.directory, "scripts/verify.ps1"), `param($PackageVersion, $SourceRevisionId)
 $ErrorActionPreference = 'Stop'
 Add-Content -LiteralPath verification-runs.txt -Value $PackageVersion
 $null = New-Item -ItemType Directory -Force -Path artifacts/packages
 Copy-Item -LiteralPath seed.nupkg -Destination "artifacts/packages/Archevolt.$PackageVersion.nupkg"
+Copy-Item -LiteralPath symbols.snupkg -Destination "artifacts/packages/Archevolt.$PackageVersion.snupkg"
 `);
   repo.state.failUploadResponse = true;
   await assert.rejects(repo.cli("prepare"), (error) => /GitHub POST \/uploads\/2\/assets returned HTTP 500/u.test(error.stderr));
@@ -245,9 +266,12 @@ Copy-Item -LiteralPath seed.nupkg -Destination "artifacts/packages/Archevolt.$Pa
   assert.doesNotMatch(recoveredNotes, /Archevolt-Package-SHA256/u);
   assert.deepEqual(repo.state.assets.get(7), await readFile(original));
   assert.match((await repo.cli("prepare")).stdout, /"publish": true/u);
-  assert.equal((await readFile(join(repo.directory, "verification-runs.txt"), "utf8")).trim(), "0.1.0");
+  assert.deepEqual(repo.state.assets.get(8), await readFile(symbols));
+  assert.match((await repo.cli("prepare")).stdout, /"publish": true/u);
+  assert.deepEqual((await readFile(join(repo.directory, "verification-runs.txt"), "utf8")).trim().split(/\r?\n/u), ["0.1.0", "0.1.0"]);
   assert.deepEqual(repo.state.writes, [
     { method: "POST", path: "/repos/fixture/archevolt/releases" },
+    { method: "POST", path: "/uploads/2/assets" },
     { method: "POST", path: "/uploads/2/assets" },
   ]);
 });
@@ -263,4 +287,55 @@ test("NuGet duplicate confirmation permits a signature and rejects changed bytes
   assert.match((await compare(signed)).stdout, /matches the staged package/u);
   await assert.rejects(compare(changed), (error) => /differs from the staged package/u.test(error.stderr));
   await assert.rejects(compare(wrongSource), (error) => /does not match Archevolt/u.test(error.stderr));
+});
+
+test("publication retries both packages and keeps the release draft when the symbol upload fails", async (t) => {
+  const repo = await fixture(t);
+  const sha = repo.commit("fix: publish debug symbols");
+  const packagePath = await makePackage(repo.directory, "original", sha);
+  const symbolsPath = await makePackage(repo.directory, "symbols", sha, { extension: "snupkg" });
+  const digest = await digestPackage(packagePath, sha);
+  const symbolsDigest = await digestPackage(symbolsPath, sha);
+  repo.git("tag", "-a", "v0.1.0", "-m", `Release notes.\n\nArchevolt-Package-SHA256: ${digest}\nArchevolt-Symbols-SHA256: ${symbolsDigest}`);
+  repo.state.assets.set(7, await readFile(packagePath));
+  repo.state.assets.set(8, await readFile(symbolsPath));
+  repo.state.nugetPackage = await readFile(packagePath);
+  repo.state.releases.push({ id: 2, tag_name: "v0.1.0", draft: true, assets: [
+    { id: 7, name: "Archevolt.0.1.0.nupkg" }, { id: 8, name: "Archevolt.0.1.0.snupkg" },
+  ] });
+  await writeFile(join(repo.directory, "transport.mjs"), `
+import childProcess from "node:child_process";
+import { syncBuiltinESMExports } from "node:module";
+import { appendFileSync, existsSync } from "node:fs";
+import { basename } from "node:path";
+const originalExec = childProcess.execFileSync;
+childProcess.execFileSync = (file, args, options) => {
+  if (file !== "dotnet") return originalExec(file, args, options);
+  if (args[0] !== "nuget" || args[1] !== "push") throw new Error("Unexpected dotnet command");
+  appendFileSync("pushes.txt", basename(args[2]) + "\\n");
+  if (args[2].endsWith(".snupkg") && existsSync("fail-symbols")) throw new Error("Symbol server unavailable");
+  return "";
+};
+syncBuiltinESMExports();
+const originalFetch = globalThis.fetch;
+globalThis.fetch = (url, options) => {
+  if (String(url).startsWith("https://api.nuget.org/v3-flatcontainer/")) {
+    return originalFetch(new URL("nuget/package", process.env.GITHUB_API_URL), options);
+  }
+  if (!String(url).startsWith(process.env.GITHUB_API_URL)) throw new Error("Unexpected external request");
+  return originalFetch(url, options);
+};
+`);
+  const env = { NODE_OPTIONS: "--import=./transport.mjs", NUGET_API_KEY: "fixture-key" };
+  await writeFile(join(repo.directory, "fail-symbols"), "");
+  await assert.rejects(repo.cli("publish", env), (error) => /NuGet symbol upload failed/u.test(error.stderr));
+  assert.equal(repo.state.releases[0].draft, true);
+  assert.deepEqual(repo.state.writes, []);
+  await rm(join(repo.directory, "fail-symbols"));
+  await repo.cli("publish", env);
+  assert.equal(repo.state.releases[0].draft, false);
+  assert.deepEqual((await readFile(join(repo.directory, "pushes.txt"), "utf8")).trim().split("\n"), [
+    "Archevolt.0.1.0.nupkg", "Archevolt.0.1.0.snupkg",
+    "Archevolt.0.1.0.nupkg", "Archevolt.0.1.0.snupkg",
+  ]);
 });

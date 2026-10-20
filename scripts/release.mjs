@@ -132,10 +132,10 @@ async function releaseState() {
       throw new Error(`${reserved.tag} does not follow published ${previousTag}. Inspect the release history.`);
     }
     const annotation = git("for-each-ref", "--format=%(contents)", `refs/tags/${reserved.tag}`);
-    const binding = /^(?<notes>[\s\S]+)\n\nArchevolt-Package-SHA256: (?<digest>[0-9a-f]{64})$/u.exec(annotation);
+    const binding = /^(?<notes>[\s\S]+)\n\nArchevolt-Package-SHA256: (?<digest>[0-9a-f]{64})(?:\nArchevolt-Symbols-SHA256: (?<symbolsDigest>[0-9a-f]{64}))?$/u.exec(annotation);
     if (!binding) throw new Error(`${reserved.tag} has no valid package content digest. Inspect it before recovery.`);
     return {
-      kind: "reserved", ...reserved, packageDigest: binding.groups.digest,
+      kind: "reserved", ...reserved, packageDigest: binding.groups.digest, symbolsDigest: binding.groups.symbolsDigest,
       plan: { sourceSha, previousTag, version: reserved.tag.slice(1), notes: binding.groups.notes },
     };
   }
@@ -159,18 +159,21 @@ function verifyPackage(path, plan, actual, expectedDigest) {
   ]).trim();
 }
 
-function packagePath(plan) {
-  return join(releaseDirectory, `Archevolt.${plan.version}.nupkg`);
+function releasePackages(state) {
+  const packages = [{ extension: "nupkg", digest: state.packageDigest }];
+  if (state.kind === "new" || state.symbolsDigest) {
+    packages.push({ extension: "snupkg", digest: state.symbolsDigest });
+  }
+  return packages.map((entry) => ({ ...entry, name: `Archevolt.${state.plan.version}.${entry.extension}` }));
 }
 
-async function downloadAsset(release, plan, expectedDigest) {
-  const name = `Archevolt.${plan.version}.nupkg`;
+async function downloadAsset(release, plan, { name, digest }) {
   const asset = release.assets.find((entry) => entry.name === name);
   if (!asset) return null;
-  const path = packagePath(plan);
+  const path = join(releaseDirectory, name);
   const bytes = await github(`repos/${repository}/releases/assets/${asset.id}`, { binary: true });
   writeFileSync(path, bytes);
-  verifyPackage(path, plan, undefined, expectedDigest);
+  verifyPackage(path, plan, undefined, digest);
   return path;
 }
 
@@ -187,16 +190,21 @@ async function prepare() {
   const { plan } = state;
   const tag = `v${plan.version}`;
   let release = state.release;
-  let digest = state.packageDigest;
-  let path = release ? await downloadAsset(release, plan, digest) : null;
-  if (!path) {
+  const packages = releasePackages(state);
+  for (const entry of packages) {
+    entry.path = release ? await downloadAsset(release, plan, entry) : null;
+  }
+  if (packages.some((entry) => !entry.path)) {
     command("pwsh", ["-NoProfile", "-File", join(import.meta.dirname, "verify.ps1"), "-PackageVersion", plan.version, "-SourceRevisionId", plan.sourceSha], { stdio: "inherit" });
-    path = resolve(`artifacts/packages/Archevolt.${plan.version}.nupkg`);
-    digest = verifyPackage(path, plan, undefined, digest);
+    for (const entry of packages) {
+      const builtPath = resolve("artifacts/packages", entry.name);
+      entry.digest = verifyPackage(builtPath, plan, undefined, entry.digest);
+      entry.path ||= builtPath;
+    }
   }
   if (state.kind === "new") {
     const notesPath = join(releaseDirectory, "notes.md");
-    writeFileSync(notesPath, `${plan.notes}\n\nArchevolt-Package-SHA256: ${digest}\n`);
+    writeFileSync(notesPath, `${plan.notes}\n\nArchevolt-Package-SHA256: ${packages[0].digest}\nArchevolt-Symbols-SHA256: ${packages[1].digest}\n`);
     git("-c", "user.name=github-actions[bot]", "-c", "user.email=41898282+github-actions[bot]@users.noreply.github.com", "tag", "--cleanup=verbatim", "-a", tag, plan.sourceSha, "-F", notesPath);
   }
   git("push", "origin", `refs/tags/${tag}:refs/tags/${tag}`);
@@ -204,10 +212,11 @@ async function prepare() {
     release = await github(`repos/${repository}/releases`, { method: "POST",
       body: { tag_name: tag, target_commitish: plan.sourceSha, name: tag, body: plan.notes, draft: true, prerelease: false } });
   }
-  if (!release.assets.some((asset) => asset.name === `Archevolt.${plan.version}.nupkg`)) {
+  for (const entry of packages) {
+    if (release.assets.some((asset) => asset.name === entry.name)) continue;
     const upload = new URL(release.upload_url.replace(/\{.*$/u, ""));
-    upload.searchParams.set("name", `Archevolt.${plan.version}.nupkg`);
-    await github(upload.href, { method: "POST", body: readFileSync(path) });
+    upload.searchParams.set("name", entry.name);
+    await github(upload.href, { method: "POST", body: readFileSync(entry.path) });
   }
   output({ publish: true, version: plan.version, source_sha: plan.sourceSha, tag });
 }
@@ -220,13 +229,17 @@ async function publish() {
   }
   mkdirSync(releaseDirectory, { recursive: true });
   const { plan, release } = state;
-  const path = await downloadAsset(release, plan, state.packageDigest);
-  if (!path) throw new Error(`Draft v${plan.version} has no staged package. Rerun prepare.`);
+  const packages = releasePackages(state);
+  for (const entry of packages) {
+    entry.path = await downloadAsset(release, plan, entry);
+    if (!entry.path) throw new Error(`Draft v${plan.version} has no staged ${entry.name}. Rerun prepare.`);
+  }
+  const path = packages[0].path;
   const apiKey = process.env.NUGET_API_KEY;
   if (!apiKey) throw new Error("NUGET_API_KEY is missing. Run NuGet/login before publishing.");
   let pushFailed = false;
   try {
-    command("dotnet", ["nuget", "push", path, "--source", "https://api.nuget.org/v3/index.json", "--api-key", apiKey, "--skip-duplicate"], { stdio: "inherit" });
+    command("dotnet", ["nuget", "push", path, "--source", "https://api.nuget.org/v3/index.json", "--api-key", apiKey, "--skip-duplicate", "--no-symbols"], { stdio: "inherit" });
   } catch {
     pushFailed = true;
   }
@@ -248,6 +261,13 @@ async function publish() {
     if (attempt + 1 < confirmationAttempts) await new Promise((resume) => setTimeout(resume, confirmationIntervalMs));
   }
   if (!confirmed) throw new Error(`NuGet did not expose ${url} after ${confirmationAttempts} attempts. The release remains draft. Rerun this workflow.${pushFailed ? " The push command also failed." : ""}`);
+  for (const entry of packages.filter((item) => item.extension === "snupkg")) {
+    try {
+      command("dotnet", ["nuget", "push", entry.path, "--source", "https://api.nuget.org/v3/index.json", "--api-key", apiKey, "--skip-duplicate"], { stdio: "inherit" });
+    } catch {
+      throw new Error(`NuGet symbol upload failed for ${entry.name}. The release remains draft. Rerun this workflow.`);
+    }
+  }
   await github(`repos/${repository}/releases/${release.id}`, { method: "PATCH", body: {
     tag_name: state.tag, target_commitish: plan.sourceSha, name: state.tag,
     body: plan.notes, prerelease: false, draft: false, make_latest: "true",
