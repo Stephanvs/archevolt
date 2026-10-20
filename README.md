@@ -1,4 +1,6 @@
-# Archevolt
+<h1 align="center">
+  <img src=".github/assets/archevolt-geometric.png" alt="Archevolt" width="720">
+</h1>
 
 Archevolt is a headless archetype ECS for .NET 10 and C# 14. Write components as structs and systems as C# methods. Its source generator builds typed queries, bundles, modules, and schedules; the runtime handles native component storage and serial or bounded parallel execution.
 
