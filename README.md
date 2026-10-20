@@ -1,10 +1,24 @@
 # Archevolt
 
-Archevolt is a headless archetype ECS for .NET 10 and C# 14. A Roslyn incremental generator supplies typed queries, bundles, system invocation, modules, and schedules. The runtime owns native component storage and serial or bounded parallel execution.
+Archevolt is a headless archetype ECS for .NET 10 and C# 14. Write components as structs and systems as C# methods. Its source generator builds typed queries, bundles, modules, and schedules; the runtime handles native component storage and serial or bounded parallel execution.
 
 The runtime has no package dependencies. The `Archevolt` package includes its generator. Generated declarations stay in your namespace and partial types.
 
 See the [API reference](docs/api.md) for the supported declarations and runtime operations, and the [acceptance record](.audit/acceptance.md) for validation against [PLAN.md](PLAN.md).
+
+## See it in action
+
+[![Archeoids gameplay with a cyan ship, drifting asteroids, and a score and lives HUD.](samples/Archeoids/archeoids.png)](samples/Archeoids/README.md)
+
+Play [Archeoids](samples/Archeoids/README.md), an Asteroids-style game with neon vector graphics, splitting rocks, and particle explosions. Archevolt runs the gameplay; Silk.NET handles the window, input, and rendering.
+
+Every ship, rock, bullet, and particle is an ECS entity. Explore the sample to see spawn bundles, deferred commands, independent message readers, and invulnerability tags working together in a playable game.
+
+```powershell
+dotnet run --project samples/Archeoids -c Release
+```
+
+Use **A/D** or **Left/Right** to turn, **W** or **Up** to thrust, and **Space** to fire. See the [sample guide](samples/Archeoids/README.md) for controls, requirements, and a walkthrough of the code. Run with `-- --verify` for gameplay checks without a window.
 
 ## Run a system
 
@@ -100,7 +114,7 @@ The SDK is pinned in `global.json`. Run verification with PowerShell 7.2 or newe
 ./scripts/verify.ps1
 ```
 
-The script builds and tests, packs the library, checks package contents, runs a clean consumer with a separate library module, publishes NativeAOT consumers, and measures warmed serial and parallel allocations. Windows NativeAOT publishing requires the Visual Studio C++ build tools.
+The script builds and tests, runs the headless Archeoids checks, packs the library, checks package contents, runs a clean consumer with a separate library module, publishes NativeAOT consumers, and measures warmed serial and parallel allocations. Windows NativeAOT publishing requires the Visual Studio C++ build tools.
 
 Run the short movement measurement or the BenchmarkDotNet suite:
 

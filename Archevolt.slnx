@@ -3,6 +3,7 @@
     <Project Path="benchmarks/Archevolt.Benchmarks/Archevolt.Benchmarks.csproj" />
   </Folder>
   <Folder Name="/samples/">
+    <Project Path="samples/Archeoids/Archeoids.csproj" />
     <Project Path="samples/Archevolt.Particles/Archevolt.Particles.csproj" />
   </Folder>
   <Folder Name="/src/">

@@ -102,6 +102,13 @@ $Steps = [ordered]@{
         param([string] $Log)
         $null = Invoke-Logged $Log 'dotnet' @('test', '--solution', 'Archevolt.slnx', '-c', 'Release')
     }
+    'archeoids-headless' = {
+        param([string] $Log)
+        $output = Invoke-Logged $Log 'dotnet' @('run', '--project', 'samples/Archeoids', '-c', 'Release', '--', '--verify')
+        if ($output -notcontains 'archeoids=ok checks=5') {
+            throw "stdout lacked 'archeoids=ok checks=5'"
+        }
+    }
     'pack' = {
         param([string] $Log)
         Remove-Tree @($Packages)
