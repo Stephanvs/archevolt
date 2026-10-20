@@ -24,13 +24,13 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GITHUB_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+      - uses: actions/setup-dotnet@v6.0.0
         with:
           global-json-file: global.json
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+      - uses: actions/setup-node@v7.1.0
         with:
           node-version: 24
       - run: npm install --global pnpm@12.5.1
@@ -41,7 +41,7 @@ jobs:
         run: node scripts/release.mjs prepare
       - name: Sign in to NuGet
         if: steps.prepare.outputs.publish == 'true'
-        uses: NuGet/login@ebc737b6fc418a6ca0073cf116ec8dc156d8b81e
+        uses: NuGet/login@v1.2.0
         id: nuget
         with:
           user: ${{ vars.NUGET_USER || 'Stephanvs' }}
@@ -56,7 +56,7 @@ jobs:
           DOCS_DEPLOY_HOOK_URL: ${{ secrets.DOCS_DEPLOY_HOOK_URL }}
       - name: Keep verification logs
         if: always()
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: release-verification
           path: artifacts/logs
