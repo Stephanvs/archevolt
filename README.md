@@ -4,7 +4,7 @@ Archevolt is a headless archetype ECS for .NET 10 and C# 14. Write components as
 
 The runtime has no package dependencies. The `Archevolt` package includes its generator. Generated declarations stay in your namespace and partial types.
 
-See the [API reference](docs/api.md) for the supported declarations and runtime operations, and the [acceptance record](.audit/acceptance.md) for validation against [PLAN.md](PLAN.md).
+See the [documentation site](docs/index.mdx) for the supported declarations and runtime operations, and the [acceptance record](.audit/acceptance.md) for validation against [PLAN.md](PLAN.md).
 
 ## See it in action
 
@@ -105,6 +105,18 @@ Resources are borrowed by default. `InsertOwnedResource` transfers disposal resp
 Message readers keep independent cursors. Call `world.AdvanceMessages()` once per outer update to rotate retention. Messages and removal records survive two rotations. Readers expose `MissedCount` when records expire before they are read.
 
 After an execution fault or cancellation, all active workers join before the call returns. Completed writes remain. Inspect those effects before calling `schedule.Reset()` to acknowledge the failure.
+
+## Documentation site
+
+The `docs/` folder is a [Blume](https://useblume.dev) site. It needs Node.js 22.19 or newer.
+
+```bash
+pnpm install
+pnpm dev
+pnpm build
+```
+
+`pnpm dev` serves the docs with hot reload. `pnpm build` writes static HTML to `dist/`.
 
 ## Build and verify
 

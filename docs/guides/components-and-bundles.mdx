@@ -1,0 +1,40 @@
+---
+title: Components and bundles
+description: Declare components, tags, and bundles.
+sidebar:
+  order: 1
+---
+
+```csharp
+using Archevolt;
+
+[Component, TrackChanges]
+public readonly record struct Position(float X);
+
+[Component]
+public readonly record struct Velocity(float X);
+
+[Component]
+public readonly struct Frozen;
+
+[Bundle]
+public readonly partial record struct Particle(Position Position, Velocity Velocity);
+```
+
+## Components
+
+Components are unmanaged value types. The generator rejects reference-containing components and components that implement `IDisposable` (diagnostic [`AV002`](/reference/diagnostics)). Native pointers and external handles remain the application's responsibility.
+
+A component with no instance fields is a **tag**. Tags support membership and tracked change filters, but have no readable or writable value column. Test for one with `Has<T>`.
+
+Prefer `readonly record struct` components. A writable `ref` still lets a system replace the whole value with a `with` expression. Other unmanaged structs are supported when their layout or update style is useful.
+
+Add `[TrackChanges]` to enable [added and changed stamps](/guides/change-tracking).
+
+## Bundles
+
+A bundle describes insertion into an entity. Bundles are unmanaged partial structs. Their generated `Descriptor` and `IBundle<T>` implementation flatten nested bundles, and a repeated component type is an error. A bundle does not provide entity identity.
+
+Spawn a bundle with `world.Spawn<TBundle>(in bundle)` or `Commands.Spawn<TBundle>(in bundle)`. `InsertBundle` adds or replaces bundle members and preserves unrelated components.
+
+Bundles used by spawn commands must be included in a [module](/guides/modules) explicitly.

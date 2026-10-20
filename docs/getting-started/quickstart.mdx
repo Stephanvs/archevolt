@@ -1,0 +1,93 @@
+---
+title: Quickstart
+description: Declare components, a system, a module, and a schedule, then run them against a world.
+sidebar:
+  order: 2
+---
+
+This program moves one particle along the X axis and prints the result.
+
+```csharp
+using Archevolt;
+
+namespace Example;
+
+[Component]
+public readonly record struct Position(float X);
+
+[Component]
+public readonly record struct Velocity(float X);
+
+[Bundle]
+public readonly partial record struct Particle(Position Position, Velocity Velocity);
+
+public static partial class Motion
+{
+    [Each]
+    public static void Move(scoped ref Position position, scoped in Velocity velocity)
+    {
+        position = position with { X = position.X + velocity.X };
+    }
+}
+
+[EcsModule, IncludeSystems(typeof(Motion)), IncludeBundle<Particle>]
+public static partial class GameEcs;
+
+[Schedule, Run(typeof(Motion), nameof(Motion.Move), Order = 0)]
+public sealed partial class Simulation;
+
+public static class Program
+{
+    public static void Main()
+    {
+        using var world = new WorldBuilder().AddModule(GameEcs.Module).Build();
+        var entity = world.Spawn(new Particle(new Position(0), new Velocity(1)));
+        using var simulation = Simulation.Create(world);
+        simulation.Run();
+        Console.WriteLine(world.Get<Position>(entity).X);
+    }
+}
+```
+
+This prints `1`.
+
+## What each piece does
+
+1. **`[Component]`** marks an unmanaged struct as a component. A `readonly record struct` is the preferred style.
+2. **`[Bundle]`** describes a group of components to insert into an entity together.
+3. **`[Each]`** marks a system that runs once per matching entity. `scoped ref` requests write access and `scoped in` requests read access.
+4. **`[EcsModule]`** collects systems and bundles into a generated `ModuleDescriptor`, exposed as `GameEcs.Module`.
+5. **`WorldBuilder`** registers modules and builds a world. Registration is fixed at construction.
+6. **`[Schedule]` with `[Run]`** declares which systems run and in what order. `Simulation.Create(world)` returns a `BoundSchedule`.
+
+## Use a named query
+
+For loops that need optional components, filters, or several rows, declare a named query.
+
+```csharp
+[Query, Write<Position>, Read<Velocity>]
+public readonly ref partial struct Moving;
+
+public static partial class Motion
+{
+    [EcsSystem]
+    public static void MoveAll(scoped Moving moving)
+    {
+        foreach (var row in moving)
+        {
+            ref var position = ref row.Position;
+            position = position with { X = position.X + row.Velocity.X };
+        }
+    }
+}
+```
+
+Register it once in the schedule with a `[Run]` declaration. See [Queries and filters](/guides/queries) for the full set of terms.
+
+## Respect the lifetimes
+
+- Build, run, mutate, and dispose a world on its owner thread.
+- Dispose every bound schedule before disposing its world.
+- Systems receive scoped capabilities. Structural changes inside systems go through [`Commands`](/guides/commands).
+
+The [particle sample](https://github.com/Stephanvs/archevolt/blob/main/samples/Archevolt.Particles/Program.cs) exercises both system forms and verifies membership changes over 100,000 entities.

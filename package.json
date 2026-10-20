@@ -1,0 +1,16 @@
+{
+  "name": "archevolt-docs",
+  "version": "1.0.0",
+  "description": "Archevolt documentation site",
+  "scripts": {
+    "dev": "blume dev",
+    "build": "blume build",
+    "preview": "blume preview",
+    "doctor": "blume doctor"
+  },
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "blume": "^2.2.4"
+  }
+}

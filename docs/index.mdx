@@ -1,0 +1,53 @@
+---
+title: Introduction
+description: Archevolt is a headless archetype ECS for .NET 10 and C# 14. Write components as structs and systems as C# methods.
+---
+
+Archevolt is a headless archetype entity component system for .NET 10 and C# 14. You write components as structs and systems as C# methods. A source generator builds typed queries, bundles, modules, and schedules. The runtime handles native component storage and serial or bounded parallel execution.
+
+The runtime has no package dependencies. The `Archevolt` package includes its generator, and generated declarations stay in your namespace and partial types.
+
+## A system in a few lines
+
+```csharp
+using Archevolt;
+
+[Component]
+public readonly record struct Position(float X);
+
+[Component]
+public readonly record struct Velocity(float X);
+
+public static partial class Motion
+{
+    [Each]
+    public static void Move(scoped ref Position position, scoped in Velocity velocity)
+    {
+        position = position with { X = position.X + velocity.X };
+    }
+}
+```
+
+The generated loop calls `Motion.Move` directly for every entity that has both components. See the [Quickstart](/getting-started/quickstart) for the complete program.
+
+## What you get
+
+- **Typed queries.** Named queries produce concrete rows with `ref` and `ref readonly` access. Nothing is boxed or looked up by type at run time.
+- **Declarative schedules.** Order systems with `Order`, `Before`, `After`, stages, and sets. The planner adds conservative ordering where access conflicts.
+- **Native storage.** Components live in dense, aligned, structure-of-arrays chunks grouped by archetype.
+- **Opt-in parallelism.** Serial execution is the reference behavior. Enable a bounded worker pool and mark eligible systems as partitioned.
+- **Change tracking, resources, messages.** Track added and changed components, share resources, and send messages with independent reader cursors.
+- **AOT-friendly.** The package runs under JIT, trimming, and NativeAOT.
+
+## Where to go next
+
+- [Installation](/getting-started/installation) covers requirements and the package.
+- [Quickstart](/getting-started/quickstart) builds and runs your first world.
+- [Concepts](/concepts/architecture) explains how storage, generation, and scheduling fit together.
+- [Guides](/guides/components-and-bundles) walk through each feature.
+- [Reference](/reference/diagnostics) lists diagnostics and the runtime API.
+- [Archeoids](/samples/archeoids) is a playable Asteroids-style game built on Archevolt.
+
+:::note
+Archevolt is at version 0.1.0. Benchmark results are workload-specific, and the [performance page](/performance) lists the validation limits.
+:::

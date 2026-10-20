@@ -1,0 +1,39 @@
+---
+title: World and entities
+description: Build a world and spawn, insert, read, and remove entity data.
+sidebar:
+  order: 3
+---
+
+`new WorldBuilder().AddModule(GameEcs.Module).Build()` creates a world owned by the calling thread. Registration is fixed at construction.
+
+## Operations
+
+| API | Behavior |
+| --- | --- |
+| `Spawn()` | Creates an entity with no components. |
+| `Spawn<TBundle>(in bundle)` | Creates an entity with the registered bundle's components. |
+| `Insert<T>(entity, in value)` | Adds or replaces one registered component. |
+| `InsertBundle<TBundle>(entity, in bundle)` | Adds or replaces bundle members and preserves unrelated components. |
+| `Remove<T>(entity)` | Removes a component and returns whether it was present. An invalid entity is an error. |
+| `Despawn(entity)` | Removes a live entity. Returns `false` for a non-live handle. |
+| `Contains(entity)` | Reports whether the handle identifies a live entity in this world. |
+| `Has<T>(entity)` | Tests component membership on a live entity. |
+| `Get<T>(entity)` / `TryGet<T>(entity, out value)` | Returns a component copy. Tags use `Has<T>`. |
+| `NativeBytes` | Reports native bytes held by the world's chunk allocator. |
+
+## Entity identity
+
+An `Entity` contains `WorldId`, `Index`, and `Generation`. `default(Entity)` is null. A stale handle cannot identify a later occupant of its slot or an entity in another world.
+
+## Threading
+
+World inspection and immediate mutation require an idle world and its owner thread. Capturing a `World` inside a system does not bypass those checks. Structural edits during execution use [`Commands`](/guides/commands).
+
+## Capacity
+
+`Reserve(entities, commandBytesPerProducer, messagesPerType)` reserves initial capacities. Capacities can grow. `WithChunkBytes(bytes)` sets the target chunk size, with a minimum of 64 bytes. Large component layouts can require a larger allocation for a single row.
+
+## Disposal
+
+Dispose every bound schedule before its world. World disposal joins its workers before releasing native storage and owned resources. Disposal attempts every owned cleanup and aggregates cleanup failures. Repeated disposal is safe.

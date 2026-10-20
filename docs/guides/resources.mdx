@@ -1,0 +1,48 @@
+---
+title: Resources and local state
+description: Share singleton data between systems and keep per-system state.
+sidebar:
+  order: 6
+---
+
+```csharp
+[Resource, TrackChanges]
+public readonly record struct FrameTime(float DeltaSeconds);
+
+[Resource(OwnerThread = true)]
+public readonly record struct WindowHandle(nint Value);
+```
+
+## System parameters
+
+| Parameter | Capability |
+| --- | --- |
+| `scoped Res<T>` | Readonly access to a required unmanaged resource. |
+| `scoped ResMut<T>` | Writable access to a required unmanaged resource. |
+| `scoped OptionalRes<T>` | Readonly access to a registered resource that may be absent. `HasValue` guards `Value`. |
+| `scoped ManagedRes<T>` | Access to a managed resource class, exclusively on the owner thread. |
+| `scoped Local<T>` | Mutable `Value` belonging to this system instance, initially `default(T)`. |
+
+## Presence and registration
+
+Required resources must be present at binding and before each execution. An optional resource still requires type registration. `Res<T>` and `OptionalRes<T>` expose `IsAdded` and `IsChanged` when [tracking](/guides/change-tracking) is enabled.
+
+## Owner-thread affinity
+
+`[Resource(OwnerThread = true)]` keeps an unmanaged resource's system on the owner thread. Disjoint worker work may overlap that system. Managed resources and reference-containing locals make their system exclusive.
+
+## Ownership
+
+| Call | Ownership |
+| --- | --- |
+| `world.InsertResource(value)` | The world borrows the value. |
+| `world.InsertOwnedResource(value)` | Transfers ownership of a managed `IDisposable` value to the world. |
+| `world.RemoveResource<T>()` | Removes and disposes an owned value once. |
+| `world.TakeResource<T>()` | Removes a value and transfers its ownership to the caller. |
+| `world.GetResource<T>()` | Returns the resource value. |
+
+Replacing an owned resource disposes the previous one once.
+
+## Local state
+
+Each repeated registration and each bound schedule has independent locals, query change cursors, and message-reader cursors.

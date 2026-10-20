@@ -1,0 +1,31 @@
+---
+title: Messages and removal records
+description: Send messages between systems and observe component removals.
+sidebar:
+  order: 9
+---
+
+## Registering a message
+
+An unmanaged `[Message]` value is registered through an included system parameter, `IncludeMessage<T>`, or `WorldBuilder.AddMessage<T>()`.
+
+## Writers and readers
+
+- `scoped MessageWriter<T>` sends values with `Send(in value)`.
+- `scoped MessageReader<T>` enumerates unread retained values and exposes `MissedCount`.
+
+Readers own independent cursors. Writers conflict with readers and with other writers of the same message type. An explicitly ordered reader sees a writer's messages in the same schedule execution.
+
+## Retention
+
+`world.SendMessage(in value)` sends while the world is idle. `world.AdvanceMessages()` rotates retention while idle. The current and previous rotations remain available, so a message expires on the second rotation after it was sent.
+
+:::note
+Schedules never rotate buffers automatically. Call `world.AdvanceMessages()` once per outer update.
+:::
+
+A reader that falls behind sees skipped records in `MissedCount`.
+
+## Removal records
+
+`scoped RemovedComponents<T>` enumerates `Removal` records with `Entity` and `Tick`. It has the same retention and missed-count behavior as messages. Recording for a component begins when its removal reader is bound.

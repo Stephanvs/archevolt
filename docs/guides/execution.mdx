@@ -1,0 +1,46 @@
+---
+title: Execution, faults, and lifetimes
+description: Run schedules serially or in parallel, and handle cancellation and failure.
+sidebar:
+  order: 11
+---
+
+## Serial and parallel
+
+Serial execution is the default. `WorldBuilder.UseParallelExecution(maxConcurrency)` enables the world-owned reusable worker pool. The positive limit includes the owner thread.
+
+A bound schedule borrows this pool, so disposing one schedule does not stop other schedules. Resource and component conflicts determine which systems can run together, and `[Each(Partitioned = true)]` opts eligible systems into [chunk partitioning](/guides/systems#partitioning).
+
+```csharp
+using var world = new WorldBuilder()
+    .AddModule(GameEcs.Module)
+    .UseParallelExecution(maxConcurrency: 4)
+    .Build();
+```
+
+:::note
+Parallel dispatch has material overhead on tiny workloads. Measure before enabling it. See [Performance](/performance).
+:::
+
+## Running and cancelling
+
+`schedule.Run(CancellationToken)` completes synchronously. Cancellation stops new work between systems or chunk ranges. Active user code must return before join completes.
+
+## Faults
+
+The owner reports execution failures after active workers join. `AggregateException` contains `SystemExecutionException` entries with the instance, system name, and chunk range.
+
+Failure or cancellation sets `IsFaulted`. Completed writes, local changes, message cursors, and earlier command playback remain. Unapplied commands are discarded.
+
+`Reset()` acknowledges partial effects and permits another run. It does not retry automatically. Inspect the partial effects first. Disposal is allowed after a fully joined failure without resetting first.
+
+## Ownership rules
+
+- World and schedule control require the world's owner thread.
+- Concurrent or nested runs against one world, and disposal during execution, are rejected.
+- Every bound schedule must be disposed before its world.
+- World disposal joins its workers before releasing native storage and owned resources.
+
+## What the compiler cannot prove
+
+Default or expired execution tokens fail validation. `scoped` and ref-struct signatures restrict escape, but they do not make captured mutable statics, unsafe pointers, or external object graphs safe for parallel use. Those remain application responsibilities.

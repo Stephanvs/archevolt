@@ -1,0 +1,30 @@
+---
+title: Deferred commands
+description: Record structural changes inside systems and play them back at schedule barriers.
+sidebar:
+  order: 8
+---
+
+`scoped Commands` records structural operations in a system's private command buffer.
+
+| Command | Behavior at playback |
+| --- | --- |
+| `Spawn<TBundle>(in bundle)` | Materializes the returned reserved entity handle with its bundle. |
+| `Insert<T>(entity, in value)` | Adds or replaces one component. |
+| `InsertBundle<TBundle>(entity, in bundle)` | Adds or replaces bundle members. |
+| `Remove<T>(entity)` / `Despawn(entity)` | Performs a strict removal. Missing targets or components are errors. |
+| `TryRemove<T>(entity)` / `TryDespawn(entity)` | Allows an absent target or component without an error. |
+
+## Reserved handles
+
+`Spawn` returns a reserved handle that can appear in later commands. It remains absent from queries until playback. Discarding an unmaterialized spawn invalidates its reservation.
+
+## When commands become visible
+
+Planner barriers join active workers, play buffers in stable plan order and local recording order, and refresh query caches. A dependent consumer observes its producer's commands, including transitive dependencies and skipped conditions. The schedule also flushes at completion.
+
+## Failure
+
+Playback stops at the first failure. Earlier effects remain. The unapplied suffix is discarded, and unmaterialized reservations are cancelled.
+
+`CommandPlaybackException` identifies `Producer` and `CommandIndex`. Playback does not roll back or retry.

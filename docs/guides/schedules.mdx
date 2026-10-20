@@ -1,0 +1,92 @@
+---
+title: Schedules and conditions
+description: Order systems with Run declarations, stages, sets, and run conditions.
+sidebar:
+  order: 10
+---
+
+```csharp
+public static partial class Conditions
+{
+    [RunCondition]
+    public static bool Enabled(scoped OptionalRes<FrameTime> time) => time.HasValue;
+}
+
+[Schedule]
+[Run(typeof(Motion), nameof(Motion.Move), Order = 0,
+    ConditionOwner = typeof(Conditions), Condition = nameof(Conditions.Enabled))]
+public sealed partial class Simulation;
+```
+
+`Simulation.Create(world)` returns a `BoundSchedule`.
+
+## Run declarations
+
+Every `Run` declaration requires a unique `Order` and instance key. The default key is the qualified owner and method name. Repeated registrations use distinct `Instance` values.
+
+`Order` breaks ties among ready nodes. It does not replace an explicit semantic dependency.
+
+| Property | Meaning |
+| --- | --- |
+| `Order` | Tie-breaker among ready nodes. |
+| `Instance` | Distinguishes repeated registrations of one method. |
+| `Before` / `After` | Dependency on an instance key or an unambiguous method name. |
+| `BeforeOwner` / `AfterOwner` | Qualifies the method reference. |
+| `Stage` / `Set` | Group membership. |
+| `Condition` / `ConditionOwner` | Run condition. `ConditionOwner` defaults to the run's owner. |
+
+## Stages and sets
+
+`[Stage("name", Order = n)]` and `[SystemSet("name", Order = n)]` define ordered groups. Names and orders must be unique within each group kind.
+
+- Declaring stages requires every run to name a known stage. Set membership is optional.
+- Earlier groups precede later groups through dependency edges.
+- Contradictory group and explicit dependencies are cycles ([`AV007`](/reference/diagnostics)).
+
+## Conflicts
+
+When two systems conflict and have no explicit dependency, the planner supplies a conservative order and reports the warning [`AV008`](/reference/diagnostics). Add `Before` or `After` to make the order intentional.
+
+## Run conditions
+
+A `[RunCondition]` method is synchronous, static, and returns `bool`. It may read queries, unmanaged resources, messages, and removal records, and mutate its own locals. Writable world access, managed resources, and commands are rejected. The condition's required types must be included in the world's module registrations.
+
+The condition evaluates once when its node is ready, after predecessor barriers. A false result completes dependency ordering without running the body or advancing the body's change cursor. Successful false evaluations advance the condition's own cursor. A partitioned body still evaluates its condition only once.
+
+## Runtime composition
+
+The runtime exposes the same planner:
+
+```csharp
+using var schedule = BoundSchedule.Bind(world,
+    [Motion.Move_Descriptor, MotionKernel.Move_Descriptor],
+    [new Archevolt.Scheduling.EdgeInput(0, 1)],
+    instanceKeys: ["motion", "kernel"],
+    orders: [0, 1],
+    conditions: [Conditions.Enabled_Descriptor, null]);
+```
+
+Edge endpoints index the supplied system array. Optional keys, orders, and conditions arrays must match its length. Omitting orders uses array order. Build a runtime condition descriptor with `AsCondition()` and a factory returning `ConditionBody`.
+
+## Inspecting the plan
+
+`BoundSchedule.Plan` exposes immutable node order, edges with reasons, batch membership, barriers, and diagnostics. Both serial and parallel execution follow this plan.
+
+## Timing
+
+`schedule.EnableTiming()` enables preallocated inspection metrics. `schedule.Timings` returns a readonly span of immutable `SystemTiming` entries in input-system order. Both operations require an idle world and its owner thread. Calling `EnableTiming` clears previous measurements, including when timing is disabled with `EnableTiming(false)`.
+
+Metrics describe the most recent run:
+
+| Metric | Meaning |
+| --- | --- |
+| `BodyInvocations` | Executed callbacks. A partitioned invocation contributes one per dispatched partition. |
+| `BodyFailures` | Callbacks that threw. |
+| `SkippedByCondition` | Whether a false condition skipped the body. |
+| `ConditionEvaluations`, `ConditionFailures` | Describe the node's separate condition instance. |
+| `BodyElapsedTicks`, `BodyElapsed` | Sum of callback durations across partitions, excluding time waiting for dispatch. This is combined execution time, not wall-clock latency. |
+| `ConditionElapsedTicks`, `ConditionElapsed` | Condition evaluation time. |
+
+Raw ticks use `System.Diagnostics.Stopwatch.Frequency`, and the `TimeSpan` properties expose the same values.
+
+Measurements are available after joined failures as well as successful runs. A copied `SystemTiming` is a value snapshot. The returned span is a view that changes after the next measured run or timing configuration change. Disabled timing reports zero counters and durations, takes no timestamps, and allocates no measurement objects during execution.

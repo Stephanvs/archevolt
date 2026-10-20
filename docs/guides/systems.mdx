@@ -1,0 +1,42 @@
+---
+title: Systems and traversal
+description: Write systems with EcsSystem and Each, and opt traversals into partitioning.
+sidebar:
+  order: 5
+---
+
+## `[EcsSystem]`
+
+`[EcsSystem]` marks a synchronous static `void` method. Supported parameters are scoped [named queries](/guides/queries) and the capabilities listed in [Resources and local state](/guides/resources), [Commands](/guides/commands), and [Messages](/guides/messages).
+
+Private methods are callable through generated invokers inside their partial owner. Overloads, generic methods, async methods, iterators, and ref returns are rejected (diagnostic [`AV005`](/reference/diagnostics)).
+
+## `[Each]`
+
+```csharp
+public static partial class MotionKernel
+{
+    [Each(Partitioned = true), Without<Frozen>]
+    public static void Move(scoped ref Position position, scoped in Velocity velocity)
+    {
+        position = position with { X = position.X + velocity.X };
+    }
+}
+```
+
+`[Each]` calls the method once per matching entity.
+
+- Use `scoped ref T` for writes and `scoped in T` for reads.
+- An optional `Entity` parameter supplies identity.
+- Membership and change-filter attributes apply to the method.
+- Components passed by value are rejected.
+
+## Partitioning
+
+`[Each]` executes one traversal by default. `[Each(Partitioned = true)]` opts into splitting matched chunks across the world's execution budget, which matters once [parallel execution](/guides/execution) is enabled.
+
+Partitioned methods accept component refs, `Entity`, and readonly unmanaged resources, including optional resources without owner-thread affinity. Locals, commands, messages, managed resources, mutable resources, and named queries are excluded. An unsafe partition request is reported as [`AV010`](/reference/diagnostics).
+
+## Descriptors
+
+The generator exposes each method as `Owner.MethodName_Descriptor`. Runtime composition accepts these descriptors through `BoundSchedule.Bind`. See [Schedules](/guides/schedules#runtime-composition).

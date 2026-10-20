@@ -1,0 +1,27 @@
+---
+title: Change tracking
+description: Detect added and changed components and resources.
+sidebar:
+  order: 7
+---
+
+`[TrackChanges]` enables added and changed stamps for a component or resource. A change filter on an untracked type is an error ([`AV006`](/reference/diagnostics)).
+
+## What a system observes
+
+A system observes stamps satisfying `lastSuccessfulRun < stamp <= thisRun`. A skipped or failed body does not advance its last successful tick. Conditions have separate ticks and cursors.
+
+## What stamps a change
+
+| Operation | Added | Changed |
+| --- | --- | --- |
+| Insertion | Stamped | Stamped |
+| Replacement | Preserved | Stamped, including equal-value replacement |
+| Moving between archetypes | Preserved | Preserved for surviving components |
+| Readonly access | Unchanged | Unchanged |
+
+A generated writable row property stamps before returning its ref. `[Each]` stamps tracked writable refs before the method call. `ResMut<T>.Value` follows the same rule.
+
+:::note
+Taking a writable ref counts as a change even when the method leaves the value unchanged. Use `Read<T>` or `scoped in` when you do not intend to write.
+:::

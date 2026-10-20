@@ -1,0 +1,40 @@
+---
+title: Validation and limits
+description: What has been verified, how to reproduce it, and what has not been tested.
+sidebar:
+  order: 7
+---
+
+The implementation is validated against [PLAN.md](https://github.com/Stephanvs/archevolt/blob/main/PLAN.md) through eight gates in `scripts/verify.ps1`. The [acceptance record](https://github.com/Stephanvs/archevolt/blob/main/.audit/acceptance.md) holds the evidence.
+
+## Verified
+
+- Release build with zero warnings, and 127 tests, on Windows and on Ubuntu 24.04.
+- Storage, entity identity, migration, reservations, and disposal, including a fixed-seed randomized comparison against a dictionary model.
+- Generated queries, namespace placement, diagnostics `AV001` through `AV010`, and incremental generator caching.
+- Planner ordering, disjoint query proofs, global resource conflicts, cycles, and barriers.
+- Parallel execution under worker-pool stress across budgets of 1, 2, and 4.
+- Packed-package consumers under JIT, trimming, and NativeAOT.
+- Zero managed allocations on warmed traversal, filter, and dispatch paths.
+
+## Reproduce
+
+```powershell
+./scripts/verify.ps1
+```
+
+Logs are written to `artifacts/logs`. For a Linux check, build, test, and pack in a clean copy:
+
+```bash
+dotnet build Archevolt.slnx -c Release -warnaserror
+dotnet test --solution Archevolt.slnx -c Release
+dotnet pack src/Archevolt/Archevolt.csproj -c Release -o artifacts/packages
+dotnet run --project tests/PackageConsumer -c Release
+```
+
+## Known limits
+
+- A forced worker `Thread.Start` failure is not tested. Partial-start cleanup was inspected, but that failure path has no runtime proof.
+- Linux NativeAOT was not run. NativeAOT evidence is Windows x64.
+- Structural churn allocates, and parallel dispatch has material overhead on tiny workloads.
+- Benchmark baselines are exploratory. They do not establish numeric release regression limits or cross-platform performance guarantees.

@@ -1,0 +1,30 @@
+---
+title: Diagnostics
+description: Compiler diagnostics AV001 through AV010 reported by the Archevolt generator.
+sidebar:
+  order: 1
+---
+
+All generator diagnostics are errors except `AV008`, which is a warning. Runtime descriptor composition also rejects invalid metadata and dependencies.
+
+| Code | Contract |
+| --- | --- |
+| `AV001` | Invalid partial declaration, containing owner, or generated member shape. |
+| `AV002` | Unsupported managed or owning component, bundle, resource, or message type. |
+| `AV003` | Duplicate fields or members, conflicting query terms, or contradictory membership. |
+| `AV004` | Mutable query, resource, message, or command capabilities overlap. |
+| `AV005` | Unsupported system signature, parameter, method shape, or tag value access. |
+| `AV006` | Change filter references an untracked component. |
+| `AV007` | Unknown or ambiguous system, condition, group, dependency, duplicate order or key, or schedule cycle. |
+| `AV008` | Conflicting systems have no explicit dependency. The planner supplies a conservative order. |
+| `AV009` | Missing or incompatible module or system metadata, registration, or export. |
+| `AV010` | Unsafe partition request or condition capability. |
+
+## Common fixes
+
+- **AV001.** Make the declaration and every containing type `partial`, and make containing types non-generic.
+- **AV002.** Use unmanaged structs for components. Use a [managed resource](/guides/resources) for reference types.
+- **AV004.** Prove that mutable queries cannot overlap with `With<T>` and `Without<T>`, or split the work into separate systems. See [Queries and filters](/guides/queries).
+- **AV006.** Add `[TrackChanges]` to the component or resource. See [Change tracking](/guides/change-tracking).
+- **AV007.** Check `Before`, `After`, `Order`, and instance keys on your [`Run` declarations](/guides/schedules).
+- **AV008.** Add an explicit `Before` or `After` dependency between the two systems.

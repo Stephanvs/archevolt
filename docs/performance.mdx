@@ -1,0 +1,43 @@
+---
+title: Performance
+description: Allocation behavior, benchmark results, and the limits of what they show.
+sidebar:
+  order: 6
+---
+
+The measured fixed-capacity traversal paths allocate zero managed bytes, including the four-worker paths. The BenchmarkDotNet comparison places generated `[Each]` near a handwritten baseline at 100,000 entities, while the named query costs about twice as much.
+
+:::note
+This is an initial baseline with visible timing variation. It is not a numeric regression policy or a claim of general superiority over another ECS.
+:::
+
+## Dense movement at 100,000 entities
+
+All four cases use the same `Position` and `Velocity` structs, initial values, and three scalar updates, with untracked components. The handwritten baseline has no scheduler. Archevolt's numbers include schedule dispatch, resource access, lease checks, and query traversal.
+
+| Case | Mean (µs) | Mean (ns/entity) | Managed B/op |
+| --- | ---: | ---: | ---: |
+| Handwritten | 104.279 | 1.043 | 0 |
+| Generated `[Each]` | 108.866 | 1.089 | 0 |
+| Generated named query | 210.411 | 2.104 | 0 |
+| Arch 2.1.0 inline query | 146.054 | 1.461 | 0 |
+
+Measured on an AMD Ryzen 9 5950X, Windows 11, .NET 10.0.13, Release, BenchmarkDotNet 0.15.8. Arch owns its own managed chunk storage, so the two engines do not offer identical alignment, scheduling, or access guarantees.
+
+## Things that cost
+
+- Structural churn allocates.
+- Small workloads can cost more to dispatch in parallel than to run serially.
+- Writable access stamps a change on [tracked components](/guides/change-tracking) even when the value is equal.
+
+## Reproduce
+
+```powershell
+dotnet run --project benchmarks/Archevolt.Benchmarks -c Release -- --quick
+dotnet run --project benchmarks/Archevolt.Benchmarks -c Release -- --filter "*MovementBenchmarks*" --job short
+./scripts/measure.ps1 -Mode All
+```
+
+`measure.ps1` runs the matrix, BenchmarkDotNet comparison, and JIT disassembly (`-Mode Matrix`, `Bdn`, or `Disassembly` run them separately). It fails if any command fails or BenchmarkDotNet does not execute all four comparison cases.
+
+The full [performance report](https://github.com/Stephanvs/archevolt/blob/main/.audit/performance-final.md) records the workload matrix, handwritten and Arch comparisons, allocations, native storage, generated code sizes, and JIT and AOT inspection.

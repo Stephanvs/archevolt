@@ -1,0 +1,45 @@
+---
+title: Architecture
+description: How Archevolt divides work between the source generator and the runtime.
+sidebar:
+  order: 1
+---
+
+The generator knows what a system can access. The runtime knows which entities currently have those components. Archevolt generates the work known at compilation and keeps runtime handling for changing entity populations and actual execution.
+
+## Generator and runtime
+
+The runtime owns entity allocation, native storage, query caches, parameter binding, command playback, and execution. The generator emits typed declarations and direct system calls. Generated code stays in your namespace and partial owner.
+
+| Generated at compile time | Handled at run time |
+| --- | --- |
+| Named query rows, enumerators, and shapes | Which archetypes currently match a query |
+| Direct calls to your system methods | Chunk traversal and partitioning |
+| Bundle descriptors and module manifests | World registration and validation |
+| Declarative schedule plans | Binding, barriers, and command playback |
+
+Diagnostics `AV001` through `AV010` report contract violations during compilation. See [Diagnostics](/reference/diagnostics).
+
+## Storage
+
+An entity contains its world identity, slot, and generation. A paged entity table records free, reserved, alive, and retired states.
+
+A frozen registry assigns world-local component IDs. Archetypes contain canonical sorted component IDs and native structure-of-arrays chunks. Moving an entity between archetypes copies retained values and ticks, initializes additions, and repairs the moved entity after swap removal.
+
+## Safe access
+
+`SystemBody` holds bindings for one system instance. `SystemBinder` validates bindings against the descriptor. `SystemRun` is a runtime-created ref struct carrying the instance, invocation epoch, tick interval, and assigned chunk range.
+
+`QueryState` belongs to one instance. The owner refreshes its matching-archetype cache before dispatch. A chunk exposes bounded readonly spans, bounded untracked writable spans, and tracked accessors that stamp before returning writable references.
+
+Column binding checks component identity, access mode, and tracking policy. Equal byte sizes do not establish type identity, and callers cannot supply arbitrary span lengths.
+
+## Scheduling
+
+The portable planner compiles into both the runtime and the generator. It orders explicit dependencies first, then orients conflicts forward in that order. Per-query access clauses retain required and excluded sets, while resource and message conflicts remain global.
+
+Both executors consume the same batches and deferred-command barriers. Bound schedules own local state, reader cursors, query bindings, command buffers, and successful-run ticks. A world owns the reusable worker pool, and native storage is released only after workers join.
+
+## Further reading
+
+The [implementation plan](https://github.com/Stephanvs/archevolt/blob/main/PLAN.md) records the full design, the alternatives considered, and the release gates. The [runtime and generated-code contract](https://github.com/Stephanvs/archevolt/blob/main/.audit/design.md) records corrections made during implementation.

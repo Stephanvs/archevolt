@@ -1,0 +1,40 @@
+---
+title: Modules
+description: Group systems, bundles, resources, and messages into a generated module.
+sidebar:
+  order: 2
+---
+
+```csharp
+[EcsModule]
+[IncludeSystems(typeof(Motion))]
+[IncludeBundle<Particle>]
+[IncludeResource<FrameTime>]
+public static partial class GameEcs;
+```
+
+`GameEcs.Module` is a generated `ModuleDescriptor`. A module includes the components, resources, and messages referenced by its included systems.
+
+| Attribute | Effect |
+| --- | --- |
+| `IncludeSystems(typeof(T))` | Includes the systems declared on `T`. |
+| `IncludeBundle<T>` | Includes a bundle. Required for bundles used by spawn commands. |
+| `IncludeComponent<T>` | Registers an otherwise unused component. |
+| `IncludeResource<T>` | Registers an otherwise unused resource. |
+| `IncludeMessage<T>` | Registers an otherwise unused message type. |
+| `IncludeModule(typeof(OtherModule))` | Includes another generated module. |
+| `IncludeModule<T>` | The generic form, for module types that C# permits as generic arguments. |
+
+## Cross-assembly modules
+
+Generated modules expose versioned manifests for referenced assemblies, so a library can ship its own module and an application can include it. Compatible component and resource registrations share one world registration.
+
+These cases fail validation:
+
+- Registering the same named module twice.
+- Conflicting component or resource metadata.
+- Incompatible module ABIs.
+
+## Runtime registration
+
+The equivalent runtime API is `ModuleBuilder`, with `Component<T>`, `Tag<T>`, `Bundle<T>`, `Resource<T>`, `ManagedResource<T>`, `Message<T>`, `System`, and `Include` methods. `WorldBuilder` also accepts individual component, bundle, resource, managed-resource, and message registrations.

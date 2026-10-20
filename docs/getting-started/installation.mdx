@@ -1,0 +1,39 @@
+---
+title: Installation
+description: Requirements and package setup for Archevolt.
+sidebar:
+  order: 1
+---
+
+## Requirements
+
+- .NET 10 SDK and a project targeting `net10.0`
+- C# 14 (`<LangVersion>14</LangVersion>` or the default for .NET 10)
+
+The repository pins its SDK in `global.json`.
+
+## Add the package
+
+```bash
+dotnet add package Archevolt
+```
+
+The single `Archevolt` package contains the runtime library and the Roslyn source generator, which ships under `analyzers/dotnet/cs`. The runtime depends only on the .NET standard library, so there is nothing else to install.
+
+## Partial declarations
+
+The generator adds members to your declarations, so types it touches must be `partial`. Generated code stays in the namespace and partial owner of the original declaration. Global declarations stay global. Containing types must also be non-generic partial declarations.
+
+## Build from source
+
+```powershell
+git clone https://github.com/Stephanvs/archevolt.git
+cd archevolt
+./scripts/verify.ps1
+```
+
+`verify.ps1` needs PowerShell 7.2 or newer. It builds and tests, runs the headless Archeoids checks, packs the library, checks package contents, runs a clean consumer with a separate library module, publishes NativeAOT consumers, and measures warmed serial and parallel allocations.
+
+:::note
+Windows NativeAOT publishing requires the Visual Studio C++ build tools.
+:::

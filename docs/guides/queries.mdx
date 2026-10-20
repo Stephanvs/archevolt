@@ -1,0 +1,57 @@
+---
+title: Queries and filters
+description: Declare named queries with typed rows, optional components, and filters.
+sidebar:
+  order: 4
+---
+
+```csharp
+[Query, Write<Position>, Optional<Velocity>, Without<Frozen>, Changed<Position>]
+public readonly ref partial struct Moving;
+
+public static partial class Motion
+{
+    [EcsSystem]
+    public static void Move(scoped Moving moving)
+    {
+        foreach (var row in moving)
+        {
+            ref var position = ref row.Position;
+            if (row.HasVelocity)
+                position = position with { X = position.X + row.Velocity.X };
+        }
+    }
+}
+```
+
+A named query must be a `readonly ref partial struct`. Its generated `Shape`, enumerator, and `Row` are concrete types.
+
+## Terms
+
+| Declaration | Membership and row access |
+| --- | --- |
+| `[Read<T>]` | Requires `T`. The row property returns `ref readonly T`. |
+| `[Write<T>]` | Requires `T`. The row property returns `ref T`. |
+| `[Optional<T>]` | Does not require `T`. `HasT` reports presence. The readonly property throws when absent. |
+| `[With<T>]` | Requires membership without exposing a value property. |
+| `[Without<T>]` | Excludes entities with `T`. |
+| `[Added<T>]` | Requires tracked `T` and selects additions in this system instance's change interval. |
+| `[Changed<T>]` | Requires tracked `T` and selects changes in this system instance's change interval. |
+
+Filters combine with AND. An optional-only query matches entities without the optional components. `Added<T>` and `Changed<T>` do not expose a value property unless a value access is also declared.
+
+Optional writes and general Boolean filters are not supported.
+
+## Row members
+
+Every row exposes `Entity`. Value properties use the component's simple name by default. `Name = "Alias"` on `Read<T>`, `Write<T>`, or `Optional<T>` changes the property name. An optional alias also changes its presence property to `HasAlias`.
+
+## Several mutable queries
+
+A system with multiple mutable query parameters needs a structural proof that their entity sets cannot overlap. `With<Player>` against `Without<Player>` proves separation. Different required tags alone do not. Otherwise the compiler reports [`AV004`](/reference/diagnostics).
+
+The planner retains every query's predicate separately, so systems with disjoint queries can still run together. Resource and message conflicts remain global.
+
+## Lifetimes
+
+Queries, rows, component refs, and capability wrappers belong to the current synchronous invocation. `scoped` and ref-struct signatures restrict escape. Default query values fail validation.
