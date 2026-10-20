@@ -3,6 +3,8 @@
   <PropertyGroup>
     <PackageId>Archevolt</PackageId>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://archevolt.dev</PackageProjectUrl>
+    <PackageTags>ecs;entity-component-system;gamedev;source-generator;nativeaot</PackageTags>
     <Description>A standalone, Bevy-inspired entity component system for .NET 10 and C# 14.</Description>
     <IsPackable>true</IsPackable>
     <IsAotCompatible>true</IsAotCompatible>

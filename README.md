@@ -122,6 +122,8 @@ pnpm build
 
 ## Build and verify
 
+Package publication and changelog updates run from `main`. See [release setup and recovery](.github/RELEASING.md) for NuGet trust and Cloudflare configuration.
+
 The SDK is pinned in `global.json`. Run verification with PowerShell 7.2 or newer:
 
 ```powershell

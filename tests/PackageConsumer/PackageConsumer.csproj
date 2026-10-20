@@ -8,10 +8,11 @@
     <LangVersion>14</LangVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <RestorePackagesPath>$(MSBuildThisFileDirectory)../../artifacts/consumer-packages</RestorePackagesPath>
+    <ArchevoltPackageVersion Condition="'$(ArchevoltPackageVersion)' == ''">0.1.0</ArchevoltPackageVersion>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Archevolt" Version="0.1.0" />
+    <PackageReference Include="Archevolt" Version="$(ArchevoltPackageVersion)" />
     <ProjectReference Include="../PackageLibrary/PackageLibrary.csproj" />
   </ItemGroup>
 

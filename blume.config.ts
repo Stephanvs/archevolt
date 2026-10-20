@@ -1,11 +1,28 @@
 import { defineConfig } from "blume";
+import { filesystem, githubReleases } from "blume/sources";
 
 export default defineConfig({
   title: "Archevolt",
   description:
     "A headless archetype ECS for .NET 10 and C# 14, with a source generator for typed queries, bundles, modules, and schedules.",
   content: {
-    root: "docs",
+    sources: [
+      filesystem({ root: "docs" }),
+      githubReleases({
+        owner: "Stephanvs",
+        repo: "archevolt",
+        prefix: "changelog",
+      }),
+    ],
+  },
+  deployment: {
+    site: "https://archevolt.dev",
+  },
+  navigation: {
+    tabs: [
+      { label: "Docs", path: "/" },
+      { label: "Changelog", path: "/changelog" },
+    ],
   },
   github: {
     owner: "Stephanvs",
