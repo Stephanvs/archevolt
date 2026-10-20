@@ -26,11 +26,11 @@ public readonly partial record struct Particle(Position Position, Velocity Veloc
 
 public static partial class Motion
 {
-	[Each]
-	public static void Move(scoped ref Position position, scoped in Velocity velocity)
-	{
-		position = position with { X = position.X + velocity.X };
-	}
+    [Each]
+    public static void Move(scoped ref Position position, scoped in Velocity velocity)
+    {
+        position = position with { X = position.X + velocity.X };
+    }
 }
 
 [EcsModule, IncludeSystems(typeof(Motion)), IncludeBundle<Particle>]
@@ -41,14 +41,14 @@ public sealed partial class Simulation;
 
 public static class Program
 {
-	public static void Main()
-	{
-		using var world = new WorldBuilder().AddModule(GameEcs.Module).Build();
-		var entity = world.Spawn(new Particle(new Position(0), new Velocity(1)));
-		using var simulation = Simulation.Create(world);
-		simulation.Run();
-		Console.WriteLine(world.Get<Position>(entity).X);
-	}
+    public static void Main()
+    {
+        using var world = new WorldBuilder().AddModule(GameEcs.Module).Build();
+        var entity = world.Spawn(new Particle(new Position(0), new Velocity(1)));
+        using var simulation = Simulation.Create(world);
+        simulation.Run();
+        Console.WriteLine(world.Get<Position>(entity).X);
+    }
 }
 ```
 
@@ -62,15 +62,15 @@ public readonly ref partial struct Moving;
 
 public static partial class Motion
 {
-	[EcsSystem]
-	public static void MoveAll(scoped Moving moving)
-	{
-		foreach (var row in moving)
-		{
-			ref var position = ref row.Position;
-			position = position with { X = position.X + row.Velocity.X };
-		}
-	}
+    [EcsSystem]
+    public static void MoveAll(scoped Moving moving)
+    {
+        foreach (var row in moving)
+        {
+            ref var position = ref row.Position;
+            position = position with { X = position.X + row.Velocity.X };
+        }
+    }
 }
 ```
 

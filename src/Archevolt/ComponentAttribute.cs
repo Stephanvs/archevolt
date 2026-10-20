@@ -9,7 +9,7 @@ public sealed class TrackChangesAttribute : Attribute;
 [AttributeUsage(AttributeTargets.Struct | AttributeTargets.Class)]
 public sealed class ResourceAttribute : Attribute
 {
-	public bool OwnerThread { get; init; }
+    public bool OwnerThread { get; init; }
 }
 
 [AttributeUsage(AttributeTargets.Struct)] public sealed class BundleAttribute : Attribute;
@@ -33,7 +33,7 @@ public sealed class ChangedAttribute<T> : Attribute;
 [AttributeUsage(AttributeTargets.Method)]
 public sealed class EachAttribute : Attribute
 {
-	public bool Partitioned { get; init; }
+    public bool Partitioned { get; init; }
 }
 [AttributeUsage(AttributeTargets.Method)] public sealed class RunConditionAttribute : Attribute;
 [AttributeUsage(AttributeTargets.Class)] public sealed class EcsModuleAttribute : Attribute;
@@ -52,34 +52,34 @@ public sealed class IncludeModuleAttribute<T> : Attribute;
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 public sealed class IncludeModuleAttribute(Type module) : Attribute
 {
-	public Type Module { get; } = module;
+    public Type Module { get; } = module;
 }
 [AttributeUsage(AttributeTargets.Class)] public sealed class ScheduleAttribute : Attribute;
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 public sealed class StageAttribute(string name) : Attribute
 {
-	public string Name { get; } = name;
-	public int Order { get; init; }
+    public string Name { get; } = name;
+    public int Order { get; init; }
 }
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 public sealed class SystemSetAttribute(string name) : Attribute
 {
-	public string Name { get; } = name;
-	public int Order { get; init; }
+    public string Name { get; } = name;
+    public int Order { get; init; }
 }
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
 public sealed class RunAttribute(Type owner, string method) : Attribute
 {
-	public Type Owner { get; } = owner;
-	public string Method { get; } = method;
-	public int Order { get; init; }
-	public string? Instance { get; init; }
-	public string? Stage { get; init; }
-	public string? Set { get; init; }
-	public Type? BeforeOwner { get; init; }
-	public string? Before { get; init; }
-	public Type? AfterOwner { get; init; }
-	public string? After { get; init; }
-	public Type? ConditionOwner { get; init; }
-	public string? Condition { get; init; }
+    public Type Owner { get; } = owner;
+    public string Method { get; } = method;
+    public int Order { get; init; }
+    public string? Instance { get; init; }
+    public string? Stage { get; init; }
+    public string? Set { get; init; }
+    public Type? BeforeOwner { get; init; }
+    public string? Before { get; init; }
+    public Type? AfterOwner { get; init; }
+    public string? After { get; init; }
+    public Type? ConditionOwner { get; init; }
+    public string? Condition { get; init; }
 }

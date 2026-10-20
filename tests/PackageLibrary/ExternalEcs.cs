@@ -13,15 +13,15 @@ public readonly ref partial struct ExternalMoving;
 
 public static partial class ExternalSystems
 {
-	[EcsSystem]
-	public static void Increment(scoped ExternalMoving moving)
-	{
-		foreach (var row in moving)
-		{
-			ref var position = ref row.ExternalPosition;
-			position = new ExternalPosition(position.Value + 1);
-		}
-	}
+    [EcsSystem]
+    public static void Increment(scoped ExternalMoving moving)
+    {
+        foreach (var row in moving)
+        {
+            ref var position = ref row.ExternalPosition;
+            position = new ExternalPosition(position.Value + 1);
+        }
+    }
 }
 
 [EcsModule, IncludeSystems(typeof(ExternalSystems)), IncludeBundle<ExternalParticle>]

@@ -71,16 +71,16 @@ public readonly ref partial struct Moving;
 
 public static partial class Motion
 {
-	[EcsSystem]
-	public static void Move(scoped Moving moving)
-	{
-		foreach (var row in moving)
-		{
-			ref var position = ref row.Position;
-			if (row.HasVelocity)
-				position = position with { X = position.X + row.Velocity.X };
-		}
-	}
+    [EcsSystem]
+    public static void Move(scoped Moving moving)
+    {
+        foreach (var row in moving)
+        {
+            ref var position = ref row.Position;
+            if (row.HasVelocity)
+                position = position with { X = position.X + row.Velocity.X };
+        }
+    }
 }
 ```
 
@@ -109,11 +109,11 @@ Multiple mutable query parameters require a structural proof that their entity s
 ```csharp
 public static partial class MotionKernel
 {
-	[Each(Partitioned = true), Without<Frozen>]
-	public static void Move(scoped ref Position position, scoped in Velocity velocity)
-	{
-		position = position with { X = position.X + velocity.X };
-	}
+    [Each(Partitioned = true), Without<Frozen>]
+    public static void Move(scoped ref Position position, scoped in Velocity velocity)
+    {
+        position = position with { X = position.X + velocity.X };
+    }
 }
 ```
 
@@ -192,13 +192,13 @@ An unmanaged `[Message]` value is registered through an included system paramete
 ```csharp
 public static partial class Conditions
 {
-	[RunCondition]
-	public static bool Enabled(scoped OptionalRes<FrameTime> time) => time.HasValue;
+    [RunCondition]
+    public static bool Enabled(scoped OptionalRes<FrameTime> time) => time.HasValue;
 }
 
 [Schedule]
 [Run(typeof(Motion), nameof(Motion.Move), Order = 0,
-	ConditionOwner = typeof(Conditions), Condition = nameof(Conditions.Enabled))]
+    ConditionOwner = typeof(Conditions), Condition = nameof(Conditions.Enabled))]
 public sealed partial class Simulation;
 ```
 
@@ -216,11 +216,11 @@ Runtime composition exposes the same planner:
 
 ```csharp
 using var schedule = BoundSchedule.Bind(world,
-	[Motion.Move_Descriptor, MotionKernel.Move_Descriptor],
-	[new Archevolt.Scheduling.EdgeInput(0, 1)],
-	instanceKeys: ["motion", "kernel"],
-	orders: [0, 1],
-	conditions: [Conditions.Enabled_Descriptor, null]);
+    [Motion.Move_Descriptor, MotionKernel.Move_Descriptor],
+    [new Archevolt.Scheduling.EdgeInput(0, 1)],
+    instanceKeys: ["motion", "kernel"],
+    orders: [0, 1],
+    conditions: [Conditions.Enabled_Descriptor, null]);
 ```
 
 Edge endpoints index the supplied system array. Optional keys, orders, and conditions arrays must match its length. Omitting orders uses array order. A runtime condition descriptor is built with `AsCondition()` and a factory returning `ConditionBody`.

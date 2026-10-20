@@ -54,19 +54,19 @@ public readonly ref partial struct Moving { }
 
 public static partial class Motion
 {
-	[EcsSystem]
-	public static void Integrate(scoped Moving moving, scoped Res<FrameTime> time)
-	{
-		foreach (var row in moving)
-		{
-			ref var position = ref row.Position;
-			position = position with
-			{
-				Value = position.Value
-					+ row.Velocity.Value * time.Value.DeltaSeconds
-			};
-		}
-	}
+    [EcsSystem]
+    public static void Integrate(scoped Moving moving, scoped Res<FrameTime> time)
+    {
+        foreach (var row in moving)
+        {
+            ref var position = ref row.Position;
+            position = position with
+            {
+                Value = position.Value
+                    + row.Velocity.Value * time.Value.DeltaSeconds
+            };
+        }
+    }
 }
 
 [EcsModule]
@@ -81,16 +81,16 @@ public sealed partial class Simulation { }
 
 public static class Program
 {
-	public static void Main()
-	{
-		using var world = new WorldBuilder().AddModule(GameEcs.Module).Build();
-		world.InsertResource(new FrameTime(1f / 60));
-		world.Spawn(new Particle(
-			new Position(Vector3.Zero),
-			new Velocity(Vector3.UnitX)));
-		using var simulation = Simulation.Create(world);
-		simulation.Run();
-	}
+    public static void Main()
+    {
+        using var world = new WorldBuilder().AddModule(GameEcs.Module).Build();
+        world.InsertResource(new FrameTime(1f / 60));
+        world.Spawn(new Particle(
+            new Position(Vector3.Zero),
+            new Velocity(Vector3.UnitX)));
+        using var simulation = Simulation.Create(world);
+        simulation.Run();
+    }
 }
 ```
 
@@ -105,18 +105,18 @@ For the common single-query update, offer a second declaration that lets the gen
 ```csharp
 public static partial class MotionKernel
 {
-	[Each]
-	[Without<Frozen>]
-	public static void Integrate(
-		scoped ref Position position,
-		scoped in Velocity velocity,
-		scoped Res<FrameTime> time)
-	{
-		position = position with
-		{
-			Value = position.Value + velocity.Value * time.Value.DeltaSeconds
-		};
-	}
+    [Each]
+    [Without<Frozen>]
+    public static void Integrate(
+        scoped ref Position position,
+        scoped in Velocity velocity,
+        scoped Res<FrameTime> time)
+    {
+        position = position with
+        {
+            Value = position.Value + velocity.Value * time.Value.DeltaSeconds
+        };
+    }
 }
 ```
 
@@ -160,21 +160,21 @@ The generated row has this shape, with tracking and lease checks omitted:
 ```csharp
 public readonly ref partial struct Moving
 {
-	// GetEnumerator() and Enumerator are generated alongside Row.
-	public readonly ref struct Row
-	{
-		private readonly ref Position _position;
-		private readonly ref readonly Velocity _velocity;
+    // GetEnumerator() and Enumerator are generated alongside Row.
+    public readonly ref struct Row
+    {
+        private readonly ref Position _position;
+        private readonly ref readonly Velocity _velocity;
 
-		internal Row(ref Position position, in Velocity velocity)
-		{
-			_position = ref position;
-			_velocity = ref velocity;
-		}
+        internal Row(ref Position position, in Velocity velocity)
+        {
+            _position = ref position;
+            _velocity = ref velocity;
+        }
 
-		public ref Position Position => ref _position;
-		public ref readonly Velocity Velocity => ref _velocity;
-	}
+        public ref Position Position => ref _position;
+        public ref readonly Velocity Velocity => ref _velocity;
+    }
 }
 ```
 
@@ -246,13 +246,13 @@ For an untracked `Position`, the `[Each]` loop has this shape. This is an explan
 // Resource and matching-archetype bindings are already resolved.
 foreach (ref readonly var match in state.Matches.AsSpan())
 {
-	foreach (var chunk in match.Chunks)
-	{
-		Span<Position> positions = chunk.Column<Position>(match.PositionSlot);
-		ReadOnlySpan<Velocity> velocities = chunk.Column<Velocity>(match.VelocitySlot);
-		for (int i = 0; i < chunk.Count; i++)
-			MotionKernel.Integrate(ref positions[i], in velocities[i], time);
-	}
+    foreach (var chunk in match.Chunks)
+    {
+        Span<Position> positions = chunk.Column<Position>(match.PositionSlot);
+        ReadOnlySpan<Velocity> velocities = chunk.Column<Velocity>(match.VelocitySlot);
+        for (int i = 0; i < chunk.Count; i++)
+            MotionKernel.Integrate(ref positions[i], in velocities[i], time);
+    }
 }
 ```
 
@@ -357,9 +357,9 @@ Serial execution is the default. An application can opt in when constructing its
 
 ```csharp
 using var world = new WorldBuilder()
-	.AddModule(GameEcs.Module)
-	.UseParallelExecution(maxConcurrency: 4)
-	.Build();
+    .AddModule(GameEcs.Module)
+    .UseParallelExecution(maxConcurrency: 4)
+    .Build();
 ```
 
 `maxConcurrency` includes the owner thread. Four permits at most three background workers plus the owner. One uses inline serial execution; nonpositive values are invalid. Allocate a world's worker pool lazily or at construction, then reuse it across that world's schedules. Multiple worlds require an explicit application-level CPU budget.

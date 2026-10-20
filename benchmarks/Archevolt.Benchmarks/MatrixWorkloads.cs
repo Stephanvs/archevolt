@@ -21,64 +21,64 @@ public readonly ref partial struct OptionalAcceleration;
 
 public static partial class MatrixSystems
 {
-	[Each(Partitioned = true)]
-	public static void Mark(scoped ref TrackedPosition position, scoped in Velocity velocity)
-	{
-		const float delta = 1f / 60;
-		position = new TrackedPosition(position.X + velocity.X * delta,
-			position.Y + velocity.Y * delta, position.Z + velocity.Z * delta);
-	}
+    [Each(Partitioned = true)]
+    public static void Mark(scoped ref TrackedPosition position, scoped in Velocity velocity)
+    {
+        const float delta = 1f / 60;
+        position = new TrackedPosition(position.X + velocity.X * delta,
+            position.Y + velocity.Y * delta, position.Z + velocity.Z * delta);
+    }
 
-	[EcsSystem]
-	public static void Changed(scoped ChangedPositions query, scoped ResMut<ScanTotal> total)
-	{
-		long count = 0;
-		double sum = 0;
-		foreach (var row in query)
-		{
-			count++;
-			sum += row.TrackedPosition.X;
-		}
-		total.Value = new ScanTotal(count, sum);
-	}
+    [EcsSystem]
+    public static void Changed(scoped ChangedPositions query, scoped ResMut<ScanTotal> total)
+    {
+        long count = 0;
+        double sum = 0;
+        foreach (var row in query)
+        {
+            count++;
+            sum += row.TrackedPosition.X;
+        }
+        total.Value = new ScanTotal(count, sum);
+    }
 
-	[EcsSystem]
-	public static void Optional(scoped OptionalAcceleration query, scoped ResMut<ScanTotal> total)
-	{
-		long count = 0;
-		double sum = 0;
-		foreach (var row in query)
-		{
-			count++;
-			sum += row.TrackedPosition.X;
-			if (row.HasAcceleration)
-				sum += row.Acceleration.Value;
-		}
-		total.Value = new ScanTotal(count, sum);
-	}
+    [EcsSystem]
+    public static void Optional(scoped OptionalAcceleration query, scoped ResMut<ScanTotal> total)
+    {
+        long count = 0;
+        double sum = 0;
+        foreach (var row in query)
+        {
+            count++;
+            sum += row.TrackedPosition.X;
+            if (row.HasAcceleration)
+                sum += row.Acceleration.Value;
+        }
+        total.Value = new ScanTotal(count, sum);
+    }
 
-	[EcsSystem]
-	public static void Toggle(scoped ManagedRes<MatrixTargets> targets, scoped Commands commands)
-	{
-		foreach (Entity entity in targets.Value.Entities)
-		{
-			commands.Insert(entity, default(MatrixTag0));
-			commands.Remove<MatrixTag0>(entity);
-		}
-	}
+    [EcsSystem]
+    public static void Toggle(scoped ManagedRes<MatrixTargets> targets, scoped Commands commands)
+    {
+        foreach (Entity entity in targets.Value.Entities)
+        {
+            commands.Insert(entity, default(MatrixTag0));
+            commands.Remove<MatrixTag0>(entity);
+        }
+    }
 
-	[EcsSystem]
-	public static void Empty() { }
+    [EcsSystem]
+    public static void Empty() { }
 
-	[EcsSystem]
-	public static void EmptyCommands(scoped Commands commands) { }
+    [EcsSystem]
+    public static void EmptyCommands(scoped Commands commands) { }
 }
 
 [EcsModule, IncludeSystems(typeof(MatrixSystems)), IncludeSystems(typeof(Movement)),
-	IncludeBundle<TrackedParticle>, IncludeBundle<Particle>,
-	IncludeResource<FrameTime>, IncludeResource<ScanTotal>, IncludeResource<MatrixTargets>,
-	IncludeComponent<MatrixTag0>, IncludeComponent<MatrixTag1>, IncludeComponent<MatrixTag2>,
-	IncludeComponent<MatrixTag3>, IncludeComponent<WidePayload>, IncludeComponent<Acceleration>]
+    IncludeBundle<TrackedParticle>, IncludeBundle<Particle>,
+    IncludeResource<FrameTime>, IncludeResource<ScanTotal>, IncludeResource<MatrixTargets>,
+    IncludeComponent<MatrixTag0>, IncludeComponent<MatrixTag1>, IncludeComponent<MatrixTag2>,
+    IncludeComponent<MatrixTag3>, IncludeComponent<WidePayload>, IncludeComponent<Acceleration>]
 public static partial class MatrixModule;
 
 [Schedule, Run(typeof(MatrixSystems), nameof(MatrixSystems.Mark), Order = 0)]
@@ -92,31 +92,31 @@ public sealed partial class CommandToggle;
 [Schedule, Run(typeof(MatrixSystems), nameof(MatrixSystems.Empty), Order = 0)]
 public sealed partial class EmptyUpdate;
 [Schedule, Run(typeof(MatrixSystems), nameof(MatrixSystems.EmptyCommands), Order = 0),
-	Run(typeof(MatrixSystems), nameof(MatrixSystems.Empty), Order = 1,
-		AfterOwner = typeof(MatrixSystems), After = nameof(MatrixSystems.EmptyCommands))]
+    Run(typeof(MatrixSystems), nameof(MatrixSystems.Empty), Order = 1,
+        AfterOwner = typeof(MatrixSystems), After = nameof(MatrixSystems.EmptyCommands))]
 public sealed partial class EmptyBarrierUpdate;
 
 internal static class MatrixPopulation
 {
-	internal static World Build(int concurrency = 1, int commandBytes = 4096) =>
-		new WorldBuilder().AddModule(MatrixModule.Module).UseParallelExecution(concurrency)
-			.Reserve(commandBytesPerProducer: commandBytes).Build();
+    internal static World Build(int concurrency = 1, int commandBytes = 4096) =>
+        new WorldBuilder().AddModule(MatrixModule.Module).UseParallelExecution(concurrency)
+            .Reserve(commandBytesPerProducer: commandBytes).Build();
 
-	internal static Entity[] Populate(World world, int count, int archetypes = 1, bool wide = false)
-	{
-		world.InsertResource(new FrameTime(1f / 60));
-		var entities = new Entity[count];
-		for (int i = 0; i < count; i++)
-		{
-			Entity entity = world.Spawn(new Particle(new Position(i % 97, 0, 0), new Velocity(1, 2, 3)));
-			entities[i] = entity;
-			int mask = i % archetypes;
-			if ((mask & 1) != 0) world.Insert(entity, default(MatrixTag0));
-			if ((mask & 2) != 0) world.Insert(entity, default(MatrixTag1));
-			if ((mask & 4) != 0) world.Insert(entity, default(MatrixTag2));
-			if ((mask & 8) != 0) world.Insert(entity, default(MatrixTag3));
-			if (wide) world.Insert(entity, new WidePayload { Value = i });
-		}
-		return entities;
-	}
+    internal static Entity[] Populate(World world, int count, int archetypes = 1, bool wide = false)
+    {
+        world.InsertResource(new FrameTime(1f / 60));
+        var entities = new Entity[count];
+        for (int i = 0; i < count; i++)
+        {
+            Entity entity = world.Spawn(new Particle(new Position(i % 97, 0, 0), new Velocity(1, 2, 3)));
+            entities[i] = entity;
+            int mask = i % archetypes;
+            if ((mask & 1) != 0) world.Insert(entity, default(MatrixTag0));
+            if ((mask & 2) != 0) world.Insert(entity, default(MatrixTag1));
+            if ((mask & 4) != 0) world.Insert(entity, default(MatrixTag2));
+            if ((mask & 8) != 0) world.Insert(entity, default(MatrixTag3));
+            if (wide) world.Insert(entity, new WidePayload { Value = i });
+        }
+        return entities;
+    }
 }
