@@ -12,7 +12,7 @@ const execute = promisify(execFile);
 const releaseScript = fileURLToPath(new URL("./release.mjs", import.meta.url));
 const packageScript = fileURLToPath(new URL("./verify-package.ps1", import.meta.url));
 
-async function fixture(t, { isolatedScripts = false } = {}) {
+async function fixture(t, { isolatedScripts = false, expireConnections = false } = {}) {
   const directory = await mkdtemp(join(tmpdir(), "archevolt-release-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const git = (...args) => execFileSync("git", args, { cwd: directory, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
@@ -21,8 +21,14 @@ async function fixture(t, { isolatedScripts = false } = {}) {
   git("config", "user.email", "release@example.invalid");
   await writeFile(join(directory, ".git/info/exclude"), "*\n");
   const state = { releases: [], assets: new Map(), writes: [], failUploadResponse: false };
+  let releaseSocket;
   const server = createServer(async (request, response) => {
     const url = new URL(request.url, "http://localhost");
+    if (url.pathname === "/expire") {
+      if (releaseSocket && !releaseSocket.destroyed) releaseSocket.resetAndDestroy();
+      response.end();
+      return;
+    }
     if (request.method !== "GET") state.writes.push({ method: request.method, path: url.pathname });
     const asset = /\/releases\/assets\/(\d+)$/u.exec(url.pathname);
     if (asset) {
@@ -51,6 +57,11 @@ async function fixture(t, { isolatedScripts = false } = {}) {
         response.setHeader("content-type", "application/json");
         response.end(JSON.stringify(release));
         return;
+      }
+      if (expireConnections) {
+        response.setHeader("Connection", "keep-alive");
+        response.setHeader("Keep-Alive", "timeout=60");
+        releaseSocket = request.socket;
       }
       response.setHeader("content-type", "application/json");
       response.end(JSON.stringify(state.releases));
@@ -236,8 +247,7 @@ test("a replaced draft asset is rejected even when version and commit metadata m
   assert.deepEqual(repo.state.writes, []);
 });
 
-test("a lost upload response resumes the original draft and package after verification", async (t) => {
-  const repo = await fixture(t, { isolatedScripts: true });
+async function seedRelease(repo, expireConnection = false) {
   const sha = repo.commit("feat: initial implementation");
   const remote = join(repo.directory, "origin.git");
   repo.git("init", "--bare", remote);
@@ -246,11 +256,32 @@ test("a lost upload response resumes the original draft and package after verifi
   const symbols = await makePackage(repo.directory, "symbols", sha, { extension: "snupkg" });
   await writeFile(join(repo.directory, "scripts/verify.ps1"), `param($PackageVersion, $SourceRevisionId)
 $ErrorActionPreference = 'Stop'
+${expireConnection ? "Invoke-WebRequest -Uri ($env:GITHUB_API_URL + 'expire') | Out-Null\nStart-Sleep -Milliseconds 100" : ""}
 Add-Content -LiteralPath verification-runs.txt -Value $PackageVersion
 $null = New-Item -ItemType Directory -Force -Path artifacts/packages
 Copy-Item -LiteralPath seed.nupkg -Destination "artifacts/packages/Archevolt.$PackageVersion.nupkg"
 Copy-Item -LiteralPath symbols.snupkg -Destination "artifacts/packages/Archevolt.$PackageVersion.snupkg"
 `);
+  return { sha, remote, original, symbols };
+}
+
+test("a fresh release stages both packages after its idle GitHub connection expires during verification", async (t) => {
+  const repo = await fixture(t, { isolatedScripts: true, expireConnections: true });
+  const { sha, remote, original, symbols } = await seedRelease(repo, true);
+  assert.match((await repo.cli("prepare")).stdout, /"publish": true/u);
+  assert.equal(repo.git("--git-dir", remote, "rev-parse", "v0.1.0^{commit}"), sha);
+  assert.equal(repo.state.releases.length, 1);
+  assert.equal(repo.state.releases[0].draft, true);
+  assert.deepEqual(repo.state.releases[0].assets.map((asset) => asset.name), [
+    "Archevolt.0.1.0.nupkg", "Archevolt.0.1.0.snupkg",
+  ]);
+  assert.deepEqual(repo.state.assets.get(7), await readFile(original));
+  assert.deepEqual(repo.state.assets.get(8), await readFile(symbols));
+});
+
+test("a lost upload response resumes the original draft and package after verification", async (t) => {
+  const repo = await fixture(t, { isolatedScripts: true });
+  const { sha, remote, original, symbols } = await seedRelease(repo);
   repo.state.failUploadResponse = true;
   await assert.rejects(repo.cli("prepare"), (error) => /GitHub POST \/uploads\/2\/assets returned HTTP 500/u.test(error.stderr));
   const reserved = repo.git("rev-parse", "v0.1.0^{commit}");
