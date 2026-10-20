@@ -232,8 +232,11 @@ async function publish() {
   }
   const remote = join(releaseDirectory, `public-Archevolt.${plan.version}.nupkg`);
   const url = `https://api.nuget.org/v3-flatcontainer/archevolt/${plan.version}/archevolt.${plan.version}.nupkg`;
+  const confirmationWindowMs = 60 * 60 * 1000;
+  const confirmationIntervalMs = 15_000;
+  const confirmationAttempts = 1 + confirmationWindowMs / confirmationIntervalMs;
   let confirmed = false;
-  for (let attempt = 0; attempt < 20; attempt++) {
+  for (let attempt = 0; attempt < confirmationAttempts; attempt++) {
     const response = await fetch(url, { signal: AbortSignal.timeout(30_000) });
     if (response.ok) {
       writeFileSync(remote, Buffer.from(await response.arrayBuffer()));
@@ -242,9 +245,9 @@ async function publish() {
       break;
     }
     if (response.status !== 404) throw new Error(`NuGet package confirmation returned HTTP ${response.status}. The release remains draft.`);
-    if (attempt < 19) await new Promise((resume) => setTimeout(resume, 15_000));
+    if (attempt + 1 < confirmationAttempts) await new Promise((resume) => setTimeout(resume, confirmationIntervalMs));
   }
-  if (!confirmed) throw new Error(`NuGet did not expose ${url} after 20 attempts. The release remains draft. Rerun this workflow.${pushFailed ? " The push command also failed." : ""}`);
+  if (!confirmed) throw new Error(`NuGet did not expose ${url} after ${confirmationAttempts} attempts. The release remains draft. Rerun this workflow.${pushFailed ? " The push command also failed." : ""}`);
   await github(`repos/${repository}/releases/${release.id}`, { method: "PATCH", body: {
     tag_name: state.tag, target_commitish: plan.sourceSha, name: state.tag,
     body: plan.notes, prerelease: false, draft: false, make_latest: "true",

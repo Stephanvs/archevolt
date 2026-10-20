@@ -48,7 +48,9 @@ The `build` script preserves output in `artifacts/logs/docs-build.txt` and fails
 
 ## Recover a failed release
 
-Rerun the original failed **Release** run in GitHub Actions. Recovery keeps its source commit and version:
+Rerun the original failed **Release** run in GitHub Actions. Recovery keeps its source commit and version.
+
+After NuGet accepts the upload, validation and indexing can take up to an hour. The workflow checks for the public package every 15 seconds through that validation window. If it is still unavailable, the workflow fails and keeps the GitHub release in draft. Wait for NuGet validation to finish, then rerun the original release run; it reuses the reserved version and staged package.
 
 | Last completed operation | Retry behavior |
 | --- | --- |
