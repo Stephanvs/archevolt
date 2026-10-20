@@ -20,7 +20,16 @@ The policy must permit creation of the first `Archevolt` package and publication
 
 ## Configure the Cloudflare rebuild
 
-Use the existing Cloudflare project that serves `https://archevolt.dev`. Set its production branch to `main`, build command to `pnpm run build`, Node.js to 24, and pnpm to 12.5.1. For Pages, the build output directory is `dist`. Keep the existing Workers deploy command if the site uses Workers Builds.
+Use the existing Cloudflare project that serves `https://archevolt.dev`. Set its production branch to `main` and build command to `pnpm run build`. For Pages, the build output directory is `dist`. Keep the existing Workers deploy command if the site uses Workers Builds.
+
+Set these build variables in Cloudflare's **Settings > Builds > Variables and secrets** for both **Production** and **Previews Base**:
+
+| Variable | Value |
+| --- | --- |
+| `PNPM_VERSION` | `12.5.1` |
+| `NODE_VERSION` | `24` |
+
+Cloudflare uses these variables to override its installed tools before dependency installation. The repository also declares `pnpm@12.5.1` in `package.json` and Node 24 in `.node-version`. pnpm 12 is required for the workspace's `allowBuilds` configuration. See [Cloudflare Workers build image and version overrides](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/#overriding-default-versions).
 
 Create a deploy hook for `main` named `Archevolt releases`:
 
@@ -29,7 +38,7 @@ Create a deploy hook for `main` named `Archevolt releases`:
 
 In GitHub, open **Settings > Secrets and variables > Actions**. Add a repository secret named `DOCS_DEPLOY_HOOK_URL` containing that URL. The release workflow calls it after publication. The separate documentation workflow also calls it after a human publishes, edits, or deletes a release, and supports manual runs.
 
-In the Cloudflare project's build environment, set `GITHUB_TOKEN` to a persistent, read-only GitHub token that can read this repository's releases. A fine-grained token needs access to `Stephanvs/archevolt` with **Contents: Read-only**. Set it as a secret in Cloudflare, not in the repository. The temporary Actions token cannot authenticate a later Cloudflare build.
+`GITHUB_TOKEN` is optional for this public repository. Blume can fetch the published releases without authentication. To avoid GitHub's lower unauthenticated request limits, optionally add a persistent, read-only token to the Cloudflare build environment. A fine-grained token needs access to `Stephanvs/archevolt` with **Contents: Read-only**. Store it as a Cloudflare secret. The temporary Actions token cannot authenticate a later Cloudflare build.
 
 The `build` script preserves output in `artifacts/logs/docs-build.txt` and fails if Blume reports an unavailable source or an offline cache. Cloudflare must run this script so a failed release fetch cannot deploy a stale or empty changelog. An accepted hook means a build was requested; check the Cloudflare build log for deployment completion.
 

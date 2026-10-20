@@ -11,6 +11,7 @@
   },
   "type": "module",
   "private": true,
+  "packageManager": "pnpm@12.5.1",
   "dependencies": {
     "blume": "^2.2.4"
   },
