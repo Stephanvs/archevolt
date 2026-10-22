@@ -6,7 +6,7 @@ Archevolt is a headless archetype ECS for .NET 10 and C# 14. Write components as
 
 The runtime has no package dependencies. The `Archevolt` package includes its generator. Generated declarations stay in your namespace and partial types.
 
-See the [documentation site](docs/index.mdx) for the supported declarations and runtime operations, and the [acceptance record](.audit/acceptance.md) for validation against [PLAN.md](PLAN.md).
+See the [documentation site](docs/index.mdx) for the supported declarations and runtime operations, and the [acceptance record](.audit/acceptance.md) for validation against the [v1 implementation plan](https://github.com/Stephanvs/archevolt/blob/ebacf07059fefbf9b182e40a290812be584dd9ee/PLAN.md). [ROADMAP.md](ROADMAP.md) holds the current performance plan.
 
 ## See it in action
 

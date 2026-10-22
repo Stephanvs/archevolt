@@ -2,7 +2,7 @@
 
 Implementation commit: `5237bf2bd21c7a921b547352db40145cf75c273f`. Final checks ran on this implementation before committing; the only subsequent source-file edits removed extra blank lines at EOF. PLAN's status line was also updated. The commit is local on `main`, which was the active checkout at commit time. Nothing was pushed.
 
-The runtime, generator, and consumers now execute the ECS described in PLAN.md, including the original-namespace requirement. Validation limits are listed below rather than treating a passing build as proof of every failure mode.
+The runtime, generator, and consumers now execute the ECS described in the [v1 implementation plan](https://github.com/Stephanvs/archevolt/blob/ebacf07059fefbf9b182e40a290812be584dd9ee/PLAN.md), including the original-namespace requirement. Validation limits are listed below rather than treating a passing build as proof of every failure mode.
 
 | Gate | Observable result | Current evidence |
 | --- | --- | --- |

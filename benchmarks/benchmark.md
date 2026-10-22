@@ -2,7 +2,7 @@
 
 This benchmark runs one workload in two ECS libraries. The .NET side is `ReferenceComparisonBenchmarks` in [Archevolt.Benchmarks](Archevolt.Benchmarks/ReferenceComparisonBenchmarks.cs), measured with BenchmarkDotNet. The Rust side is [bevy-reference](bevy-reference/src/lib.rs), a port of the same workload to `bevy_ecs`, measured with criterion.
 
-The two sides differ in language, compiler, storage layout, and harness. [PLAN.md](../PLAN.md) treats cross-language Bevy numbers as contextual unless the workload and compiler settings are controlled, so this file lists which conditions match and which do not. The results describe this one workload; they do not rank the engines.
+The two sides differ in language, compiler, storage layout, and harness. [ROADMAP.md](../ROADMAP.md) treats cross-language Bevy numbers as contextual unless the workload and compiler settings are controlled, so this file lists which conditions match and which do not. The results describe this one workload; they do not rank the engines.
 
 ## Workload
 
