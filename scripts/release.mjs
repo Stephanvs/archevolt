@@ -55,13 +55,25 @@ function commitsSince(previousTag, sourceSha) {
   return commits;
 }
 
+function changedPaths(hash) {
+  return command("git", ["diff-tree", "--no-commit-id", "--name-only", "-r", "-m", "--first-parent", "--root", "-z", hash])
+    .split("\0").map((path) => path.replaceAll("\\", "/")).filter(Boolean);
+}
+
+function changesPackage(hash) {
+  const paths = changedPaths(hash);
+  return paths.length === 0 || paths.some((path) => !path.startsWith("docs/"));
+}
+
 async function newPlan(sourceSha, previousTag) {
   const commits = commitsSince(previousTag, sourceSha);
   if (commits.length === 0) throw new Error("The release range contains no commits.");
+  const packageCommits = commits.filter((commit) => changesPackage(commit.hash));
+  if (packageCommits.length === 0) return null;
   const preset = conventionalCommits();
   const parser = new CommitParser(preset.parser);
-  const parsed = commits.map(({ message }) => parser.parse(message));
-  const recommended = await analyzeCommits({ preset: "conventionalcommits" }, { cwd: root, commits, logger });
+  const parsed = packageCommits.map(({ message }) => parser.parse(message));
+  const recommended = await analyzeCommits({ preset: "conventionalcommits" }, { cwd: root, commits: packageCommits, logger });
   const bump = parsed.some((commit) => commit.notes.length > 0) ? "major"
     : parsed.some((commit) => commit.type === "feat") ? "minor" : recommended || "patch";
   const version = previousTag ? semver.inc(previousTag.slice(1), bump) : "0.1.0";
@@ -139,7 +151,9 @@ async function releaseState() {
       plan: { sourceSha, previousTag, version: reserved.tag.slice(1), notes: binding.groups.notes },
     };
   }
-  return { kind: "new", plan: await newPlan(sourceSha, previousTag) };
+  const plan = await newPlan(sourceSha, previousTag);
+  if (!plan) return { kind: "unchanged", tag: previousTag };
+  return { kind: "new", plan };
 }
 
 function output(values) {
@@ -179,8 +193,8 @@ async function downloadAsset(release, plan, { name, digest }) {
 
 async function prepare() {
   const state = await releaseState();
-  if (state.kind === "published") {
-    output({ publish: false, tag: state.tag });
+  if (state.kind === "published" || state.kind === "unchanged") {
+    output({ publish: false, ...(state.tag ? { tag: state.tag } : {}) });
     return;
   }
   if (git("status", "--porcelain")) {
@@ -223,7 +237,7 @@ async function prepare() {
 
 async function publish() {
   const state = await releaseState();
-  if (state.kind === "published") return;
+  if (state.kind === "published" || state.kind === "unchanged") return;
   if (state.kind !== "reserved" || !state.release) {
     throw new Error("Prepare and stage the release before publishing it.");
   }

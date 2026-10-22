@@ -3,7 +3,7 @@ import { execFile, execFileSync } from "node:child_process";
 import { createServer } from "node:http";
 import { copyFile, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import test from "node:test";
@@ -110,6 +110,17 @@ async function fixture(t, { isolatedScripts = false, expireConnections = false }
   return { directory, git, state, cli, commit, published };
 }
 
+async function commitPaths(repo, message, files) {
+  for (const [path, content] of Object.entries(files)) {
+    const file = join(repo.directory, path);
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, content);
+    repo.git("add", "--force", "--", path);
+  }
+  repo.git("commit", "-m", message);
+  return repo.git("rev-parse", "HEAD");
+}
+
 test("the first release is 0.1.0 and includes ordinary direct commits", async (t) => {
   const repo = await fixture(t);
   const sha = repo.commit("Initial implementation");
@@ -142,6 +153,68 @@ test("the full commit range selects strict semantic versions below 1.0", async (
       for (const sha of commits) assert.ok(plan.notes.includes(`/commit/${sha}`), `notes include ${sha}`);
     });
   }
+});
+
+test("a range that only changes docs does not publish a package", async (t) => {
+  const repo = await fixture(t);
+  repo.commit("Initial implementation");
+  repo.published();
+  await commitPaths(repo, "feat!: replace the guide\n\nBREAKING CHANGE: remove the old page", { "docs/guide.md": "Guide\n" });
+  const result = JSON.parse((await repo.cli("plan")).stdout);
+  assert.equal(result.kind, "unchanged");
+  assert.equal(result.tag, "v0.1.0");
+  const prepared = JSON.parse((await repo.cli("prepare")).stdout);
+  assert.deepEqual(prepared, { publish: false, tag: "v0.1.0" });
+  assert.equal(repo.git("tag", "--list"), "v0.1.0");
+  assert.deepEqual(repo.state.writes, []);
+});
+
+test("docs changes leave the selected package version unchanged", async (t) => {
+  const repo = await fixture(t);
+  repo.commit("Initial implementation");
+  repo.published();
+  const docsSha = await commitPaths(repo, "feat: document bundles", { "docs/guide.md": "Bundles\n" });
+  const fixSha = await commitPaths(repo, "fix: repair migration", { "src/World.cs": "class World {}\n" });
+  const { plan } = JSON.parse((await repo.cli("plan")).stdout);
+  assert.equal(plan.previousTag, "v0.1.0");
+  assert.equal(plan.version, "0.1.1");
+  assert.ok(plan.notes.includes(`/commit/${docsSha}`));
+  assert.ok(plan.notes.includes(`/commit/${fixSha}`));
+});
+
+test("a commit that changes docs and package files still releases", async (t) => {
+  const repo = await fixture(t);
+  repo.commit("Initial implementation");
+  repo.published();
+  await commitPaths(repo, "feat: add bundles", { "docs/guide.md": "Bundles\n", "src/World.cs": "class World {}\n" });
+  const { plan, kind } = JSON.parse((await repo.cli("plan")).stdout);
+  assert.equal(kind, "new");
+  assert.equal(plan.version, "0.2.0");
+});
+
+test("a merge that only brings docs changes does not publish a package", async (t) => {
+  const repo = await fixture(t);
+  repo.commit("Initial implementation");
+  repo.published();
+  repo.git("checkout", "-b", "docs-only");
+  await commitPaths(repo, "docs: explain queries", { "docs/guide.md": "Queries\n" });
+  repo.git("checkout", "main");
+  repo.git("merge", "--no-ff", "-m", "Merge docs", "docs-only");
+  const prepared = JSON.parse((await repo.cli("prepare")).stdout);
+  assert.deepEqual(prepared, { publish: false, tag: "v0.1.0" });
+  assert.equal(repo.git("tag", "--list"), "v0.1.0");
+  assert.deepEqual(repo.state.writes, []);
+});
+
+test("the first history does not release when it only adds docs", async (t) => {
+  const repo = await fixture(t);
+  await commitPaths(repo, "docs: add the site", { "docs/index.mdx": "Home\n" });
+  const result = JSON.parse((await repo.cli("plan")).stdout);
+  assert.deepEqual(result, { kind: "unchanged", tag: null });
+  const prepared = JSON.parse((await repo.cli("prepare")).stdout);
+  assert.deepEqual(prepared, { publish: false });
+  assert.equal(repo.git("tag", "--list"), "");
+  assert.deepEqual(repo.state.writes, []);
 });
 
 test("an already covered source skips package publication", async (t) => {

@@ -1,6 +1,6 @@
 # Release setup and recovery
 
-Pushes to `main` run `.github/workflows/release.yml`. The first package is `Archevolt` 0.1.0. Later releases inspect every commit since the last published release. A breaking `!` or `BREAKING CHANGE:` footer selects a major version, including before 1.0. A `feat` selects a minor version. Every other nonempty range selects a patch version. Direct commits that do not follow Conventional Commits still appear in the notes.
+Pushes to `main` run `.github/workflows/release.yml`. A push that changes only files under `docs/` skips that workflow. The first package is `Archevolt` 0.1.0. Later releases inspect every commit since the last published release. A breaking `!` or `BREAKING CHANGE:` footer in a commit that changes a file outside `docs/` selects a major version, including before 1.0. A `feat` in such a commit selects a minor version. Every other range with a change outside `docs/` selects a patch version. Commits that change only files under `docs/` remain in the notes of the next package release and leave its version unchanged. Direct commits that do not follow Conventional Commits still appear in the notes.
 
 The workflow runs all nine verification gates on Windows, including clean package consumers under JIT and NativeAOT. It then reserves an annotated `vX.Y.Z` tag at the tested commit and uploads both the `.nupkg` and Source Link `.snupkg` to a draft GitHub release. It publishes the release only after the public NuGet package matches the staged package and NuGet accepts the separate symbol upload. Symbol indexing can finish later. Blume reads these published release notes as the changelog.
 
@@ -38,7 +38,7 @@ Create a deploy hook for `main` named `Archevolt releases`:
 - **Pages:** Open **Workers & Pages**, select the Pages project, then **Settings > Builds > Add deploy hook**. Choose `main` and copy the generated URL. See [Pages deploy hooks](https://developers.cloudflare.com/pages/configuration/deploy-hooks/).
 - **Workers Builds:** Open **Workers & Pages**, select the Git-connected Worker, then **Settings > Builds > Deploy Hooks**. Enter the name, choose `main`, select **Create**, and copy the URL. See [Workers deploy hooks](https://developers.cloudflare.com/workers/ci-cd/builds/deploy-hooks/).
 
-In GitHub, open **Settings > Secrets and variables > Actions**. Add a repository secret named `DOCS_DEPLOY_HOOK_URL` containing that URL. The release workflow calls it after publication. The separate documentation workflow also calls it after a human publishes, edits, or deletes a release, and supports manual runs.
+In GitHub, open **Settings > Secrets and variables > Actions**. Add a repository secret named `DOCS_DEPLOY_HOOK_URL` containing that URL. The release workflow calls it after publication. The separate documentation workflow also calls it after a human publishes, edits, or deletes a release, and supports manual runs. A push that only changes `docs/` skips the release workflow, so the git-connected Cloudflare build publishes those documentation changes.
 
 Configure `GITHUB_TOKEN` as a secret in both Cloudflare build environments, **Production** and **Previews Base**. Use a persistent fine-grained GitHub token restricted to `Stephanvs/archevolt` with **Contents: Read-only**. The temporary Actions token cannot authenticate a later Cloudflare build.
 
