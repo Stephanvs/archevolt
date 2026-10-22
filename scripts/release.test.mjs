@@ -20,7 +20,8 @@ async function fixture(t, { isolatedScripts = false, expireConnections = false }
   git("config", "user.name", "Release test");
   git("config", "user.email", "release@example.invalid");
   await writeFile(join(directory, ".git/info/exclude"), "*\n");
-  const state = { releases: [], assets: new Map(), writes: [], failUploadResponse: false };
+  const state = { releases: [], releaseLists: [], listPages: [], assets: new Map(), writes: [], failUploadResponse: false };
+  let releaseList;
   let releaseSocket;
   const server = createServer(async (request, response) => {
     const url = new URL(request.url, "http://localhost");
@@ -63,8 +64,12 @@ async function fixture(t, { isolatedScripts = false, expireConnections = false }
         response.setHeader("Keep-Alive", "timeout=60");
         releaseSocket = request.socket;
       }
+      const page = Number(url.searchParams.get("page") || 1);
+      const perPage = Number(url.searchParams.get("per_page") || 100);
+      state.listPages.push(page);
+      if (page === 1) releaseList = state.releaseLists.shift() ?? state.releases;
       response.setHeader("content-type", "application/json");
-      response.end(JSON.stringify(state.releases));
+      response.end(JSON.stringify(releaseList.slice((page - 1) * perPage, page * perPage)));
       return;
     }
     if (url.pathname === "/uploads/2/assets") {
@@ -120,6 +125,41 @@ test("the first release is 0.1.0 and includes ordinary direct commits", async (t
   assert.equal(plan.version, "0.1.0");
   assert.match(plan.notes, /Initial implementation/u);
   assert.match(plan.notes, new RegExp(`/commit/${sha}`, "u"));
+  assert.deepEqual(repo.state.listPages, [1]);
+});
+
+test("incomplete release lists recover the current draft after published history", async (t) => {
+  for (const [name, partial] of [["initially empty", false], ["later page omitted with stale history", true]]) {
+    await t.test(name, async (t) => {
+      const repo = await fixture(t);
+      repo.commit("Initial implementation");
+      for (let patch = 0; patch < 5; patch++) repo.published(`v0.1.${patch}`);
+      const sha = repo.commit("fix: preserve the reserved release");
+      const notes = "The original v0.1.5 release notes.";
+      repo.git("tag", "-a", "v0.1.5", "-m", `${notes}\n\nArchevolt-Package-SHA256: ${"0".repeat(64)}`);
+      repo.state.releases.push({ id: 2, tag_name: "v0.1.5", draft: true, body: notes, assets: [] });
+      if (partial) {
+        const fillers = Array.from({ length: 95 }, (_, index) => ({
+          id: 100 + index, tag_name: `preview-${index}`, draft: false, assets: [],
+        }));
+        repo.state.releases.splice(5, 0, ...fillers);
+        repo.state.releaseLists.push(repo.state.releases.slice(0, 100).map((release, index) => (
+          index === 0 ? { ...release, draft: true, body: "Stale draft metadata." } : release
+        )));
+      } else {
+        repo.state.releaseLists.push([]);
+      }
+      const result = JSON.parse((await repo.cli("plan")).stdout);
+      assert.equal(result.kind, "reserved");
+      assert.deepEqual(result.plan, {
+        sourceSha: sha, previousTag: "v0.1.4", version: "0.1.5", notes,
+      });
+      assert.equal(result.release.id, 2);
+      assert.equal(result.release.draft, true);
+      assert.deepEqual(repo.state.listPages, partial ? [1, 2, 1, 2] : [1, 1]);
+      assert.deepEqual(repo.state.writes, []);
+    });
+  }
 });
 
 test("the full commit range selects strict semantic versions below 1.0", async (t) => {
@@ -157,18 +197,21 @@ test("an already covered source skips package publication", async (t) => {
 
 test("a reserved source reuses its version and notes and blocks later commits", async (t) => {
   const repo = await fixture(t);
-  repo.commit("Initial implementation");
+  const sha = repo.commit("Initial implementation");
   repo.git("tag", "-a", "v0.1.0", "-m", `The tested release notes.\n\nArchevolt-Package-SHA256: ${"0".repeat(64)}`);
   const result = JSON.parse((await repo.cli("plan")).stdout);
   assert.equal(result.kind, "reserved");
-  assert.equal(result.plan.version, "0.1.0");
-  assert.equal(result.plan.notes, "The tested release notes.");
+  assert.deepEqual(result.plan, {
+    sourceSha: sha, previousTag: null, version: "0.1.0", notes: "The tested release notes.",
+  });
+  assert.deepEqual(repo.state.listPages, [1, 1, 1]);
   repo.commit("fix: later correction");
   await assert.rejects(repo.cli("plan"), (error) => {
     assert.match(error.stderr, /Unfinished release v0\.1\.0/u);
     assert.match(error.stderr, /Rerun its original release\.yml/u);
     return true;
   });
+  assert.deepEqual(repo.state.listPages, [1, 1, 1, 1, 1, 1]);
   assert.deepEqual(repo.state.writes, []);
 });
 
@@ -359,7 +402,9 @@ globalThis.fetch = (url, options) => {
 `);
   const env = { NODE_OPTIONS: "--import=./transport.mjs", NUGET_API_KEY: "fixture-key" };
   await writeFile(join(repo.directory, "fail-symbols"), "");
+  repo.state.releaseLists.push([]);
   await assert.rejects(repo.cli("publish", env), (error) => /NuGet symbol upload failed/u.test(error.stderr));
+  assert.deepEqual(repo.state.listPages, [1, 1]);
   assert.equal(repo.state.releases[0].draft, true);
   assert.deepEqual(repo.state.writes, []);
   await rm(join(repo.directory, "fail-symbols"));
