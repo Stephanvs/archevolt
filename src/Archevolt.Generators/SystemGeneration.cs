@@ -176,6 +176,8 @@ public sealed partial class ArchevoltGenerator
     {
         var problems = new List<Problem>();
         var model = System(method, problems, cancellationToken);
+        if (model.Form == SystemForm.EachBlock)
+            model = model with { Parameters = model.Parameters.Select((parameter, index) => parameter with { Name = "__argument" + index }).ToList() };
         var text = Open(method.ContainingType);
         text.Append("public const string ").Append(Escape("__Archevolt_" + method.Name + "_Access")).Append(" = ").Append(Literal(SystemManifest(model))).AppendLine(";");
         var bodyName = "__Archevolt_" + method.Name + "Body";
@@ -218,7 +220,7 @@ public sealed partial class ArchevoltGenerator
         else if (model.Form == SystemForm.EachBlock)
         {
             text.AppendLine("var cursor = _query0.Begin(run);\nwhile (cursor.Next(out var block))\n{");
-            text.Append(Escape(method.Name)).Append('(').Append(string.Join(", ", model.Parameters.Select(parameter => parameter.Kind switch
+            text.Append(TypeName(method.ContainingType)).Append('.').Append(Escape(method.Name)).Append('(').Append(string.Join(", ", model.Parameters.Select(parameter => parameter.Kind switch
             {
                 "Column" => BlockColumn(model.Queries[0].First(term => term.Index == parameter.Index)),
                 "Entities" => "block.Entities", _ => parameter.Name

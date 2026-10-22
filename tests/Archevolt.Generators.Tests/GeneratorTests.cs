@@ -549,6 +549,47 @@ public sealed class GeneratorTests
         Execute(assembly).Should().Be(50034991);
     }
 
+    [Theory]
+    [InlineData("block", "Move")]
+    [InlineData("cursor", "Move")]
+    [InlineData("run", "Move")]
+    [InlineData("_resource0", "Move")]
+    [InlineData("Move", "Move")]
+    [InlineData("__argument0", "Run")]
+    [InlineData("delta", "__argument1")]
+    public void EachBlock_capability_names_do_not_collide_with_generated_locals(string parameterName, string methodName)
+    {
+        var assembly = CompileAndLoad($$"""
+            using Archevolt;
+            using System;
+            [Component] public readonly record struct Position(int Value);
+            [Resource] public readonly record struct Delta(int Value);
+            [Bundle] public readonly partial record struct Particle(Position Position);
+            public static partial class Systems
+            {
+                [EachBlock] public static void {{methodName}}(scoped Span<Position> positions, scoped Res<Delta> {{parameterName}})
+                {
+                    for (int i = 0; i < positions.Length; i++) positions[i] = new(positions[i].Value + {{parameterName}}.Value.Value);
+                }
+            }
+            [EcsModule, IncludeSystems(typeof(Systems)), IncludeBundle<Particle>, IncludeResource<Delta>] public static partial class Game { }
+            [Schedule, Run(typeof(Systems), nameof(Systems.{{methodName}}))] public partial class Simulation { }
+            public static class Acceptance
+            {
+                public static int Run()
+                {
+                    using var world = new WorldBuilder().AddModule(Game.Module).Build();
+                    world.InsertResource(new Delta(5));
+                    var entity = world.Spawn(new Particle(new(7)));
+                    using var simulation = Simulation.Create(world);
+                    simulation.Run();
+                    return world.Get<Position>(entity).Value;
+                }
+            }
+            """);
+        Execute(assembly).Should().Be(12);
+    }
+
     [Fact]
     public void EachBlock_writable_tracked_spans_mark_every_row_changed_and_readonly_spans_mark_none()
     {
@@ -585,6 +626,52 @@ public sealed class GeneratorTests
             }
             """);
         Execute(assembly).Should().Be(1000);
+    }
+
+    [Fact]
+    public void EachBlock_failure_preserves_partial_writes_and_marks_untouched_rows_changed()
+    {
+        var assembly = CompileAndLoad("""
+            using Archevolt;
+            using System;
+            [Component, TrackChanges] public readonly record struct Position(int Value);
+            [Bundle] public readonly partial record struct Particle(Position Position);
+            [Query, Read<Position>, Changed<Position>] public readonly ref partial struct Changes { }
+            public static partial class Systems
+            {
+                public static int Seen;
+                [EachBlock] public static void Fail(scoped Span<Position> positions)
+                {
+                    positions[0] = new(positions[0].Value + 1);
+                    throw new InvalidOperationException("partial write");
+                }
+                [EcsSystem] public static void Observe(scoped Changes changes) { foreach (var row in changes) Seen++; }
+            }
+            [EcsModule, IncludeSystems(typeof(Systems)), IncludeBundle<Particle>] public static partial class Game { }
+            [Schedule, Run(typeof(Systems), nameof(Systems.Fail))] public partial class Writer { }
+            [Schedule, Run(typeof(Systems), nameof(Systems.Observe))] public partial class Observer { }
+            public static class Acceptance
+            {
+                public static int Run()
+                {
+                    using var world = new WorldBuilder().AddModule(Game.Module).Build();
+                    var first = world.Spawn(new Particle(new(10)));
+                    var second = world.Spawn(new Particle(new(20)));
+                    using var writer = Writer.Create(world); using var observer = Observer.Create(world);
+                    observer.Run(); Systems.Seen = 0;
+                    try { writer.Run(); return -1; }
+                    catch (AggregateException failure)
+                    {
+                        if (failure.InnerExceptions.Count != 1 ||
+                            failure.InnerExceptions[0].InnerException is not InvalidOperationException { Message: "partial write" }) return -2;
+                    }
+                    if (world.Get<Position>(first).Value != 11 || world.Get<Position>(second).Value != 20) return -3;
+                    observer.Run();
+                    return Systems.Seen;
+                }
+            }
+            """);
+        Execute(assembly).Should().Be(2);
     }
 
     [Fact]
@@ -811,6 +898,7 @@ public sealed class GeneratorTests
     [InlineData("public static partial class S { [EcsSystem] public static void A() {} } [Schedule, Run(typeof(S), \"A\", Set = \"missing\")] public partial class Simulation { }", "AV007")]
     [InlineData("[Schedule, Stage(\"same\", Order = 0), Stage(\"same\", Order = 1)] public partial class Simulation { }", "AV007")]
     [InlineData("[Component, TrackChanges] public readonly record struct P(int Value); public static partial class S { [EachBlock, Changed<P>] public static void Run(scoped System.Span<P> values) {} }", "AV011")]
+    [InlineData("[Component, TrackChanges] public readonly record struct P(int Value); public static partial class S { [EachBlock, Added<P>] public static void Run(scoped System.Span<P> values) {} }", "AV011")]
     [InlineData("[Component] public readonly record struct P(int Value); [Component] public readonly record struct Q(int Value); public static partial class S { [EachBlock] public static void Run(scoped System.Span<P> values, scoped ref Q other) {} }", "AV005")]
     [InlineData("[Component] public readonly record struct P(int Value); public static partial class S { [EachBlock] public static void Run(System.Span<P> values) {} }", "AV005")]
     [InlineData("[Component] public readonly record struct P(int Value); public static partial class S { [EachBlock] public static void Run(scoped System.Span<P> values, EntityColumn entities) {} }", "AV005")]
