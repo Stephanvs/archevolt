@@ -1,6 +1,6 @@
 # Archevolt performance plan
 
-Status: not started. The v1 implementation plan is complete. Every stage passed its acceptance gate, and the evidence is in `.audit/acceptance.md`. The [v1 plan](https://github.com/Stephanvs/archevolt/blob/ebacf07059fefbf9b182e40a290812be584dd9ee/PLAN.md) remains in history as the record of the original design, its alternatives, and its gates.
+Status: step 0 done. Its baselines are in `benchmarks/baseline.md`. The v1 implementation plan is complete. Every stage passed its acceptance gate, and the evidence is in `.audit/acceptance.md`. The [v1 plan](https://github.com/Stephanvs/archevolt/blob/ebacf07059fefbf9b182e40a290812be584dd9ee/PLAN.md) remains in history as the record of the original design, its alternatives, and its gates.
 
 This plan covers the next stage. It makes Archevolt faster at dense iteration, structural change, and entity lifecycle. Each change is grounded in measured Archevolt costs or in what Bevy changed between v0.17.3, which v1 was designed against, and v0.20.0, the current release.
 

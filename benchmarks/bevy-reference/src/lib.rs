@@ -1,5 +1,7 @@
-//! Bevy counterpart of the dense-movement workload in Archevolt's `ReferenceComparisonBenchmarks`:
-//! the same component layout, initial values, and `position += velocity * (1 / 60)` update.
+//! Bevy counterparts of Archevolt's benchmark workloads. This module holds the dense-movement
+//! workload from `ReferenceComparisonBenchmarks`: the same component layout, initial values, and
+//! `position += velocity * (1 / 60)` update. [`lifecycle`] and [`matrix`] mirror the entity
+//! lifecycle, traversal, and filter workloads.
 //!
 //! `cargo bench` compiles for baseline x86-64, while the .NET JIT targets the host CPU; run
 //! `RUSTFLAGS="-C target-cpu=native" cargo bench` to match it. The target decides how LLVM
@@ -9,6 +11,9 @@
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::SingleThreadedExecutor;
 use bevy_ecs::system::ScheduleSystem;
+
+pub mod lifecycle;
+pub mod matrix;
 
 const DELTA: f32 = 1.0 / 60.0;
 
@@ -39,7 +44,7 @@ impl Position {
     }
 }
 
-fn particle(index: usize) -> (Position, Velocity) {
+pub fn particle(index: usize) -> (Position, Velocity) {
     (
         Position {
             x: (index % 97) as f32,
@@ -52,6 +57,20 @@ fn particle(index: usize) -> (Position, Velocity) {
             z: 3.0,
         },
     )
+}
+
+/// Per-table slices, the counterpart of ROADMAP step 1's slice-per-storage-block system. Writing
+/// through the mutable slice marks every row in it as changed.
+pub fn contiguous(mut query: Query<(&mut Position, &Velocity)>, time: Res<FrameTime>) {
+    let delta = time.0;
+    let tables = query
+        .contiguous_iter_mut()
+        .expect("Position and Velocity are table components");
+    for (mut positions, velocities) in tables {
+        for (position, velocity) in positions.iter_mut().zip(velocities) {
+            *position = position.advanced(velocity, delta);
+        }
+    }
 }
 
 /// Internal iteration, the counterpart of Archevolt's generated `[Each]` loop.
@@ -96,16 +115,30 @@ pub struct Scheduled {
     schedule: Schedule,
 }
 
+/// A schedule holding one system. Archevolt's benchmarks run with a concurrency of one.
+pub fn single_threaded<M>(system: impl IntoScheduleConfigs<ScheduleSystem, M>) -> Schedule {
+    let mut schedule = Schedule::default();
+    schedule.set_executor(SingleThreadedExecutor::new());
+    schedule.add_systems(system);
+    schedule
+}
+
 impl Scheduled {
     pub fn new<M>(count: usize, system: impl IntoScheduleConfigs<ScheduleSystem, M>) -> Self {
         let mut world = World::new();
-        world.insert_resource(FrameTime(DELTA));
         world.spawn_batch((0..count).map(particle));
-        let mut schedule = Schedule::default();
-        // Archevolt's reference comparison runs with a concurrency of one.
-        schedule.set_executor(SingleThreadedExecutor::new());
-        schedule.add_systems(system);
-        Self { world, schedule }
+        Self::from_world(world, system)
+    }
+
+    pub fn from_world<M>(
+        mut world: World,
+        system: impl IntoScheduleConfigs<ScheduleSystem, M>,
+    ) -> Self {
+        world.insert_resource(FrameTime(DELTA));
+        Self {
+            world,
+            schedule: single_threaded(system),
+        }
     }
 
     pub fn run(&mut self) {
@@ -130,8 +163,11 @@ mod tests {
         each.run();
         let mut query = Scheduled::new(1_000, for_loop);
         query.run();
+        let mut slices = Scheduled::new(1_000, contiguous);
+        slices.run();
 
         assert_eq!(positions(&mut each), expected.positions);
         assert_eq!(positions(&mut query), expected.positions);
+        assert_eq!(positions(&mut slices), expected.positions);
     }
 }

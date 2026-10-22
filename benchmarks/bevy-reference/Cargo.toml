@@ -11,6 +11,14 @@ bench = false
 name = "movement"
 harness = false
 
+[[bench]]
+name = "lifecycle"
+harness = false
+
+[[bench]]
+name = "matrix"
+harness = false
+
 [dependencies]
 bevy_ecs = "=0.20.0"
 

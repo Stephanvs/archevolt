@@ -18,6 +18,7 @@ The two sides differ in language, compiler, storage layout, and harness. [ROADMA
 | `Handwritten` | `handwritten` | A loop over two arrays, without an ECS or scheduler. |
 | `GeneratedEach` | `bevy_for_each` | The ECS drives the loop and runs a per-entity body: Archevolt's generated `[Each]` system and Bevy's `query.iter_mut().for_each(...)`. |
 | `GeneratedQuery` | `bevy_for_loop` | The system iterates its query: `foreach` over an Archevolt named query and `for` over a Bevy `Query`. |
+| none until ROADMAP step 1 | `bevy_contiguous` | The system receives one `Position` slice and one `Velocity` slice per table through `Query::contiguous_iter_mut`. Writing through the slice marks every row as changed. |
 | `ArchInline` | none | Arch 2.1.0 `InlineQuery` with a struct callback, without a scheduler. |
 
 The Archevolt and Bevy cases run one system through a schedule on one thread. Archevolt uses concurrency 1; Bevy uses `SingleThreadedExecutor`. Their times include schedule dispatch and resource access. [Cargo.toml](bevy-reference/Cargo.toml) pins `bevy_ecs` to 0.20.0 with its default features.
@@ -37,11 +38,11 @@ The Rust side, once per build target (see [Rust build target](#rust-build-target
 ```powershell
 cd benchmarks/bevy-reference
 cargo test
-cargo bench
-$env:RUSTFLAGS = '-C target-cpu=native'; cargo bench; Remove-Item Env:RUSTFLAGS
+cargo bench --bench movement
+$env:RUSTFLAGS = '-C target-cpu=native'; cargo bench --bench movement; Remove-Item Env:RUSTFLAGS
 ```
 
-In a POSIX shell, the last line is `RUSTFLAGS="-C target-cpu=native" cargo bench`. Changing `RUSTFLAGS` rebuilds all dependencies.
+In a POSIX shell, the last line is `RUSTFLAGS="-C target-cpu=native" cargo bench --bench movement`. Changing `RUSTFLAGS` rebuilds all dependencies.
 
 BenchmarkDotNet switches Windows to the High performance power plan while it runs and restores the previous plan afterwards. Criterion leaves the plan alone. To run criterion under the same plan, run `powercfg /setactive SCHEME_MIN` before `cargo bench`, then reactivate the previous plan, for example `powercfg /setactive SCHEME_BALANCED`.
 
@@ -118,4 +119,4 @@ The ranges below compare each Rust run with each .NET run.
 
 ## Not covered
 
-The workload has one archetype, two small components, one thread, and steady-state updates only. The .NET [workload matrix](Archevolt.Benchmarks/PerformanceMeasurement.cs) also measures multiple archetypes, wide components, change and optional filters, structural changes, and parallel execution; none of those have a Bevy port. All results come from one machine.
+The workload has one archetype, two small components, one thread, and steady-state updates only. The results above predate `bevy_contiguous`. [baseline.md](baseline.md) records it, together with the Bevy ports of the entity lifecycle, traversal matrix, and filter cases. Parallel execution has no Bevy port. All results come from one machine.

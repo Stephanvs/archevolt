@@ -102,13 +102,15 @@ internal static class MatrixPopulation
         new WorldBuilder().AddModule(MatrixModule.Module).UseParallelExecution(concurrency)
             .Reserve(commandBytesPerProducer: commandBytes).Build();
 
+    internal static Particle ParticleAt(int index) => new(new Position(index % 97, 0, 0), new Velocity(1, 2, 3));
+
     internal static Entity[] Populate(World world, int count, int archetypes = 1, bool wide = false)
     {
         world.InsertResource(new FrameTime(1f / 60));
         var entities = new Entity[count];
         for (int i = 0; i < count; i++)
         {
-            Entity entity = world.Spawn(new Particle(new Position(i % 97, 0, 0), new Velocity(1, 2, 3)));
+            Entity entity = world.Spawn(ParticleAt(i));
             entities[i] = entity;
             int mask = i % archetypes;
             if ((mask & 1) != 0) world.Insert(entity, default(MatrixTag0));
@@ -118,5 +120,35 @@ internal static class MatrixPopulation
             if (wide) world.Insert(entity, new WidePayload { Value = i });
         }
         return entities;
+    }
+
+    internal static void RequireParticles(World world, Entity[] entities)
+    {
+        for (int i = 0; i < entities.Length; i++)
+        {
+            Particle expected = ParticleAt(i);
+            if (world.Get<Position>(entities[i]) != expected.Position || world.Get<Velocity>(entities[i]) != expected.Velocity)
+                throw new InvalidOperationException($"Entity {i} does not hold its spawned particle.");
+        }
+    }
+
+    // bevy-reference shuffles with the same SplitMix64 sequence, so both sides visit entities in the same order.
+    internal static T[] Shuffled<T>(T[] items)
+    {
+        var result = (T[])items.Clone();
+        ulong state = 0;
+        for (int i = result.Length - 1; i > 0; i--)
+        {
+            unchecked
+            {
+                state += 0x9E3779B97F4A7C15;
+                ulong z = state;
+                z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9;
+                z = (z ^ (z >> 27)) * 0x94D049BB133111EB;
+                int j = (int)((z ^ (z >> 31)) % (ulong)(i + 1));
+                (result[i], result[j]) = (result[j], result[i]);
+            }
+        }
+        return result;
     }
 }

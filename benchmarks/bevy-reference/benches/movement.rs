@@ -1,6 +1,6 @@
 use std::hint::black_box;
 
-use bevy_reference::{Handwritten, Scheduled, for_each, for_loop};
+use bevy_reference::{Handwritten, Scheduled, contiguous, for_each, for_loop};
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 
 const COUNT: usize = 100_000;
@@ -22,6 +22,11 @@ fn movement(c: &mut Criterion) {
     let mut query = Scheduled::new(COUNT, for_loop);
     group.bench_function(BenchmarkId::new("bevy_for_loop", COUNT), |b| {
         b.iter(|| black_box(&mut query).run())
+    });
+
+    let mut slices = Scheduled::new(COUNT, contiguous);
+    group.bench_function(BenchmarkId::new("bevy_contiguous", COUNT), |b| {
+        b.iter(|| black_box(&mut slices).run())
     });
 
     group.finish();

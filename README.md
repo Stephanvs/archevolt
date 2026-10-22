@@ -140,4 +140,6 @@ dotnet run --project benchmarks/Archevolt.Benchmarks -c Release -- --filter "*Mo
 ./scripts/measure.ps1 -Mode All
 ```
 
+`./scripts/baseline.ps1` records the [step 0 baseline](benchmarks/baseline.md): entity lifecycle, traversal, and filter cases next to their Bevy counterparts, with the median of three process runs.
+
 Benchmark results are workload-specific. The [performance report](.audit/performance-final.md) records the workload matrix, handwritten and Arch comparisons, allocations, native storage, generated code sizes, and JIT/AOT inspection. Structural churn allocates, and small workloads can cost more to dispatch in parallel.
