@@ -17,8 +17,8 @@ internal static class QuickMeasurement
         try
         {
             workload.Setup();
-            string[] names = ["handwritten", "generated-each", "generated-query"];
-            Action[] methods = [workload.Handwritten, workload.GeneratedEach, workload.GeneratedQuery];
+            string[] names = ["handwritten", "generated-each", "generated-query", "generated-block", "generated-block-vector"];
+            Action[] methods = [workload.Handwritten, workload.GeneratedEach, workload.GeneratedQuery, workload.GeneratedBlock, workload.GeneratedBlockVector];
             const int warmup = 32;
             const int repetitions = 64;
             var elapsed = new long[methods.Length];

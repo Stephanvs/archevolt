@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
 using Archevolt;
 using BenchmarkDotNet.Attributes;
 
@@ -12,6 +13,8 @@ public unsafe class MovementBenchmarks
     private World _world = null!;
     private BoundSchedule _each = null!;
     private BoundSchedule _query = null!;
+    private BoundSchedule _block = null!;
+    private BoundSchedule _blockVector = null!;
 
     [Params(1_000, 100_000, 1_000_000)]
     public int Count { get; set; }
@@ -37,18 +40,27 @@ public unsafe class MovementBenchmarks
 
         _world = new WorldBuilder().AddModule(MovementModule.Module).UseParallelExecution(Concurrency).Build();
         _world.InsertResource(new FrameTime(1f / 60));
+        var entities = new Entity[Count];
         for (var i = 0; i < Count; i++)
         {
             var position = new Position(i % 97, 0, 0);
             var velocity = new Velocity(1, 2, 3);
             _positions[i] = position;
             _velocities[i] = velocity;
-            _world.Spawn(new Particle(position, velocity));
+            entities[i] = _world.Spawn(new Particle(position, velocity));
         }
         _each = EachMovement.Create(_world);
         _query = QueryMovement.Create(_world);
-        _each.Run();
-        _query.Run();
+        _block = BlockMovement.Create(_world);
+        _blockVector = BlockVectorMovement.Create(_world);
+        foreach (var schedule in new[] { _each, _query, _block, _blockVector })
+        {
+            schedule.Run();
+            Handwritten();
+        }
+        for (var i = 0; i < Count; i++)
+            if (_world.Get<Position>(entities[i]) != _positions[i])
+                throw new InvalidOperationException($"Generated movement diverged from the handwritten loop at entity {i}.");
     }
 
     [Benchmark(Baseline = true)]
@@ -71,11 +83,19 @@ public unsafe class MovementBenchmarks
     [Benchmark]
     public void GeneratedQuery() => _query.Run();
 
+    [Benchmark]
+    public void GeneratedBlock() => _block.Run();
+
+    [Benchmark]
+    public void GeneratedBlockVector() => _blockVector.Run();
+
     [GlobalCleanup]
     public void Cleanup()
     {
         _each?.Dispose();
         _query?.Dispose();
+        _block?.Dispose();
+        _blockVector?.Dispose();
         _world?.Dispose();
         NativeMemory.AlignedFree(_positions);
         NativeMemory.AlignedFree(_velocities);
@@ -101,6 +121,35 @@ public static partial class Movement
         position = new Position(position.X + velocity.X * delta, position.Y + velocity.Y * delta, position.Z + velocity.Z * delta);
     }
 
+    [EachBlock(Partitioned = true)]
+    public static void Block(scoped Span<Position> positions, scoped ReadOnlySpan<Velocity> velocities, scoped Res<FrameTime> time)
+    {
+        var delta = time.Value.Delta;
+        velocities = velocities[..positions.Length];
+        for (var i = 0; i < positions.Length; i++)
+        {
+            ref var p = ref positions[i];
+            ref readonly var v = ref velocities[i];
+            p = new Position(p.X + v.X * delta, p.Y + v.Y * delta, p.Z + v.Z * delta);
+        }
+    }
+
+    [EachBlock(Partitioned = true)]
+    public static void BlockVector(scoped Span<Position> positions, scoped ReadOnlySpan<Velocity> velocities, scoped Res<FrameTime> time)
+    {
+        var p = MemoryMarshal.Cast<Position, float>(positions);
+        var v = MemoryMarshal.Cast<Velocity, float>(velocities)[..p.Length];
+        var delta = time.Value.Delta;
+        var d = Vector256.Create(delta);
+        ref var pr = ref MemoryMarshal.GetReference(p);
+        ref var vr = ref MemoryMarshal.GetReference(v);
+        var i = 0;
+        for (; i <= p.Length - Vector256<float>.Count; i += Vector256<float>.Count)
+            (Vector256.LoadUnsafe(ref pr, (nuint)i) + Vector256.LoadUnsafe(ref vr, (nuint)i) * d).StoreUnsafe(ref pr, (nuint)i);
+        for (; i < p.Length; i++)
+            p[i] += v[i] * delta;
+    }
+
     [EcsSystem]
     public static void Query(scoped Moving moving, scoped Res<FrameTime> time)
     {
@@ -122,3 +171,9 @@ public sealed partial class EachMovement;
 
 [Schedule, Run(typeof(Movement), nameof(Movement.Query), Order = 0)]
 public sealed partial class QueryMovement;
+
+[Schedule, Run(typeof(Movement), nameof(Movement.Block), Order = 0)]
+public sealed partial class BlockMovement;
+
+[Schedule, Run(typeof(Movement), nameof(Movement.BlockVector), Order = 0)]
+public sealed partial class BlockVectorMovement;

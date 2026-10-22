@@ -67,8 +67,8 @@ try {
         Invoke-Recorded 'bdn.txt' @($Assembly, '--filter', '*ReferenceComparisonBenchmarks*', '--job', 'Short',
             '--launchCount', '1', '--warmupCount', '3', '--iterationCount', '8',
             '--artifacts', (Join-Path $Output 'bdn'))
-        if (-not (Select-String -LiteralPath (Join-Path $Output 'bdn.txt') -Pattern 'executed benchmarks: 4' -Quiet)) {
-            throw 'BenchmarkDotNet did not execute all four reference benchmarks.'
+        if (-not (Select-String -LiteralPath (Join-Path $Output 'bdn.txt') -Pattern 'executed benchmarks: 6' -Quiet)) {
+            throw 'BenchmarkDotNet did not execute all six reference benchmarks.'
         }
     }
     if ($Mode -in @('Disassembly', 'All')) {
@@ -79,7 +79,7 @@ try {
         try {
             $env:DOTNET_TieredCompilation = '0'
             $env:DOTNET_ReadyToRun = '0'
-            $env:DOTNET_JitDisasm = '*Run* *Handwritten* *ArchInline* *Query*'
+            $env:DOTNET_JitDisasm = '*Run* *Handwritten* *ArchInline* *Query* *Block*'
             $env:DOTNET_JitStdOutFile = Join-Path $Output 'jit-disassembly.txt'
             Set-Content -LiteralPath $env:DOTNET_JitStdOutFile -Value '' -NoNewline
             Invoke-Recorded 'disassembly-run.txt' @($Assembly, '--matrix')
@@ -87,7 +87,7 @@ try {
             $methods = [regex]::Matches($disassembly,
                 '(?ms)^; Assembly listing for method (?<name>[^\r\n]+).*?^; Total bytes of code (?<bytes>\d+)\r?\n')
             $selected = @($methods | Where-Object {
-                $_.Groups['name'].Value -match 'Movement.*(Run|Query|Handwritten)|ArchInline|InlineQuery'
+                $_.Groups['name'].Value -match 'Movement.*(Run|Query|Block|Handwritten)|ArchInline|InlineQuery'
             })
             $selected | ForEach-Object {
                 [pscustomobject]@{ Method = $_.Groups['name'].Value; CodeBytes = $_.Groups['bytes'].Value }

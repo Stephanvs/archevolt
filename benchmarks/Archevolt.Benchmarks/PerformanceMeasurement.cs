@@ -24,6 +24,8 @@ public static class PerformanceMeasurement
                 Measure("movement-handwritten", count, comparison.Handwritten);
                 Measure("movement-generated-each", count, comparison.GeneratedEach);
                 Measure("movement-generated-query", count, comparison.GeneratedQuery);
+                Measure("movement-generated-block", count, comparison.GeneratedBlock);
+                Measure("movement-generated-block-vector", count, comparison.GeneratedBlockVector);
                 Measure("movement-arch-2.1.0-inline", count, comparison.ArchInline);
             }
             finally { comparison.Cleanup(); }
@@ -36,6 +38,8 @@ public static class PerformanceMeasurement
             {
                 Measure("movement-generated-each-concurrency-4", count, parallel.GeneratedEach);
                 Measure("movement-generated-query-concurrency-4", count, parallel.GeneratedQuery);
+                Measure("movement-generated-block-concurrency-4", count, parallel.GeneratedBlock);
+                Measure("movement-generated-block-vector-concurrency-4", count, parallel.GeneratedBlockVector);
             }
             finally { parallel.Cleanup(); }
         }
