@@ -7,7 +7,7 @@ namespace Archevolt.Generators;
 public sealed partial class ArchevoltGenerator
 {
     static IEnumerable<IMethodSymbol> Systems(INamedTypeSymbol owner) => owner.GetMembers().OfType<IMethodSymbol>()
-        .Where(static method => Has(method, "EachAttribute") || Has(method, "EcsSystemAttribute") || Has(method, "RunConditionAttribute")).OrderBy(static method => method.Name, StringComparer.Ordinal);
+        .Where(static method => FormOf(method) is not null).OrderBy(static method => method.Name, StringComparer.Ordinal);
 
     static GeneratedUnit GenerateModule(INamedTypeSymbol symbol, CancellationToken cancellationToken)
     {
@@ -32,7 +32,7 @@ public sealed partial class ArchevoltGenerator
             {
                 foreach (var method in Systems(owner))
                 {
-                    var model = System(method, Has(method, "EachAttribute"), problems, cancellationToken);
+                    var model = System(method, problems, cancellationToken);
                     systems[TypeName(owner) + "." + method.Name] = method;
                     foreach (var component in model.Components) components[component.Type] = component;
                     foreach (var resource in model.Resources) resources[resource.Type] = resource;
@@ -69,7 +69,7 @@ public sealed partial class ArchevoltGenerator
         var text = Open(symbol);
         var manifest = "1\n" + string.Join("\n", components.Values.OrderBy(static component => component.Type, StringComparer.Ordinal).Select(static component =>
             $"component|{component.Type}|{component.Tracked}|{component.Tag}").Concat(systems.Values.Select(method => "system|" + TypeName(method.ContainingType) + "." + method.Name + "_Descriptor\n" +
-            SystemManifest(System(method, Has(method, "EachAttribute"), problems, cancellationToken))))
+            SystemManifest(System(method, problems, cancellationToken))))
             .Concat(resources.Values.Select(static resource => $"resource|{resource.Type}|{resource.Tracked}|{resource.OwnerThread}|{resource.Managed}")));
         text.Append("public const int ArchevoltManifestAbi = 1;\npublic const string ArchevoltManifest = ").Append(Literal(manifest)).AppendLine(";");
         text.Append("public static global::Archevolt.ModuleDescriptor Module { get; } = new global::Archevolt.ModuleBuilder(").Append(Literal(symbol.ToDisplayString())).AppendLine(", abiVersion: 1)");
@@ -118,7 +118,7 @@ public sealed partial class ArchevoltGenerator
             return id;
         }
         var method = Systems(run.Owner).FirstOrDefault(method => method.Name == run.Method);
-        var manifest = method is not null ? SystemManifest(System(method, Has(method, "EachAttribute"), problems, cancellationToken)) :
+        var manifest = method is not null ? SystemManifest(System(method, problems, cancellationToken)) :
             run.Owner.GetMembers("__Archevolt_" + run.Method + "_Access").OfType<IFieldSymbol>().FirstOrDefault()?.ConstantValue as string ?? "";
         if (method is null && manifest.Length == 0) Error(problems, run.Owner, "AV009", $"Imported system {run.Owner.Name}.{run.Method} has no generated access manifest.");
         var lines = manifest.Split('\n').Select(static line => line.Split('|')).ToArray();
@@ -148,7 +148,7 @@ public sealed partial class ArchevoltGenerator
         {
             if (attribute.ConstructorArguments.Length != 2 || attribute.ConstructorArguments[0].Value is not INamedTypeSymbol owner ||
                 attribute.ConstructorArguments[1].Value is not string methodName) { Error(problems, symbol, "AV007", "Run needs a known owner and method name."); continue; }
-            var methods = Systems(owner).Where(method => method.Name == methodName && !Has(method, "RunConditionAttribute")).ToArray();
+            var methods = Systems(owner).Where(method => method.Name == methodName && FormOf(method) != SystemForm.Condition).ToArray();
             var exported = owner.GetMembers(methodName + "_Descriptor").Any(member => member.DeclaredAccessibility == Accessibility.Public);
             if (methods.Length != 1 && !exported) { Error(problems, symbol, "AV007", $"Unknown or ambiguous system {owner.Name}.{methodName}."); continue; }
             var order = attribute.NamedArguments.FirstOrDefault(static pair => pair.Key == "Order").Value.Value is int value ? value : 0;
@@ -206,7 +206,7 @@ public sealed partial class ArchevoltGenerator
             var conditionName = NamedString(run.Attribute, "Condition");
             if (conditionName is null) { conditions.Add(null); continue; }
             var owner = run.Attribute.NamedArguments.FirstOrDefault(static pair => pair.Key == "ConditionOwner").Value.Value as INamedTypeSymbol ?? run.Owner;
-            var method = Systems(owner).FirstOrDefault(method => method.Name == conditionName && Has(method, "RunConditionAttribute"));
+            var method = Systems(owner).FirstOrDefault(method => method.Name == conditionName && FormOf(method) == SystemForm.Condition);
             var importedManifest = owner.GetMembers("__Archevolt_" + conditionName + "_Access").OfType<IFieldSymbol>().FirstOrDefault()?.ConstantValue as string;
             if (method is null && importedManifest?.StartsWith("condition|True\n", StringComparison.Ordinal) != true)
                 Error(problems, symbol, "AV007", $"Unknown run condition {owner.Name}.{conditionName}.");

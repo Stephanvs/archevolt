@@ -6,18 +6,24 @@ namespace Archevolt.Generators;
 
 public sealed partial class ArchevoltGenerator
 {
-    sealed record SystemModel(IMethodSymbol Method, bool Each, List<ParameterModel> Parameters, List<List<TermModel>> Queries,
+    enum SystemForm { System, Condition, Each }
+
+    static readonly (string Attribute, SystemForm Form)[] Forms = [("EcsSystemAttribute", SystemForm.System), ("RunConditionAttribute", SystemForm.Condition), ("EachAttribute", SystemForm.Each)];
+
+    static SystemForm? FormOf(IMethodSymbol method) => Forms.Where(form => Has(method, form.Attribute)).Select(static form => (SystemForm?)form.Form).FirstOrDefault();
+
+    sealed record SystemModel(IMethodSymbol Method, SystemForm Form, List<ParameterModel> Parameters, List<List<TermModel>> Queries,
         List<ComponentModel> Components, List<ComponentModel> Resources, bool Partitionable);
 
-    static SystemModel System(IMethodSymbol method, bool each, List<Problem> problems, CancellationToken cancellationToken)
+    static SystemModel System(IMethodSymbol method, List<Problem> problems, CancellationToken cancellationToken)
     {
-        bool condition = Has(method, "RunConditionAttribute");
+        var form = FormOf(method) ?? SystemForm.System;
         if (method.Locations.Any(static location => location.IsInSource)) ValidatePartial(method.ContainingType, problems, cancellationToken);
-        if (!method.IsStatic || (condition ? method.ReturnType.SpecialType != SpecialType.System_Boolean : !method.ReturnsVoid) || method.IsAsync || method.IsGenericMethod || method.ReturnsByRef || method.ReturnsByRefReadonly ||
+        if (!method.IsStatic || (form == SystemForm.Condition ? method.ReturnType.SpecialType != SpecialType.System_Boolean : !method.ReturnsVoid) || method.IsAsync || method.IsGenericMethod || method.ReturnsByRef || method.ReturnsByRefReadonly ||
             method.MethodKind != MethodKind.Ordinary || method.ContainingType.GetMembers(method.Name).OfType<IMethodSymbol>().Count() != 1 ||
             method.DeclaringSyntaxReferences.Any(reference => reference.GetSyntax(cancellationToken).DescendantNodes().OfType<YieldStatementSyntax>().Any()))
-            Error(problems, method, "AV005", condition ? "A run condition must be a synchronous, non-generic, non-overloaded static bool method." : "A system must be a synchronous, non-generic, non-overloaded static void method.");
-        if ((Has(method, "EachAttribute") ? 1 : 0) + (Has(method, "EcsSystemAttribute") ? 1 : 0) + (condition ? 1 : 0) != 1)
+            Error(problems, method, "AV005", form == SystemForm.Condition ? "A run condition must be a synchronous, non-generic, non-overloaded static bool method." : "A system must be a synchronous, non-generic, non-overloaded static void method.");
+        if (Forms.Count(entry => Has(method, entry.Attribute)) != 1)
             Error(problems, method, "AV005", "Choose exactly one of Each, EcsSystem, or RunCondition.");
         var parameters = new List<ParameterModel>();
         var queries = new List<List<TermModel>>();
@@ -65,7 +71,7 @@ public sealed partial class ArchevoltGenerator
                 if (parameter.RefKind != RefKind.None || parameter.ScopedKind == ScopedKind.None)
                     Error(problems, parameter, "AV005", "Resource capability parameters must be passed by scoped value.");
             }
-            else if (!each && type is INamedTypeSymbol query && Has(query, "QueryAttribute"))
+            else if (form is SystemForm.System or SystemForm.Condition && type is INamedTypeSymbol query && Has(query, "QueryAttribute"))
             {
                 kind = "Query";
                 index = queries.Count;
@@ -75,11 +81,11 @@ public sealed partial class ArchevoltGenerator
                 if (parameter.RefKind != RefKind.None || parameter.ScopedKind == ScopedKind.None)
                     Error(problems, parameter, "AV005", "Query capability parameters must be passed by scoped value.");
             }
-            else if (each && TypeName(type) == "global::Archevolt.Entity" && parameter.RefKind == RefKind.None)
+            else if (form == SystemForm.Each && TypeName(type) == "global::Archevolt.Entity" && parameter.RefKind == RefKind.None)
             {
                 kind = "Entity"; index = -1;
             }
-            else if (each && parameter.RefKind is RefKind.Ref or RefKind.In or RefKind.RefReadOnlyParameter)
+            else if (form == SystemForm.Each && parameter.RefKind is RefKind.Ref or RefKind.In or RefKind.RefReadOnlyParameter)
             {
                 kind = "Component";
                 ValidateComponent(type, parameter, problems, valueAccess: true);
@@ -97,7 +103,7 @@ public sealed partial class ArchevoltGenerator
             }
             parameters.Add(new(TypeName(type), Escape(parameter.Name), kind, parameter.RefKind == RefKind.Ref ? "ref" : "in", index, component));
         }
-        if (each)
+        if (form == SystemForm.Each)
         {
             var terms = QueryTerms(method, problems);
             var indexes = eachTerms.GroupBy(static term => term.Component.Type).ToDictionary(static group => group.Key, static group => group.First().Index);
@@ -119,13 +125,13 @@ public sealed partial class ArchevoltGenerator
             if (group.Count() > 1 && group.Any(static parameter => parameter.Kind is "ResMut" or "ManagedRes")) Error(problems, method, "AV004", "Mutable resource parameters alias the same resource.");
         foreach (var group in parameters.Where(static parameter => parameter.Kind is "MessageReader" or "MessageWriter").GroupBy(static parameter => parameter.Component!.Type))
             if (group.Count() > 1 && group.Any(static parameter => parameter.Kind == "MessageWriter")) Error(problems, method, "AV004", "Message writer parameters alias the same message channel.");
-        if (condition && (queries.Any(static query => query.Any(static term => term.Mode == "Write")) || parameters.Any(static parameter => parameter.Kind is "ResMut" or "ManagedRes" or "MessageWriter" or "Commands")))
+        if (form == SystemForm.Condition && (queries.Any(static query => query.Any(static term => term.Mode == "Write")) || parameters.Any(static parameter => parameter.Kind is "ResMut" or "ManagedRes" or "MessageWriter" or "Commands")))
             Error(problems, method, "AV010", "Run conditions may read world capabilities and mutate only their instance-local state.");
-        bool partitionRequested = each && Attributes(method, "EachAttribute").Any(attribute => NamedBool(attribute, "Partitioned"));
+        bool partitionRequested = form == SystemForm.Each && Attributes(method, "EachAttribute").Any(attribute => NamedBool(attribute, "Partitioned"));
         bool partitionSafe = parameters.All(static parameter => parameter.Kind is "Component" or "Entity" or "Res" or "OptionalRes" && parameter.Component?.OwnerThread != true);
         if (partitionRequested && !partitionSafe)
             Error(problems, method, "AV010", "Partitioned Each permits only component refs, Entity, and readonly unmanaged resources without owner-thread affinity.");
-        return new(method, each, parameters, queries, components, resources, partitionRequested && partitionSafe);
+        return new(method, form, parameters, queries, components, resources, partitionRequested && partitionSafe);
     }
 
     static bool Conflicts(IReadOnlyList<TermModel> left, IReadOnlyList<TermModel> right)
@@ -137,20 +143,19 @@ public sealed partial class ArchevoltGenerator
             other.Mode is "Read" or "Write" or "Optional" && (term.Mode == "Write" || other.Mode == "Write")));
     }
 
-    static string SystemManifest(SystemModel model) => "condition|" + Has(model.Method, "RunConditionAttribute") + "\ncommands|" + model.Parameters.Any(static parameter => parameter.Kind == "Commands") + "\n" + string.Join("\n", model.Queries.SelectMany((query, index) => query.Select(term =>
+    static string SystemManifest(SystemModel model) => "condition|" + (model.Form == SystemForm.Condition) + "\ncommands|" + model.Parameters.Any(static parameter => parameter.Kind == "Commands") + "\n" + string.Join("\n", model.Queries.SelectMany((query, index) => query.Select(term =>
         $"query|{index}|{term.Mode}|{term.Component.Type}"))
         .Concat(model.Parameters.Where(static parameter => parameter.Kind is "Res" or "ResMut" or "ManagedRes" or "OptionalRes" or "Local" or "MessageReader" or "MessageWriter" or "RemovedComponents")
             .Select(static parameter => $"parameter|{parameter.Kind}|{parameter.Component!.Type}|{parameter.Component.Managed}|{parameter.Component.OwnerThread}")));
 
-    static GeneratedUnit GenerateSystem(IMethodSymbol method, bool each, CancellationToken cancellationToken)
+    static GeneratedUnit GenerateSystem(IMethodSymbol method, CancellationToken cancellationToken)
     {
         var problems = new List<Problem>();
-        var model = System(method, each, problems, cancellationToken);
-        bool condition = Has(method, "RunConditionAttribute");
+        var model = System(method, problems, cancellationToken);
         var text = Open(method.ContainingType);
         text.Append("public const string ").Append(Escape("__Archevolt_" + method.Name + "_Access")).Append(" = ").Append(Literal(SystemManifest(model))).AppendLine(";");
         var bodyName = "__Archevolt_" + method.Name + "Body";
-        text.Append("private sealed class ").Append(bodyName).AppendLine(condition ? " : global::Archevolt.ConditionBody\n{" : " : global::Archevolt.SystemBody\n{");
+        text.Append("private sealed class ").Append(bodyName).AppendLine(model.Form == SystemForm.Condition ? " : global::Archevolt.ConditionBody\n{" : " : global::Archevolt.SystemBody\n{");
         for (int index = 0; index < model.Queries.Count; index++) text.Append("readonly global::Archevolt.QueryState _query").Append(index).AppendLine(";");
         if (model.Parameters.Any(static parameter => parameter.Kind == "Commands")) text.AppendLine("readonly global::Archevolt.CommandsHandle _commands;");
         for (int index = 0; index < model.Resources.Count; index++) text.Append(model.Resources[index].Managed ? "readonly global::Archevolt.ManagedResourceHandle<" : "readonly global::Archevolt.ResourceHandle<").Append(model.Resources[index].Type).Append("> _resource").Append(index).AppendLine(";");
@@ -164,14 +169,14 @@ public sealed partial class ArchevoltGenerator
         foreach (var parameter in model.Parameters.Where(static parameter => parameter.Kind == "Local")) text.Append("_local").Append(parameter.Index).Append(" = binder.Local<").Append(parameter.Component!.Type).Append(">(").Append(parameter.Index).AppendLine(");");
         foreach (var parameter in model.Parameters.Where(static parameter => parameter.Kind is "MessageReader" or "MessageWriter" or "RemovedComponents"))
             text.Append("_message").Append(parameter.Index).Append(parameter.Kind == "RemovedComponents" ? " = binder.Removed<" : " = binder.Message<").Append(parameter.Component!.Type).Append(">(").Append(parameter.Index).AppendLine(");");
-        text.AppendLine(condition ? "}\nprotected override bool Evaluate(global::Archevolt.SystemRun run)\n{" : "}\nprotected override void Run(global::Archevolt.SystemRun run)\n{");
+        text.AppendLine(model.Form == SystemForm.Condition ? "}\nprotected override bool Evaluate(global::Archevolt.SystemRun run)\n{" : "}\nprotected override void Run(global::Archevolt.SystemRun run)\n{");
         foreach (var parameter in model.Parameters.Where(static parameter => parameter.Kind is "Res" or "ResMut" or "ManagedRes" or "OptionalRes"))
             text.Append("var ").Append(parameter.Name).Append(" = _resource").Append(parameter.Index).Append(parameter.Kind == "ResMut" ? ".Write(run);" : parameter.Kind == "OptionalRes" ? ".ReadOptional(run);" : ".Read(run);").AppendLine();
         foreach (var parameter in model.Parameters.Where(static parameter => parameter.Kind == "Local")) text.Append("var ").Append(parameter.Name).Append(" = _local").Append(parameter.Index).AppendLine(".Get(run);");
         foreach (var parameter in model.Parameters.Where(static parameter => parameter.Kind == "Commands")) text.Append("var ").Append(parameter.Name).AppendLine(" = _commands.Open(run);");
         foreach (var parameter in model.Parameters.Where(static parameter => parameter.Kind is "MessageReader" or "MessageWriter" or "RemovedComponents"))
             text.Append("var ").Append(parameter.Name).Append(" = _message").Append(parameter.Index).Append(parameter.Kind == "MessageWriter" ? ".Write(run);" : ".Read(run);").AppendLine();
-        if (each)
+        if (model.Form == SystemForm.Each)
         {
             text.AppendLine("var cursor = _query0.Begin(run);\nwhile (cursor.Next(out var chunk))\n{");
             BindColumns(text, model.Queries[0], declarations: true);
@@ -190,7 +195,7 @@ public sealed partial class ArchevoltGenerator
         {
             foreach (var parameter in model.Parameters.Where(static parameter => parameter.Kind == "Query"))
                 text.Append("var ").Append(parameter.Name).Append(" = new ").Append(parameter.Type).Append("(_query").Append(parameter.Index).AppendLine(", run);");
-            if (condition) text.Append("return ");
+            if (model.Form == SystemForm.Condition) text.Append("return ");
             text.Append(Escape(method.Name)).Append('(').Append(string.Join(", ", model.Parameters.Select(static parameter => parameter.Name))).AppendLine(");");
         }
         text.AppendLine("}\n}");
@@ -198,8 +203,8 @@ public sealed partial class ArchevoltGenerator
             .Append(Literal(method.ContainingType.ToDisplayString() + "." + method.Name)).Append(", static binder => new ").Append(bodyName).AppendLine("(binder))");
         for (int index = 0; index < model.Queries.Count; index++)
         {
-            text.Append(each ? ".EachQuery(" : ".Query(").Append(Shape(method.ToDisplayString() + "." + index, model.Queries[index]));
-            if (each) text.Append(", partitionable: ").Append(Bool(model.Partitionable));
+            text.Append(model.Form == SystemForm.Each ? ".EachQuery(" : ".Query(").Append(Shape(method.ToDisplayString() + "." + index, model.Queries[index]));
+            if (model.Form == SystemForm.Each) text.Append(", partitionable: ").Append(Bool(model.Partitionable));
             text.AppendLine(")");
         }
         foreach (var parameter in model.Parameters.Where(static parameter => parameter.Kind is "Res" or "ResMut" or "ManagedRes" or "OptionalRes"))
@@ -213,8 +218,8 @@ public sealed partial class ArchevoltGenerator
         if (model.Parameters.Any(static parameter => parameter.Kind == "Commands")) text.AppendLine(".Commands()");
         foreach (var parameter in model.Parameters.Where(static parameter => parameter.Kind is "MessageReader" or "MessageWriter" or "RemovedComponents"))
             text.Append('.').Append(parameter.Kind == "RemovedComponents" ? "Removed" : parameter.Kind).Append('<').Append(parameter.Component!.Type).AppendLine(">()");
-        if (condition) text.AppendLine(".AsCondition()");
+        if (model.Form == SystemForm.Condition) text.AppendLine(".AsCondition()");
         text.AppendLine(".Build();");
-        return Unit(method, each ? "Each" : "System", Close(text, method.ContainingType), problems);
+        return Unit(method, model.Form == SystemForm.Each ? "Each" : "System", Close(text, method.ContainingType), problems);
     }
 }
