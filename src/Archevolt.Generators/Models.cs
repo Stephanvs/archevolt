@@ -32,7 +32,7 @@ internal sealed record ParameterModel(string Type, string Name, string Kind, str
 
 internal static class Diagnostics
 {
-    static readonly Dictionary<string, DiagnosticDescriptor> Descriptors = Enumerable.Range(1, 10).ToDictionary(
+    static readonly Dictionary<string, DiagnosticDescriptor> Descriptors = Enumerable.Range(1, 11).ToDictionary(
         static index => $"AV{index:000}",
         static index => new DiagnosticDescriptor($"AV{index:000}", "Invalid Archevolt declaration", "{0}", "Archevolt",
             index == 8 ? DiagnosticSeverity.Warning : DiagnosticSeverity.Error, isEnabledByDefault: true));

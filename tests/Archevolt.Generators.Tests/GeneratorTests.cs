@@ -58,6 +58,55 @@ public sealed class GeneratorTests
         Execute(assembly).Should().Be(expectedThreads);
     }
 
+    [Theory]
+    [InlineData("EachBlock", false, 1)]
+    [InlineData("EachBlock(Partitioned = false)", false, 1)]
+    [InlineData("EachBlock(Partitioned = true)", true, 4)]
+    public void EachBlock_partitioning_requires_explicit_opt_in(string attribute, bool requireOverlap, int expectedThreads)
+    {
+        var assembly = CompileAndLoad($$"""
+            using Archevolt;
+            using System;
+            using System.Collections.Concurrent;
+            using System.Threading;
+            [Component] public readonly record struct Position(int Value);
+            [Bundle] public readonly partial record struct Particle(Position Position);
+            public static partial class Systems
+            {
+                public static readonly ConcurrentDictionary<int, byte> Threads = new();
+                public static readonly Barrier Together = new(4);
+                public static bool RequireOverlap;
+                public static int Rows;
+                [{{attribute}}]
+                public static void Increment(scoped Span<Position> positions)
+                {
+                    bool firstOnThread = Threads.TryAdd(Environment.CurrentManagedThreadId, 0);
+                    if (RequireOverlap && firstOnThread && !Together.SignalAndWait(TimeSpan.FromSeconds(10)))
+                        throw new InvalidOperationException("The requested partitions did not overlap.");
+                    Interlocked.Add(ref Rows, positions.Length);
+                    for (int index = 0; index < positions.Length; index++) positions[index] = new(positions[index].Value + 1);
+                }
+            }
+            [EcsModule, IncludeSystems(typeof(Systems)), IncludeBundle<Particle>] public static partial class Game { }
+            [Schedule, Run(typeof(Systems), nameof(Systems.Increment))] public partial class Simulation { }
+            public static class Acceptance
+            {
+                public static int Run()
+                {
+                    Systems.RequireOverlap = {{(requireOverlap ? "true" : "false")}};
+                    using var world = new WorldBuilder().UseParallelExecution(4).WithChunkBytes(256).AddModule(Game.Module).Build();
+                    var entities = new Entity[10000];
+                    for (int index = 0; index < entities.Length; index++) entities[index] = world.Spawn(new Particle(new(index)));
+                    using var simulation = Simulation.Create(world); simulation.Run();
+                    if (Systems.Rows != entities.Length) return -1;
+                    for (int index = 0; index < entities.Length; index++) if (world.Get<Position>(entities[index]).Value != index + 1) return -2;
+                    return Systems.Threads.Count;
+                }
+            }
+            """);
+        Execute(assembly).Should().Be(expectedThreads);
+    }
+
     [Fact]
     public void Generated_declarations_preserve_global_file_block_and_nested_namespaces()
     {
@@ -459,6 +508,224 @@ public sealed class GeneratorTests
     }
 
     [Fact]
+    public void EachBlock_moves_every_block_and_skips_excluded_archetypes()
+    {
+        var assembly = CompileAndLoad("""
+            using Archevolt;
+            using System;
+            [Component] public readonly record struct Position(int Value);
+            [Component] public readonly record struct Velocity(int Value);
+            [Component] public readonly struct Frozen { }
+            [Bundle] public readonly partial record struct Particle(Position Position, Velocity Velocity);
+            public static partial class Motion
+            {
+                public static int Blocks;
+                [EachBlock, Without<Frozen>]
+                private static void Integrate(scoped Span<Position> positions, scoped ReadOnlySpan<Velocity> velocities)
+                {
+                    Blocks++;
+                    for (int i = 0; i < positions.Length; i++) positions[i] = new(positions[i].Value + velocities[i].Value);
+                }
+            }
+            [EcsModule, IncludeSystems(typeof(Motion)), IncludeBundle<Particle>] public static partial class Game { }
+            [Schedule, Run(typeof(Motion), "Integrate")] public sealed partial class Simulation { }
+            public static class Acceptance
+            {
+                public static int Run()
+                {
+                    using var world = new WorldBuilder().WithChunkBytes(256).AddModule(Game.Module).Build();
+                    var entities = new Entity[10000];
+                    for (int i = 0; i < entities.Length; i++) entities[i] = world.Spawn(new Particle(new(i), new(i % 7 + 1)));
+                    world.Insert(entities[5000], new Frozen());
+                    using var simulation = Simulation.Create(world); simulation.Run();
+                    if (Motion.Blocks < 2) return -1;
+                    if (world.Get<Position>(entities[5000]).Value != 5000) return -2;
+                    int checksum = 0;
+                    for (int i = 0; i < entities.Length; i++) checksum += world.Get<Position>(entities[i]).Value;
+                    return checksum;
+                }
+            }
+            """);
+        Execute(assembly).Should().Be(50034991);
+    }
+
+    [Fact]
+    public void EachBlock_writable_tracked_spans_mark_every_row_changed_and_readonly_spans_mark_none()
+    {
+        var assembly = CompileAndLoad("""
+            using Archevolt;
+            using System;
+            [Component, TrackChanges] public readonly record struct Position(int Value);
+            [Bundle] public readonly partial record struct Particle(Position Position);
+            [Query, Read<Position>, Changed<Position>] public readonly ref partial struct Changes { }
+            public static partial class Systems
+            {
+                public static int Seen;
+                [EachBlock] public static void Touch(scoped Span<Position> positions) { }
+                [EachBlock] public static void Look(scoped ReadOnlySpan<Position> positions) { }
+                [EcsSystem] public static void Observe(scoped Changes changes) { foreach (var row in changes) Seen++; }
+            }
+            [EcsModule, IncludeSystems(typeof(Systems)), IncludeBundle<Particle>] public static partial class Game { }
+            [Schedule, Run(typeof(Systems), nameof(Systems.Touch))] public partial class Toucher { }
+            [Schedule, Run(typeof(Systems), nameof(Systems.Look))] public partial class Looker { }
+            [Schedule, Run(typeof(Systems), nameof(Systems.Observe))] public partial class Observer { }
+            public static class Acceptance
+            {
+                public static int Run()
+                {
+                    using var world = new WorldBuilder().WithChunkBytes(256).AddModule(Game.Module).Build();
+                    for (int i = 0; i < 1000; i++) world.Spawn(new Particle(new(i)));
+                    using var toucher = Toucher.Create(world); using var looker = Looker.Create(world); using var observer = Observer.Create(world);
+                    observer.Run(); Systems.Seen = 0;
+                    looker.Run(); observer.Run();
+                    if (Systems.Seen != 0) return -1;
+                    toucher.Run(); observer.Run();
+                    return Systems.Seen;
+                }
+            }
+            """);
+        Execute(assembly).Should().Be(1000);
+    }
+
+    [Fact]
+    public void EachBlock_writes_through_tracked_spans_reach_storage()
+    {
+        var assembly = CompileAndLoad("""
+            using Archevolt;
+            using System;
+            [Component, TrackChanges] public readonly record struct Position(int Value);
+            [Bundle] public readonly partial record struct Particle(Position Position);
+            [Query, Read<Position>, Changed<Position>] public readonly ref partial struct Changes { }
+            public static partial class Systems
+            {
+                public static int Sum;
+                [EachBlock] public static void Drift(scoped Span<Position> positions) { for (int i = 0; i < positions.Length; i++) positions[i] = new(positions[i].Value + 1); }
+                [EcsSystem] public static void Observe(scoped Changes changes) { foreach (var row in changes) Sum += row.Position.Value; }
+            }
+            [EcsModule, IncludeSystems(typeof(Systems)), IncludeBundle<Particle>] public static partial class Game { }
+            [Schedule, Run(typeof(Systems), nameof(Systems.Drift))] public partial class Drifter { }
+            [Schedule, Run(typeof(Systems), nameof(Systems.Observe))] public partial class Observer { }
+            public static class Acceptance
+            {
+                public static int Run()
+                {
+                    using var world = new WorldBuilder().WithChunkBytes(256).AddModule(Game.Module).Build();
+                    for (int i = 0; i < 1000; i++) world.Spawn(new Particle(new(i)));
+                    using var drifter = Drifter.Create(world); using var observer = Observer.Create(world);
+                    observer.Run(); Systems.Sum = 0;
+                    drifter.Run(); observer.Run();
+                    return Systems.Sum;
+                }
+            }
+            """);
+        Execute(assembly).Should().Be(500500);
+    }
+
+    [Fact]
+    public void EachBlock_vector_body_matches_each_bit_for_bit()
+    {
+        var assembly = CompileAndLoad("""
+            using Archevolt;
+            using System;
+            using System.Runtime.InteropServices;
+            using System.Runtime.Intrinsics;
+            [Component] public readonly record struct Position(float X, float Y, float Z);
+            [Component] public readonly record struct Velocity(float X, float Y, float Z);
+            [Resource] public readonly record struct FrameTime(float Delta);
+            [Bundle] public readonly partial record struct Particle(Position Position, Velocity Velocity);
+            public static partial class Motion
+            {
+                [Each]
+                public static void Row(scoped ref Position position, scoped in Velocity velocity, scoped Res<FrameTime> time)
+                {
+                    var delta = time.Value.Delta;
+                    position = new Position(position.X + velocity.X * delta, position.Y + velocity.Y * delta, position.Z + velocity.Z * delta);
+                }
+                [EachBlock]
+                public static void Block(scoped Span<Position> positions, scoped ReadOnlySpan<Velocity> velocities, scoped Res<FrameTime> time)
+                {
+                    var p = MemoryMarshal.Cast<Position, float>(positions);
+                    var v = MemoryMarshal.Cast<Velocity, float>(velocities)[..p.Length];
+                    var delta = time.Value.Delta;
+                    var d = Vector256.Create(delta);
+                    ref var pr = ref MemoryMarshal.GetReference(p);
+                    ref var vr = ref MemoryMarshal.GetReference(v);
+                    var i = 0;
+                    for (; i <= p.Length - Vector256<float>.Count; i += Vector256<float>.Count)
+                        (Vector256.LoadUnsafe(ref pr, (nuint)i) + Vector256.LoadUnsafe(ref vr, (nuint)i) * d).StoreUnsafe(ref pr, (nuint)i);
+                    for (; i < p.Length; i++) p[i] += v[i] * delta;
+                }
+            }
+            [EcsModule, IncludeSystems(typeof(Motion)), IncludeBundle<Particle>, IncludeResource<FrameTime>] public static partial class Game { }
+            [Schedule, Run(typeof(Motion), nameof(Motion.Row))] public partial class RowMovement { }
+            [Schedule, Run(typeof(Motion), nameof(Motion.Block))] public partial class BlockMovement { }
+            public static class Acceptance
+            {
+                static World Populate(out Entity[] entities)
+                {
+                    var world = new WorldBuilder().AddModule(Game.Module).Build();
+                    world.InsertResource(new FrameTime(1f / 60));
+                    entities = new Entity[10001];
+                    for (int i = 0; i < entities.Length; i++)
+                        entities[i] = world.Spawn(new Particle(new(i * 0.001f, i * 0.5f, i % 13), new(1 + i * 0.001f, i % 101 * 0.1f, -(i % 17) * 0.3f)));
+                    return world;
+                }
+                static bool Same(Position left, Position right) => BitConverter.SingleToInt32Bits(left.X) == BitConverter.SingleToInt32Bits(right.X) &&
+                    BitConverter.SingleToInt32Bits(left.Y) == BitConverter.SingleToInt32Bits(right.Y) && BitConverter.SingleToInt32Bits(left.Z) == BitConverter.SingleToInt32Bits(right.Z);
+                public static int Run()
+                {
+                    using var rowWorld = Populate(out var rowEntities);
+                    using var blockWorld = Populate(out var blockEntities);
+                    using var rows = RowMovement.Create(rowWorld); using var blocks = BlockMovement.Create(blockWorld);
+                    for (int step = 0; step < 3; step++) { rows.Run(); blocks.Run(); }
+                    for (int i = 0; i < rowEntities.Length; i++) if (!Same(rowWorld.Get<Position>(rowEntities[i]), blockWorld.Get<Position>(blockEntities[i]))) return -1;
+                    return BitConverter.SingleToInt32Bits(blockWorld.Get<Position>(blockEntities[513]).X);
+                }
+            }
+            """);
+        Execute(assembly).Should().Be(BitConverter.SingleToInt32Bits(0.5886501f));
+    }
+
+    [Fact]
+    public void EachBlock_entity_column_records_commands_per_row()
+    {
+        var assembly = CompileAndLoad("""
+            using Archevolt;
+            using System;
+            [Component] public readonly record struct Position(int Value);
+            [Bundle] public readonly partial record struct Particle(Position Position);
+            public static partial class Systems
+            {
+                [EachBlock]
+                public static void Cull(scoped ReadOnlySpan<Position> positions, scoped EntityColumn entities, scoped Commands commands)
+                {
+                    for (int i = 0; i < positions.Length; i++) if (positions[i].Value % 3 == 0) commands.Despawn(entities[i]);
+                }
+            }
+            [EcsModule, IncludeSystems(typeof(Systems)), IncludeBundle<Particle>] public static partial class Game { }
+            [Schedule, Run(typeof(Systems), nameof(Systems.Cull))] public partial class Simulation { }
+            public static class Acceptance
+            {
+                public static int Run()
+                {
+                    using var world = new WorldBuilder().WithChunkBytes(256).AddModule(Game.Module).Build();
+                    var entities = new Entity[1000];
+                    for (int i = 0; i < entities.Length; i++) entities[i] = world.Spawn(new Particle(new(i)));
+                    using var simulation = Simulation.Create(world); simulation.Run();
+                    int survivors = 0;
+                    for (int i = 0; i < entities.Length; i++)
+                    {
+                        if (world.Contains(entities[i]) == (i % 3 == 0)) return -1;
+                        if (world.Contains(entities[i])) survivors++;
+                    }
+                    return survivors;
+                }
+            }
+            """);
+        Execute(assembly).Should().Be(666);
+    }
+
+    [Fact]
     public void Named_query_resources_and_nested_bundles_execute_the_plan_programming_model()
     {
         var assembly = CompileAndLoad("""
@@ -543,6 +810,14 @@ public sealed class GeneratorTests
     [InlineData("public static partial class S { [EcsSystem] public static void A() {} } [Schedule, Stage(\"update\"), Run(typeof(S), \"A\")] public partial class Simulation { }", "AV007")]
     [InlineData("public static partial class S { [EcsSystem] public static void A() {} } [Schedule, Run(typeof(S), \"A\", Set = \"missing\")] public partial class Simulation { }", "AV007")]
     [InlineData("[Schedule, Stage(\"same\", Order = 0), Stage(\"same\", Order = 1)] public partial class Simulation { }", "AV007")]
+    [InlineData("[Component, TrackChanges] public readonly record struct P(int Value); public static partial class S { [EachBlock, Changed<P>] public static void Run(scoped System.Span<P> values) {} }", "AV011")]
+    [InlineData("[Component] public readonly record struct P(int Value); [Component] public readonly record struct Q(int Value); public static partial class S { [EachBlock] public static void Run(scoped System.Span<P> values, scoped ref Q other) {} }", "AV005")]
+    [InlineData("[Component] public readonly record struct P(int Value); public static partial class S { [EachBlock] public static void Run(System.Span<P> values) {} }", "AV005")]
+    [InlineData("[Component] public readonly record struct P(int Value); public static partial class S { [EachBlock] public static void Run(scoped System.Span<P> values, EntityColumn entities) {} }", "AV005")]
+    [InlineData("[Component] public readonly record struct P(int Value); public static partial class S { [EachBlock(Partitioned = true)] public static void Run(scoped System.Span<P> values, scoped Commands commands) {} }", "AV010")]
+    [InlineData("[Component] public readonly record struct P(int Value); public static partial class S { [EachBlock] public static void Run(scoped System.Span<P> values, scoped System.ReadOnlySpan<P> same) {} }", "AV004")]
+    [InlineData("[Resource] public readonly record struct R(int Value); public static partial class S { [EachBlock] public static void Run(scoped Res<R> value) {} }", "AV005")]
+    [InlineData("[Component] public readonly record struct P(int Value); public static partial class S { [Each, EachBlock] public static void Run(scoped ref P value) {} }", "AV005")]
     public void Invalid_declarations_report_actionable_diagnostics(string declaration, string expectedDiagnostic)
     {
         var result = Generate("using Archevolt;\n" + declaration);

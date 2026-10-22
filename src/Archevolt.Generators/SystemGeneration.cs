@@ -6,9 +6,9 @@ namespace Archevolt.Generators;
 
 public sealed partial class ArchevoltGenerator
 {
-    enum SystemForm { System, Condition, Each }
+    enum SystemForm { System, Condition, Each, EachBlock }
 
-    static readonly (string Attribute, SystemForm Form)[] Forms = [("EcsSystemAttribute", SystemForm.System), ("RunConditionAttribute", SystemForm.Condition), ("EachAttribute", SystemForm.Each)];
+    static readonly (string Attribute, SystemForm Form)[] Forms = [("EcsSystemAttribute", SystemForm.System), ("RunConditionAttribute", SystemForm.Condition), ("EachAttribute", SystemForm.Each), ("EachBlockAttribute", SystemForm.EachBlock)];
 
     static SystemForm? FormOf(IMethodSymbol method) => Forms.Where(form => Has(method, form.Attribute)).Select(static form => (SystemForm?)form.Form).FirstOrDefault();
 
@@ -24,7 +24,7 @@ public sealed partial class ArchevoltGenerator
             method.DeclaringSyntaxReferences.Any(reference => reference.GetSyntax(cancellationToken).DescendantNodes().OfType<YieldStatementSyntax>().Any()))
             Error(problems, method, "AV005", form == SystemForm.Condition ? "A run condition must be a synchronous, non-generic, non-overloaded static bool method." : "A system must be a synchronous, non-generic, non-overloaded static void method.");
         if (Forms.Count(entry => Has(method, entry.Attribute)) != 1)
-            Error(problems, method, "AV005", "Choose exactly one of Each, EcsSystem, or RunCondition.");
+            Error(problems, method, "AV005", "Choose exactly one of Each, EachBlock, EcsSystem, or RunCondition.");
         var parameters = new List<ParameterModel>();
         var queries = new List<List<TermModel>>();
         var components = new List<ComponentModel>();
@@ -96,6 +96,23 @@ public sealed partial class ArchevoltGenerator
                 components.Add(component);
                 if (parameter.ScopedKind == ScopedKind.None) Error(problems, parameter, "AV005", "Each component refs must be scoped.");
             }
+            else if (form == SystemForm.EachBlock && type is INamedTypeSymbol span && span.ContainingNamespace.ToDisplayString() == "System" && span.Arity == 1 && span.Name is "Span" or "ReadOnlySpan")
+            {
+                kind = "Column";
+                ValidateComponent(span.TypeArguments[0], parameter, problems, valueAccess: true);
+                component = Component(span.TypeArguments[0]);
+                index = eachTerms.Count;
+                if (eachTerms.Any(term => term.Component.Type == component.Type)) Error(problems, parameter, "AV004", "EachBlock parameters cannot alias the same component.");
+                eachTerms.Add(new(component, span.Name == "Span" ? "Write" : "Read", index, parameter.Name));
+                components.Add(component);
+                if (parameter.RefKind != RefKind.None || parameter.ScopedKind == ScopedKind.None)
+                    Error(problems, parameter, "AV005", "EachBlock component parameters must be scoped Span<T> to write or scoped ReadOnlySpan<T> to read.");
+            }
+            else if (form == SystemForm.EachBlock && TypeName(type) == "global::Archevolt.EntityColumn")
+            {
+                kind = "Entities"; index = -1;
+                if (parameter.RefKind != RefKind.None || parameter.ScopedKind == ScopedKind.None) Error(problems, parameter, "AV005", "EntityColumn must be passed by scoped value.");
+            }
             else
             {
                 Error(problems, parameter, "AV005", $"Unsupported system parameter {parameter.Name}; use a scoped query, resource, or Each component ref.");
@@ -103,7 +120,7 @@ public sealed partial class ArchevoltGenerator
             }
             parameters.Add(new(TypeName(type), Escape(parameter.Name), kind, parameter.RefKind == RefKind.Ref ? "ref" : "in", index, component));
         }
-        if (form == SystemForm.Each)
+        if (form is SystemForm.Each or SystemForm.EachBlock)
         {
             var terms = QueryTerms(method, problems);
             var indexes = eachTerms.GroupBy(static term => term.Component.Type).ToDictionary(static group => group.Key, static group => group.First().Index);
@@ -116,7 +133,13 @@ public sealed partial class ArchevoltGenerator
             ValidateRequirements(method, eachTerms, problems);
             queries.Add(eachTerms);
             components.AddRange(terms.Select(static term => term.Component));
-            if (!parameters.Any(static parameter => parameter.Kind == "Component")) Error(problems, method, "AV005", "Each requires at least one component ref.");
+            if (form == SystemForm.EachBlock)
+            {
+                foreach (var term in terms.Where(static term => term.Mode is "Added" or "Changed"))
+                    Error(problems, method, "AV011", $"EachBlock receives whole blocks and cannot filter rows by {term.Mode}<{term.Component.Name}>; use [Each] until block change summaries land.");
+                if (!parameters.Any(static parameter => parameter.Kind == "Column")) Error(problems, method, "AV005", "EachBlock requires at least one component span.");
+            }
+            else if (!parameters.Any(static parameter => parameter.Kind == "Component")) Error(problems, method, "AV005", "Each requires at least one component ref.");
         }
         for (int left = 0; left < queries.Count; left++)
             for (int right = left + 1; right < queries.Count; right++)
@@ -127,10 +150,11 @@ public sealed partial class ArchevoltGenerator
             if (group.Count() > 1 && group.Any(static parameter => parameter.Kind == "MessageWriter")) Error(problems, method, "AV004", "Message writer parameters alias the same message channel.");
         if (form == SystemForm.Condition && (queries.Any(static query => query.Any(static term => term.Mode == "Write")) || parameters.Any(static parameter => parameter.Kind is "ResMut" or "ManagedRes" or "MessageWriter" or "Commands")))
             Error(problems, method, "AV010", "Run conditions may read world capabilities and mutate only their instance-local state.");
-        bool partitionRequested = form == SystemForm.Each && Attributes(method, "EachAttribute").Any(attribute => NamedBool(attribute, "Partitioned"));
-        bool partitionSafe = parameters.All(static parameter => parameter.Kind is "Component" or "Entity" or "Res" or "OptionalRes" && parameter.Component?.OwnerThread != true);
+        bool partitionRequested = form is SystemForm.Each or SystemForm.EachBlock && Attributes(method, form == SystemForm.Each ? "EachAttribute" : "EachBlockAttribute").Any(attribute => NamedBool(attribute, "Partitioned"));
+        bool partitionSafe = parameters.All(static parameter => parameter.Kind is "Component" or "Entity" or "Column" or "Entities" or "Res" or "OptionalRes" && parameter.Component?.OwnerThread != true);
         if (partitionRequested && !partitionSafe)
-            Error(problems, method, "AV010", "Partitioned Each permits only component refs, Entity, and readonly unmanaged resources without owner-thread affinity.");
+            Error(problems, method, "AV010", form == SystemForm.EachBlock ? "Partitioned EachBlock permits only component spans, EntityColumn, and readonly unmanaged resources without owner-thread affinity."
+                : "Partitioned Each permits only component refs, Entity, and readonly unmanaged resources without owner-thread affinity.");
         return new(method, form, parameters, queries, components, resources, partitionRequested && partitionSafe);
     }
 
@@ -191,6 +215,15 @@ public sealed partial class ArchevoltGenerator
                 "Entity" => "entities[row]", _ => parameter.Name
             }))).AppendLine(");\n}\n}");
         }
+        else if (model.Form == SystemForm.EachBlock)
+        {
+            text.AppendLine("var cursor = _query0.Begin(run);\nwhile (cursor.Next(out var block))\n{");
+            text.Append(Escape(method.Name)).Append('(').Append(string.Join(", ", model.Parameters.Select(parameter => parameter.Kind switch
+            {
+                "Column" => BlockColumn(model.Queries[0].First(term => term.Index == parameter.Index)),
+                "Entities" => "block.Entities", _ => parameter.Name
+            }))).AppendLine(");\n}");
+        }
         else
         {
             foreach (var parameter in model.Parameters.Where(static parameter => parameter.Kind == "Query"))
@@ -203,8 +236,8 @@ public sealed partial class ArchevoltGenerator
             .Append(Literal(method.ContainingType.ToDisplayString() + "." + method.Name)).Append(", static binder => new ").Append(bodyName).AppendLine("(binder))");
         for (int index = 0; index < model.Queries.Count; index++)
         {
-            text.Append(model.Form == SystemForm.Each ? ".EachQuery(" : ".Query(").Append(Shape(method.ToDisplayString() + "." + index, model.Queries[index]));
-            if (model.Form == SystemForm.Each) text.Append(", partitionable: ").Append(Bool(model.Partitionable));
+            text.Append(model.Form is SystemForm.Each or SystemForm.EachBlock ? ".EachQuery(" : ".Query(").Append(Shape(method.ToDisplayString() + "." + index, model.Queries[index]));
+            if (model.Form is SystemForm.Each or SystemForm.EachBlock) text.Append(", partitionable: ").Append(Bool(model.Partitionable));
             text.AppendLine(")");
         }
         foreach (var parameter in model.Parameters.Where(static parameter => parameter.Kind is "Res" or "ResMut" or "ManagedRes" or "OptionalRes"))
@@ -220,6 +253,6 @@ public sealed partial class ArchevoltGenerator
             text.Append('.').Append(parameter.Kind == "RemovedComponents" ? "Removed" : parameter.Kind).Append('<').Append(parameter.Component!.Type).AppendLine(">()");
         if (model.Form == SystemForm.Condition) text.AppendLine(".AsCondition()");
         text.AppendLine(".Build();");
-        return Unit(method, model.Form == SystemForm.Each ? "Each" : "System", Close(text, method.ContainingType), problems);
+        return Unit(method, model.Form switch { SystemForm.Each => "Each", SystemForm.EachBlock => "EachBlock", _ => "System" }, Close(text, method.ContainingType), problems);
     }
 }

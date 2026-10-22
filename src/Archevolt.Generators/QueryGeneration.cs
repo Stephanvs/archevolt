@@ -59,6 +59,8 @@ public sealed partial class ArchevoltGenerator
     static string ColumnName(TermModel term) => "_column" + term.Index;
     static string Element(TermModel term, string row) => term.Mode == "Write" && term.Component.Tracked
         ? $"{ColumnName(term)}.Write({row})" : $"{ColumnName(term)}[{row}]";
+    static string BlockColumn(TermModel term) => term.Mode == "Read" ? $"block.Read<{term.Component.Type}>({term.Index})"
+        : term.Component.Tracked ? $"block.Tracked<{term.Component.Type}>({term.Index}).WriteAll()" : $"block.Write<{term.Component.Type}>({term.Index})";
 
     static void BindColumns(StringBuilder text, IReadOnlyList<TermModel> terms, string targetPrefix = "", string chunk = "chunk", bool declarations = false)
     {
