@@ -90,15 +90,27 @@ async function newPlan(sourceSha, previousTag) {
   return { sourceSha, previousTag, version, notes };
 }
 
+async function readReleases(tags) {
+  const attempts = 3;
+  for (let attempt = 1; ; attempt++) {
+    const releases = [];
+    for (let page = 1; ; page++) {
+      const batch = await github(`repos/${repository}/releases?per_page=100&page=${page}`);
+      releases.push(...batch);
+      if (batch.length < 100) break;
+    }
+    const missing = tags.filter((tag) => !releases.some((release) => release.tag_name === tag));
+    if (missing.length === 0) return releases;
+    console.error(`GitHub release list attempt ${attempt}/${attempts} returned ${releases.length} releases and omitted local tags ${missing.join(", ")}. ${attempt === attempts ? "Read recovery exhausted. Using the last snapshot." : `Retrying with a fresh snapshot in ${attempt * 1000} ms.`}`);
+    if (attempt === attempts) return releases;
+    await new Promise((resume) => setTimeout(resume, attempt * 1000));
+  }
+}
+
 async function releaseState() {
   const sourceSha = git("rev-parse", "HEAD");
   const tags = git("tag", "--list", "v*").split("\n").filter((tag) => canonicalTag.test(tag));
-  const releases = [];
-  for (let page = 1; ; page++) {
-    const batch = await github(`repos/${repository}/releases?per_page=100&page=${page}`);
-    releases.push(...batch);
-    if (batch.length < 100) break;
-  }
+  const releases = await readReleases(tags);
   const states = tags.map((tag) => ({
     tag,
     sourceSha: git("rev-parse", `${tag}^{commit}`),
