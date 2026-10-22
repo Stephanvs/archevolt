@@ -26,6 +26,8 @@ An entity contains its world identity, slot, and generation. A paged entity tabl
 
 A frozen registry assigns world-local component IDs. Archetypes contain canonical sorted component IDs and native structure-of-arrays chunks. Moving an entity between archetypes copies retained values and ticks, initializes additions, and repairs the moved entity after swap removal.
 
+The [storage engine](/concepts/storage) page walks through each of these steps with an interactive model.
+
 ## Safe access
 
 `SystemBody` holds bindings for one system instance. `SystemBinder` validates bindings against the descriptor. `SystemRun` is a runtime-created ref struct carrying the instance, invocation epoch, tick interval, and assigned chunk range.
