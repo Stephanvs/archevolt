@@ -15,6 +15,7 @@ public unsafe class MovementBenchmarks
     private BoundSchedule _query = null!;
     private BoundSchedule _block = null!;
     private BoundSchedule _blockVector = null!;
+    private Entity[] _entities = null!;
 
     [Params(1_000, 100_000, 1_000_000)]
     public int Count { get; set; }
@@ -40,27 +41,51 @@ public unsafe class MovementBenchmarks
 
         _world = new WorldBuilder().AddModule(MovementModule.Module).UseParallelExecution(Concurrency).Build();
         _world.InsertResource(new FrameTime(1f / 60));
-        var entities = new Entity[Count];
+        _entities = new Entity[Count];
         for (var i = 0; i < Count; i++)
         {
             var position = new Position(i % 97, 0, 0);
             var velocity = new Velocity(1, 2, 3);
             _positions[i] = position;
             _velocities[i] = velocity;
-            entities[i] = _world.Spawn(new Particle(position, velocity));
+            _entities[i] = _world.Spawn(new Particle(position, velocity));
         }
         _each = EachMovement.Create(_world);
         _query = QueryMovement.Create(_world);
         _block = BlockMovement.Create(_world);
         _blockVector = BlockVectorMovement.Create(_world);
-        foreach (var schedule in new[] { _each, _query, _block, _blockVector })
+        ValidateMovement("setup");
+    }
+
+    private void ValidateMovement(string phase)
+    {
+        const float delta = 1f / 60;
+        var velocity = new Velocity(1, 2, 3);
+        foreach (var (name, schedule) in new[]
         {
+            (nameof(GeneratedEach), _each), (nameof(GeneratedQuery), _query),
+            (nameof(GeneratedBlock), _block), (nameof(GeneratedBlockVector), _blockVector)
+        })
+        {
+            for (var i = 0; i < Count; i++)
+            {
+                var position = new Position(i % 97, 0, 0);
+                _positions[i] = position;
+                _velocities[i] = velocity;
+                _world.Insert(_entities[i], position);
+                _world.Insert(_entities[i], velocity);
+            }
             schedule.Run();
             Handwritten();
+            for (var i = 0; i < Count; i++)
+            {
+                var expected = new Position(i % 97 + delta, 2 * delta, 3 * delta);
+                if (_positions[i] != expected || _velocities[i] != velocity)
+                    throw new InvalidOperationException($"{phase}: Handwritten produced an incorrect result at entity {i}.");
+                if (_world.Get<Position>(_entities[i]) != expected || _world.Get<Velocity>(_entities[i]) != velocity)
+                    throw new InvalidOperationException($"{phase}: {name} produced an incorrect result at entity {i}.");
+            }
         }
-        for (var i = 0; i < Count; i++)
-            if (_world.Get<Position>(entities[i]) != _positions[i])
-                throw new InvalidOperationException($"Generated movement diverged from the handwritten loop at entity {i}.");
     }
 
     [Benchmark(Baseline = true)]
@@ -92,15 +117,22 @@ public unsafe class MovementBenchmarks
     [GlobalCleanup]
     public void Cleanup()
     {
-        _each?.Dispose();
-        _query?.Dispose();
-        _block?.Dispose();
-        _blockVector?.Dispose();
-        _world?.Dispose();
-        NativeMemory.AlignedFree(_positions);
-        NativeMemory.AlignedFree(_velocities);
-        _positions = null;
-        _velocities = null;
+        try
+        {
+            if (_blockVector is not null) ValidateMovement("cleanup");
+        }
+        finally
+        {
+            _each?.Dispose();
+            _query?.Dispose();
+            _block?.Dispose();
+            _blockVector?.Dispose();
+            _world?.Dispose();
+            NativeMemory.AlignedFree(_positions);
+            NativeMemory.AlignedFree(_velocities);
+            _positions = null;
+            _velocities = null;
+        }
     }
 }
 
