@@ -20,9 +20,7 @@ public sealed partial class ArchevoltGenerator : IIncrementalGenerator
         Register(context, "ComponentAttribute", static (symbol, ct) => GenerateComponent((INamedTypeSymbol)symbol, ct));
         Register(context, "BundleAttribute", static (symbol, ct) => GenerateBundle((INamedTypeSymbol)symbol, ct));
         Register(context, "QueryAttribute", static (symbol, ct) => GenerateQuery((INamedTypeSymbol)symbol, ct));
-        Register(context, "EachAttribute", static (symbol, ct) => GenerateSystem((IMethodSymbol)symbol, true, ct));
-        Register(context, "EcsSystemAttribute", static (symbol, ct) => GenerateSystem((IMethodSymbol)symbol, false, ct));
-        Register(context, "RunConditionAttribute", static (symbol, ct) => GenerateSystem((IMethodSymbol)symbol, false, ct));
+        foreach (var form in Forms) Register(context, form.Attribute, static (symbol, ct) => GenerateSystem((IMethodSymbol)symbol, ct));
         Register(context, "EcsModuleAttribute", static (symbol, ct) => GenerateModule((INamedTypeSymbol)symbol, ct));
         Register(context, "ScheduleAttribute", static (symbol, ct) => GenerateSchedule((INamedTypeSymbol)symbol, ct));
     }

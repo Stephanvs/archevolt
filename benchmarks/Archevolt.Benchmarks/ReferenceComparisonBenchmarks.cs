@@ -34,6 +34,10 @@ public class ReferenceComparisonBenchmarks
     [Benchmark]
     public void GeneratedQuery() => _archevolt.GeneratedQuery();
     [Benchmark]
+    public void GeneratedBlock() => _archevolt.GeneratedBlock();
+    [Benchmark]
+    public void GeneratedBlockVector() => _archevolt.GeneratedBlockVector();
+    [Benchmark]
     public void ArchInline() => _arch.InlineQuery<Integrate, Position, Velocity>(in _description);
 
     [GlobalCleanup]
