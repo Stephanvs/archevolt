@@ -132,7 +132,7 @@ $Steps = [ordered]@{
         try {
             $entries = @($zip.Entries | ForEach-Object FullName)
             $entries | Add-Content -LiteralPath $Log
-            foreach ($required in 'lib/net10.0/Archevolt.dll', 'analyzers/dotnet/cs/Archevolt.Generators.dll') {
+            foreach ($required in 'lib/net11.0/Archevolt.dll', 'analyzers/dotnet/cs/Archevolt.Generators.dll') {
                 if ($entries -notcontains $required) {
                     throw "package lacks $required"
                 }
