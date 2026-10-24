@@ -4,7 +4,7 @@ import { filesystem, githubReleases } from "blume/sources";
 export default defineConfig({
   title: "Archevolt",
   description:
-    "A headless archetype ECS for .NET 11 and C# 14, with a source generator for typed queries, bundles, modules, and schedules.",
+    "A headless archetype ECS for .NET 11 and C# 15, with a source generator for typed queries, bundles, modules, and schedules.",
   content: {
     sources: [
       filesystem({ root: "docs" }),

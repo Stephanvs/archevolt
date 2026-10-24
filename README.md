@@ -2,7 +2,7 @@
   <img src=".github/assets/archevolt-geometric.png" alt="Archevolt" width="720">
 </h1>
 
-Archevolt is a headless archetype ECS for .NET 11 and C# 14. Write components as structs and systems as C# methods. Its source generator builds typed queries, bundles, modules, and schedules; the runtime handles native component storage and serial or bounded parallel execution.
+Archevolt is a headless archetype ECS for .NET 11 and C# 15. Write components as structs and systems as C# methods. Its source generator builds typed queries, bundles, modules, and schedules; the runtime handles native component storage and serial or bounded parallel execution.
 
 The runtime has no package dependencies. The `Archevolt` package includes its generator. Generated declarations stay in your namespace and partial types.
 

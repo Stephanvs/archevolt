@@ -5,7 +5,7 @@
     <TargetFramework>net11.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <LangVersion>14</LangVersion>
+    <LangVersion>15</LangVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <RestorePackagesPath>$(MSBuildThisFileDirectory)../../artifacts/consumer-packages</RestorePackagesPath>
     <ArchevoltPackageVersion Condition="'$(ArchevoltPackageVersion)' == ''">0.1.0</ArchevoltPackageVersion>
