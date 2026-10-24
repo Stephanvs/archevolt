@@ -260,6 +260,7 @@ public readonly ref struct TrackedColumn<T> where T : unmanaged
     }
     public int Length => _values.Length;
     public ref T Write(int row) { _changed[row] = _now; return ref _values[row]; }
+    public Span<T> WriteAll() { _changed.Fill(_now); return _values; }
     public StampedRef<T> At(int row) => new(ref _values[row], ref _changed[row], _now);
 }
 

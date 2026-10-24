@@ -35,6 +35,11 @@ public sealed class EachAttribute : Attribute
 {
     public bool Partitioned { get; init; }
 }
+[AttributeUsage(AttributeTargets.Method)]
+public sealed class EachBlockAttribute : Attribute
+{
+    public bool Partitioned { get; init; }
+}
 [AttributeUsage(AttributeTargets.Method)] public sealed class RunConditionAttribute : Attribute;
 [AttributeUsage(AttributeTargets.Class)] public sealed class EcsModuleAttribute : Attribute;
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]

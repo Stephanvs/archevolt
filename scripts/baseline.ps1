@@ -10,13 +10,21 @@ case. The summary reports the median of those means and their range, per the mea
 
 Results go to artifacts/baseline/<UTC timestamp>/: environment.txt, the raw harness logs and
 exports, summary.csv, and summary.md.
+
+A step gate that compares only some cases passes -Classes and -Benches, for example
+./scripts/baseline.ps1 -Classes ReferenceComparisonBenchmarks -Benches movement.
 #>
 [CmdletBinding()]
 param(
     [ValidateRange(1, 99)]
     [int] $Runs = 3,
     # Shortens both harnesses to check that the script works. Quick results are not baselines.
-    [switch] $Quick
+    [switch] $Quick,
+    [ValidateNotNullOrEmpty()]
+    [string[]] $Classes = @('EntityPopulationBenchmarks', 'EntityStorageBenchmarks', 'TraversalMatrixBenchmarks',
+        'FilterBenchmarks', 'ReferenceComparisonBenchmarks'),
+    # Criterion bench targets in bevy-reference. Empty runs all of them.
+    [string[]] $Benches = @()
 )
 
 Set-StrictMode -Version Latest
@@ -28,8 +36,6 @@ $Project = Join-Path $Root 'benchmarks/Archevolt.Benchmarks/Archevolt.Benchmarks
 $Assembly = Join-Path $Root 'artifacts/bin/Archevolt.Benchmarks/release/Archevolt.Benchmarks.dll'
 $Crate = Join-Path $Root 'benchmarks/bevy-reference'
 $CargoTarget = Join-Path $Crate 'target/native'
-$Classes = @('EntityPopulationBenchmarks', 'EntityStorageBenchmarks', 'TraversalMatrixBenchmarks',
-    'FilterBenchmarks', 'ReferenceComparisonBenchmarks')
 [Threading.Thread]::CurrentThread.CurrentCulture = [Globalization.CultureInfo]::InvariantCulture
 $null = New-Item -ItemType Directory -Force -Path $Output
 
@@ -46,6 +52,7 @@ function Get-Median([double[]] $Values) {
 }
 
 function New-Row([string] $Harness, [string] $Case, [double[]] $NanosecondsPerRun) {
+    if ($NanosecondsPerRun.Count -eq 0) { throw "$Harness recorded no measurements for $Case; see the logs in $Output" }
     [pscustomobject]@{
         Harness = $Harness
         Case = $Case
@@ -85,8 +92,8 @@ try {
         if ($savedScheme) { powercfg /setactive SCHEME_MIN }
         $criterionArguments = if ($Quick) { @('--warm-up-time', '0.5', '--measurement-time', '1', '--sample-size', '10') } else { @() }
         for ($run = 1; $run -le $Runs; $run++) {
-            Invoke-Logged "criterion-run$run.txt" 'cargo' (@('bench', '--manifest-path', (Join-Path $Crate 'Cargo.toml'), '--',
-                '--save-baseline', "$Stamp-run$run") + $criterionArguments)
+            Invoke-Logged "criterion-run$run.txt" 'cargo' (@('bench', '--manifest-path', (Join-Path $Crate 'Cargo.toml')) +
+                @($Benches | ForEach-Object { '--bench', $_ }) + @('--', '--save-baseline', "$Stamp-run$run") + $criterionArguments)
         }
     }
     finally {
