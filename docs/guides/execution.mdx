@@ -9,7 +9,7 @@ sidebar:
 
 Serial execution is the default. `WorldBuilder.UseParallelExecution(maxConcurrency)` enables the world-owned reusable worker pool. The positive limit includes the owner thread.
 
-A bound schedule borrows this pool, so disposing one schedule does not stop other schedules. Resource and component conflicts determine which systems can run together, and `[Each(Partitioned = true)]` opts eligible systems into [chunk partitioning](/guides/systems#partitioning).
+A bound schedule borrows this pool, so disposing one schedule does not stop other schedules. Resource and component conflicts determine which systems can run together, and `[Each(Partitioned = true)]` opts eligible systems into [row-range partitioning](/guides/systems#partitioning).
 
 ```csharp
 using var world = new WorldBuilder()
@@ -24,11 +24,11 @@ Parallel dispatch has material overhead on tiny workloads. Measure before enabli
 
 ## Running and cancelling
 
-`schedule.Run(CancellationToken)` completes synchronously. Cancellation stops new work between systems or chunk ranges. Active user code must return before join completes.
+`schedule.Run(CancellationToken)` completes synchronously. Cancellation stops new work between systems or row ranges. Active user code must return before join completes.
 
 ## Faults
 
-The owner reports execution failures after active workers join. `AggregateException` contains `SystemExecutionException` entries with the instance, system name, and chunk range.
+The owner reports execution failures after active workers join. `AggregateException` contains `SystemExecutionException` entries with the instance, system name, and row range (`FirstRow`, `RowCount`).
 
 Failure or cancellation sets `IsFaulted`. Completed writes, local changes, message cursors, and earlier command playback remain. Unapplied commands are discarded.
 

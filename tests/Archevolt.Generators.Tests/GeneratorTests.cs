@@ -45,7 +45,7 @@ public sealed class GeneratorTests
                 public static int Run()
                 {
                     Systems.RequireOverlap = {{(requireOverlap ? "true" : "false")}};
-                    using var world = new WorldBuilder().UseParallelExecution(4).WithChunkBytes(256).AddModule(Game.Module).Build();
+                    using var world = new WorldBuilder().UseParallelExecution(4).AddModule(Game.Module).Build();
                     var entities = new Entity[10000];
                     for (int index = 0; index < entities.Length; index++) entities[index] = world.Spawn(new Particle(new(index)));
                     using var simulation = Simulation.Create(world); simulation.Run();
@@ -94,7 +94,7 @@ public sealed class GeneratorTests
                 public static int Run()
                 {
                     Systems.RequireOverlap = {{(requireOverlap ? "true" : "false")}};
-                    using var world = new WorldBuilder().UseParallelExecution(4).WithChunkBytes(256).AddModule(Game.Module).Build();
+                    using var world = new WorldBuilder().UseParallelExecution(4).AddModule(Game.Module).Build();
                     var entities = new Entity[10000];
                     for (int index = 0; index < entities.Length; index++) entities[index] = world.Spawn(new Particle(new(index)));
                     using var simulation = Simulation.Create(world); simulation.Run();
@@ -516,6 +516,7 @@ public sealed class GeneratorTests
             [Component] public readonly record struct Position(int Value);
             [Component] public readonly record struct Velocity(int Value);
             [Component] public readonly struct Frozen { }
+            [Component] public readonly struct Marked { }
             [Bundle] public readonly partial record struct Particle(Position Position, Velocity Velocity);
             public static partial class Motion
             {
@@ -527,18 +528,19 @@ public sealed class GeneratorTests
                     for (int i = 0; i < positions.Length; i++) positions[i] = new(positions[i].Value + velocities[i].Value);
                 }
             }
-            [EcsModule, IncludeSystems(typeof(Motion)), IncludeBundle<Particle>] public static partial class Game { }
+            [EcsModule, IncludeSystems(typeof(Motion)), IncludeBundle<Particle>, IncludeComponent<Marked>] public static partial class Game { }
             [Schedule, Run(typeof(Motion), "Integrate")] public sealed partial class Simulation { }
             public static class Acceptance
             {
                 public static int Run()
                 {
-                    using var world = new WorldBuilder().WithChunkBytes(256).AddModule(Game.Module).Build();
+                    using var world = new WorldBuilder().AddModule(Game.Module).Build();
                     var entities = new Entity[10000];
                     for (int i = 0; i < entities.Length; i++) entities[i] = world.Spawn(new Particle(new(i), new(i % 7 + 1)));
                     world.Insert(entities[5000], new Frozen());
+                    world.Insert(entities[7000], new Marked());
                     using var simulation = Simulation.Create(world); simulation.Run();
-                    if (Motion.Blocks < 2) return -1;
+                    if (Motion.Blocks != 2) return -1;
                     if (world.Get<Position>(entities[5000]).Value != 5000) return -2;
                     int checksum = 0;
                     for (int i = 0; i < entities.Length; i++) checksum += world.Get<Position>(entities[i]).Value;
@@ -614,7 +616,7 @@ public sealed class GeneratorTests
             {
                 public static int Run()
                 {
-                    using var world = new WorldBuilder().WithChunkBytes(256).AddModule(Game.Module).Build();
+                    using var world = new WorldBuilder().AddModule(Game.Module).Build();
                     for (int i = 0; i < 1000; i++) world.Spawn(new Particle(new(i)));
                     using var toucher = Toucher.Create(world); using var looker = Looker.Create(world); using var observer = Observer.Create(world);
                     observer.Run(); Systems.Seen = 0;
@@ -696,7 +698,7 @@ public sealed class GeneratorTests
             {
                 public static int Run()
                 {
-                    using var world = new WorldBuilder().WithChunkBytes(256).AddModule(Game.Module).Build();
+                    using var world = new WorldBuilder().AddModule(Game.Module).Build();
                     for (int i = 0; i < 1000; i++) world.Spawn(new Particle(new(i)));
                     using var drifter = Drifter.Create(world); using var observer = Observer.Create(world);
                     observer.Run(); Systems.Sum = 0;
@@ -795,7 +797,7 @@ public sealed class GeneratorTests
             {
                 public static int Run()
                 {
-                    using var world = new WorldBuilder().WithChunkBytes(256).AddModule(Game.Module).Build();
+                    using var world = new WorldBuilder().AddModule(Game.Module).Build();
                     var entities = new Entity[1000];
                     for (int i = 0; i < entities.Length; i++) entities[i] = world.Spawn(new Particle(new(i)));
                     using var simulation = Simulation.Create(world); simulation.Run();

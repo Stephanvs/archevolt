@@ -33,7 +33,7 @@ public static partial class MotionKernel
 
 ## Partitioning
 
-`[Each]` executes one traversal by default. `[Each(Partitioned = true)]` opts into splitting matched chunks across the world's execution budget, which matters once [parallel execution](/guides/execution) is enabled.
+`[Each]` executes one traversal by default. `[Each(Partitioned = true)]` opts into splitting the matched rows into contiguous ranges, one per worker in the world's execution budget, which matters once [parallel execution](/guides/execution) is enabled.
 
 Partitioned methods accept component refs, `Entity`, and readonly unmanaged resources, including optional resources without owner-thread affinity. Locals, commands, messages, managed resources, mutable resources, and named queries are excluded. An unsafe partition request is reported as [`AV010`](/reference/diagnostics).
 

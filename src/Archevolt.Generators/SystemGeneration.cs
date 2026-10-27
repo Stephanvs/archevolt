@@ -204,12 +204,12 @@ public sealed partial class ArchevoltGenerator
             text.Append("var ").Append(parameter.Name).Append(" = _message").Append(parameter.Index).Append(parameter.Kind == "MessageWriter" ? ".Write(run);" : ".Read(run);").AppendLine();
         if (model.Form == SystemForm.Each)
         {
-            text.AppendLine("var cursor = _query0.Begin(run);\nwhile (cursor.Next(out var chunk))\n{");
+            text.AppendLine("var cursor = _query0.Begin(run);\nwhile (cursor.Next(out var block))\n{");
             BindColumns(text, model.Queries[0], declarations: true);
             var filters = model.Queries[0].Where(static term => term.Mode is "Added" or "Changed").ToArray();
-            for (int index = 0; index < filters.Length; index++) text.Append("var ticks").Append(index).Append(" = chunk.").Append(filters[index].Mode).Append('(').Append(filters[index].Index).AppendLine(");");
-            if (model.Parameters.Any(static parameter => parameter.Kind == "Entity")) text.AppendLine("var entities = chunk.Entities;");
-            text.AppendLine("int count = chunk.Count;\nfor (int row = 0; row < count; row++)\n{");
+            for (int index = 0; index < filters.Length; index++) text.Append("var ticks").Append(index).Append(" = block.").Append(filters[index].Mode).Append('(').Append(filters[index].Index).AppendLine(");");
+            if (model.Parameters.Any(static parameter => parameter.Kind == "Entity")) text.AppendLine("var entities = block.Entities;");
+            text.AppendLine("int count = block.Count;\nfor (int row = 0; row < count; row++)\n{");
             if (filters.Length != 0) text.Append("if (!(").Append(string.Join(" && ", filters.Select((_, index) => $"cursor.Window.Contains(ticks{index}[row])"))).AppendLine(")) continue;");
             text.Append(Escape(method.Name)).Append('(').Append(string.Join(", ", model.Parameters.Select(parameter => parameter.Kind switch
             {

@@ -51,10 +51,10 @@ public sealed class QueryState
         return new QueryCursor(this, run);
     }
 
-    public bool TryLocate(SystemRun run, Entity entity, out ChunkView chunk, out int row)
+    public bool TryLocate(SystemRun run, Entity entity, out BlockView block, out int row)
     {
         run.Require(Owner);
-        chunk = default;
+        block = default;
         row = 0;
         if (run.IsPartitioned)
             throw new InvalidOperationException("Entity lookup is not allowed in a partitioned invocation.");
@@ -64,20 +64,20 @@ public sealed class QueryState
         foreach (var match in Matches)
             if (match.Archetype == entry.Archetype)
             {
-                chunk = new ChunkView(this, match, entry.Chunk!, run);
+                block = new BlockView(this, match, 0, match.Archetype.Table.Count, run);
                 row = entry.Row;
-                return chunk.MatchesRow(row);
+                return block.MatchesRow(row);
             }
         return false;
     }
 
-    internal int TotalChunks
+    internal int TotalRows
     {
         get
         {
             int count = 0;
             foreach (var match in Matches)
-                count = checked(count + match.Archetype.Chunks.Count);
+                count = checked(count + match.Archetype.Table.Count);
             return count;
         }
     }
@@ -90,16 +90,14 @@ public ref struct QueryCursor
     private readonly QueryState? _state;
     private readonly SystemRun _run;
     private int _match;
-    private int _chunk;
-    private int _ordinal;
+    private long _offset;
 
     internal QueryCursor(QueryState state, SystemRun run)
     {
         _state = state;
         _run = run;
         _match = 0;
-        _chunk = 0;
-        _ordinal = 0;
+        _offset = 0;
     }
 
     public TickWindow Window => _run.Window;
@@ -112,48 +110,49 @@ public ref struct QueryCursor
         return new QueryCursor(_state, _run);
     }
 
-    public bool Next(out ChunkView chunk)
+    public bool Next(out BlockView block)
     {
-        chunk = default;
+        block = default;
         if (_state is null)
             throw new InvalidOperationException("A default query has no active execution.");
         _run.Require(_state.Owner);
+        long first = _run.FirstRow;
+        long end = first + _run.RowCount;
         while (_match < _state.Matches.Count)
         {
-            var match = _state.Matches[_match];
-            if (_chunk < match.Archetype.Chunks.Count)
-            {
-                var native = match.Archetype.Chunks[_chunk++];
-                int ordinal = _ordinal++;
-                if (ordinal < _run.FirstChunk)
-                    continue;
-                if ((long)ordinal >= (long)_run.FirstChunk + _run.ChunkCount)
-                    return false;
-                chunk = new ChunkView(_state, match, native, _run);
-                return true;
-            }
-            _match++;
-            _chunk = 0;
+            var match = _state.Matches[_match++];
+            long tableStart = _offset;
+            _offset += match.Archetype.Table.Count;
+            if (tableStart >= end)
+                return false;
+            long start = Math.Max(first, tableStart);
+            long stop = Math.Min(end, _offset);
+            if (start >= stop)
+                continue;
+            block = new BlockView(_state, match, (int)(start - tableStart), (int)(stop - start), _run);
+            return true;
         }
         return false;
     }
 }
 
-public readonly ref struct ChunkView
+public readonly ref struct BlockView
 {
     private readonly QueryState? _state;
     private readonly QueryMatch? _match;
-    private readonly NativeChunk? _chunk;
+    private readonly Table? _table;
     private readonly SystemRun _run;
+    private readonly int _start;
     private readonly int _count;
 
-    internal ChunkView(QueryState state, QueryMatch match, NativeChunk chunk, SystemRun run)
+    internal BlockView(QueryState state, QueryMatch match, int start, int count, SystemRun run)
     {
         _state = state;
         _match = match;
-        _chunk = chunk;
+        _table = match.Archetype.Table;
         _run = run;
-        _count = chunk.Count;
+        _start = start;
+        _count = count;
     }
 
     public int Count => _count;
@@ -163,48 +162,49 @@ public readonly ref struct ChunkView
         int column = Column<T>(term, QueryAccess.Read);
         if (column < 0)
             throw new InvalidOperationException("The optional component is absent.");
-        return _chunk!.Values<T>(column);
+        return _table!.Values<T>(column).Slice(_start, _count);
     }
 
     public bool TryRead<T>(int term, out ReadOnlySpan<T> values) where T : unmanaged
     {
         int column = Column<T>(term, QueryAccess.Read | QueryAccess.Optional);
-        values = column < 0 ? default : _chunk!.Values<T>(column);
+        values = column < 0 ? default : _table!.Values<T>(column).Slice(_start, _count);
         return column >= 0;
     }
 
     public Span<T> Write<T>(int term) where T : unmanaged
     {
         int column = Column<T>(term, QueryAccess.Write);
-        if (_chunk!.Archetype.Components[column].Tracked)
+        if (_table!.Components[column].Tracked)
             throw new InvalidOperationException("Tracked values require the stamping accessor.");
-        return _chunk.Values<T>(column);
+        return _table.Values<T>(column).Slice(_start, _count);
     }
 
     public TrackedColumn<T> Tracked<T>(int term) where T : unmanaged
     {
         int column = Column<T>(term, QueryAccess.Write);
-        if (!_chunk!.Archetype.Components[column].Tracked)
+        if (!_table!.Components[column].Tracked)
             throw new InvalidOperationException("The component is not tracked.");
-        return new TrackedColumn<T>(_chunk.Values<T>(column), _chunk.Changed(column), _run.Window.Now);
+        return new TrackedColumn<T>(_table.Values<T>(column).Slice(_start, _count),
+            _table.Changed(column).Slice(_start, _count), _run.Window.Now);
     }
 
     public ReadOnlySpan<ulong> Added(int term) => Ticks(term, QueryAccess.Added);
     public ReadOnlySpan<ulong> Changed(int term) => Ticks(term, QueryAccess.Changed);
-    public EntityColumn Entities { get { Validate(); return new(_chunk!.Entities, _state!.Owner.World.Id); } }
+    public EntityColumn Entities { get { Validate(); return new(_table!.Entities.Slice(_start, _count), _state!.Owner.World.Id); } }
 
     public bool MatchesRow(int row)
     {
         Validate();
-        if ((uint)row >= (uint)_chunk!.Count)
+        if ((uint)row >= (uint)_count)
             throw new ArgumentOutOfRangeException(nameof(row));
         for (int i = 0; i < _state!.Shape.Terms.Length; i++)
         {
             var access = _state.Shape.Terms[i].Access;
             int column = _match!.Columns[i];
-            if ((access & QueryAccess.Added) != 0 && !_run.Window.Contains(_chunk.Added(column)[row]))
+            if ((access & QueryAccess.Added) != 0 && !_run.Window.Contains(_table!.Added(column)[_start + row]))
                 return false;
-            if ((access & QueryAccess.Changed) != 0 && !_run.Window.Contains(_chunk.Changed(column)[row]))
+            if ((access & QueryAccess.Changed) != 0 && !_run.Window.Contains(_table!.Changed(column)[_start + row]))
                 return false;
         }
         return true;
@@ -227,13 +227,13 @@ public readonly ref struct ChunkView
         if ((uint)term >= (uint)_state!.Shape.Terms.Length || (_state.Shape.Terms[term].Access & kind) == 0)
             throw new InvalidOperationException("The requested tick access was not declared.");
         int column = _match!.Columns[term];
-        return kind == QueryAccess.Added ? _chunk!.Added(column) : _chunk!.Changed(column);
+        return (kind == QueryAccess.Added ? _table!.Added(column) : _table!.Changed(column)).Slice(_start, _count);
     }
 
     private void Validate()
     {
         if (_state is null)
-            throw new InvalidOperationException("A default chunk has no active execution.");
+            throw new InvalidOperationException("A default block has no active execution.");
         _run.Require(_state.Owner);
     }
 }

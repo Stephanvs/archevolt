@@ -1,5 +1,6 @@
 namespace Archevolt.Tests;
 
+[Trait("Category", "Storage")]
 public sealed class StorageTests
 {
     private readonly record struct Position(int Value);
@@ -26,11 +27,121 @@ public sealed class StorageTests
         internal bool Frozen;
     }
 
+    private sealed class CollectPositions(SystemBinder binder, List<int> seen) : SystemBody
+    {
+        private readonly QueryState _query = binder.Query(0);
+        protected override void Run(SystemRun run)
+        {
+            var cursor = _query.Begin(run);
+            while (cursor.Next(out var block))
+            {
+                var positions = block.Read<Position>(0);
+                for (int row = 0; row < block.Count; row++)
+                    if (block.MatchesRow(row))
+                        seen.Add(positions[row].Value);
+            }
+        }
+    }
+
+    private static BoundSchedule Collect(World world, QueryShape shape, List<int> seen) =>
+        BoundSchedule.Bind(world, SystemDescriptor.Create(shape.Name, b => new CollectPositions(b, seen)).Query(shape).Build());
+
     [Fact]
-    public void Structural_trace_matches_dictionary_across_chunk_migration_and_swap_removal()
+    public void Table_growth_preserves_values_and_change_ticks_of_existing_rows()
+    {
+        using var world = new WorldBuilder().AddBundle<Particle>().Build();
+        var changed = new List<int>();
+        var added = new List<int>();
+        using var changes = Collect(world, QueryShape.Create("changed").Read<Position>(0).Changed<Position>(0).Build(), changed);
+        using var additions = Collect(world, QueryShape.Create("added").Read<Position>(0).Added<Position>(0).Build(), added);
+        var entities = new List<Entity>();
+        for (int i = 0; i < 5; i++)
+            entities.Add(world.Spawn(new Particle(new Position(i), new Velocity(-i))));
+        changes.Run(TestContext.Current.CancellationToken);
+        additions.Run(TestContext.Current.CancellationToken);
+        Assert.Equal([0, 1, 2, 3, 4], changed.Order());
+        Assert.Equal([0, 1, 2, 3, 4], added.Order());
+        changed.Clear();
+        added.Clear();
+
+        world.Insert(entities[3], new Position(1003));
+        for (int i = 5; i < 1000; i++)
+            entities.Add(world.Spawn(new Particle(new Position(i), new Velocity(-i))));
+        changes.Run(TestContext.Current.CancellationToken);
+        additions.Run(TestContext.Current.CancellationToken);
+
+        Assert.Equal(Enumerable.Range(5, 995).Append(1003), changed.Order());
+        Assert.Equal(Enumerable.Range(5, 995), added.Order());
+        for (int i = 0; i < entities.Count; i++)
+        {
+            Assert.Equal(i == 3 ? 1003 : i, world.Get<Position>(entities[i]).Value);
+            Assert.Equal(-i, world.Get<Velocity>(entities[i]).Value);
+        }
+    }
+
+    [Fact]
+    public void Emptied_table_retains_native_memory_until_trimmed()
+    {
+        using var world = new WorldBuilder().AddBundle<Particle>().AddComponent<Extra>().Build();
+        Entity survivor = world.Spawn(new Particle(new Position(-1), new Velocity(-2)));
+        world.Insert(survivor, new Extra(42));
+        var entities = Enumerable.Range(0, 1000).Select(i => world.Spawn(new Particle(new Position(i), new Velocity(i * 2)))).ToArray();
+        long full = world.NativeBytes;
+
+        foreach (var entity in entities)
+            Assert.True(world.Despawn(entity));
+        Assert.Equal(full, world.NativeBytes);
+        entities = Enumerable.Range(0, 1000).Select(i => world.Spawn(new Particle(new Position(i), new Velocity(i * 2)))).ToArray();
+        Assert.Equal(full, world.NativeBytes);
+        foreach (var entity in entities)
+            Assert.True(world.Despawn(entity));
+
+        world.TrimExcess();
+        long trimmed = world.NativeBytes;
+        Assert.InRange(trimmed, 1, full - 1);
+        Assert.Equal(-1, world.Get<Position>(survivor).Value);
+        Assert.Equal(-2, world.Get<Velocity>(survivor).Value);
+        Assert.Equal(42, world.Get<Extra>(survivor).Value);
+
+        var respawned = Enumerable.Range(0, 20).Select(i => world.Spawn(new Particle(new Position(i + 100), new Velocity(i)))).ToArray();
+        Assert.True(world.NativeBytes > trimmed);
+        Assert.Equal(Enumerable.Range(100, 20), respawned.Select(e => world.Get<Position>(e).Value));
+        Assert.Equal(Enumerable.Range(0, 20), respawned.Select(e => world.Get<Velocity>(e).Value));
+        Assert.Equal(-1, world.Get<Position>(survivor).Value);
+    }
+
+    [Fact]
+    public void Trimming_a_world_with_no_live_entities_releases_all_native_memory()
+    {
+        using var world = new WorldBuilder().AddBundle<Particle>().AddComponent<Extra>().AddComponent<Frozen>(tag: true).Build();
+        var entities = new List<Entity>();
+        for (int i = 0; i < 300; i++)
+        {
+            Entity entity = i % 3 == 0 ? world.Spawn() : world.Spawn(new Particle(new Position(i), new Velocity(i)));
+            if (i % 5 == 0)
+                world.Insert(entity, new Extra(i));
+            if (i % 7 == 0)
+                world.Insert(entity, default(Frozen));
+            entities.Add(entity);
+        }
+        long held = world.NativeBytes;
+        foreach (var entity in entities)
+            Assert.True(world.Despawn(entity));
+        Assert.Equal(held, world.NativeBytes);
+
+        world.TrimExcess();
+
+        Assert.Equal(0, world.NativeBytes);
+        Entity again = world.Spawn(new Particle(new Position(5), new Velocity(6)));
+        Assert.Equal(5, world.Get<Position>(again).Value);
+        Assert.Equal(6, world.Get<Velocity>(again).Value);
+    }
+
+    [Fact]
+    public void Structural_trace_matches_dictionary_across_table_growth_migration_and_swap_removal()
     {
         using var world = new WorldBuilder().AddBundle<Particle>().AddComponent<Extra>()
-            .AddComponent<Frozen>(tag: true).WithChunkBytes(256).Build();
+            .AddComponent<Frozen>(tag: true).Build();
         var expected = new Dictionary<Entity, Expected>();
         var random = new Random(82637);
         for (int i = 0; i < 128; i++)

@@ -66,12 +66,12 @@ public sealed class CommandTests
         {
             consumerSaw = 0;
             var cursor = query.Begin(run);
-            while (cursor.Next(out var chunk))
-                for (int row = 0; row < chunk.Count; row++)
-                    if (chunk.MatchesRow(row))
+            while (cursor.Next(out var block))
+                for (int row = 0; row < block.Count; row++)
+                    if (block.MatchesRow(row))
                     {
                         consumerSaw++;
-                        consumerValue = chunk.Read<Position>(0)[row].Value;
+                        consumerValue = block.Read<Position>(0)[row].Value;
                     }
         };
         var producer = SystemDescriptor.Create("producer", b => new CommandBody(b, produce, query: true)).Query(added).Commands().Build();
@@ -214,9 +214,9 @@ public sealed class CommandTests
     private static int Count(QueryCursor cursor)
     {
         int result = 0;
-        while (cursor.Next(out var chunk))
-            for (int row = 0; row < chunk.Count; row++)
-                if (chunk.MatchesRow(row))
+        while (cursor.Next(out var block))
+            for (int row = 0; row < block.Count; row++)
+                if (block.MatchesRow(row))
                     result++;
         return result;
     }
