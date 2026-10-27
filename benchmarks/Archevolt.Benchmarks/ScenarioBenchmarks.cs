@@ -7,6 +7,7 @@ public class TraversalMatrixBenchmarks
 {
     private World _world = null!;
     private BoundSchedule _schedule = null!;
+    private BoundSchedule _query = null!;
     [Params(1_000, 100_000, 1_000_000)] public int Count { get; set; }
     [Params(1, 16)] public int Archetypes { get; set; }
     [Params(false, true)] public bool Wide { get; set; }
@@ -18,10 +19,13 @@ public class TraversalMatrixBenchmarks
         _world = MatrixPopulation.Build();
         MatrixPopulation.Populate(_world, Count, Archetypes, Wide);
         _schedule = EachMovement.Create(_world);
+        _query = QueryMovement.Create(_world);
         _schedule.Run();
+        _query.Run();
     }
     [Benchmark] public void GeneratedEach() => _schedule.Run();
-    [GlobalCleanup] public void Cleanup() { _schedule?.Dispose(); _world?.Dispose(); }
+    [Benchmark] public void GeneratedQuery() => _query.Run();
+    [GlobalCleanup] public void Cleanup() { _schedule?.Dispose(); _query?.Dispose(); _world?.Dispose(); }
 }
 
 [MemoryDiagnoser, MinColumn, MaxColumn, MedianColumn]
