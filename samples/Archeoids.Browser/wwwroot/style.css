@@ -1,0 +1,20 @@
+@font-face {
+  font-family: Barlow;
+  src: url("./fonts/Barlow-Regular.ttf") format("truetype");
+  font-weight: 400;
+}
+@font-face {
+  font-family: Barlow;
+  src: url("./fonts/Barlow-SemiBold.ttf") format("truetype");
+  font-weight: 600;
+}
+:root { color-scheme: dark; background: #05080c; color: #c1d3d6; font-family: Barlow, sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { position: relative; width: 100%; height: calc(100dvh - 52px); min-height: 240px; }
+canvas { position: absolute; width: 100%; height: 100%; display: block; }
+#game:focus-visible { outline: 2px solid #66f2e6; outline-offset: -2px; }
+#hud { pointer-events: none; }
+#status { position: absolute; inset: 0; display: grid; place-content: center; padding: 32px; background: #05080cf5; text-align: center; }
+#status[hidden] { display: none; }
+#controls { margin: 0; min-height: 52px; padding: 12px 20px; text-align: center; font-size: 15px; }
