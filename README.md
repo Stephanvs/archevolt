@@ -2,6 +2,10 @@
   <img src=".github/assets/archevolt-geometric.png" alt="Archevolt" width="720">
 </h1>
 
+<p align="center">
+  <a href="https://www.nuget.org/packages/Archevolt"><img src="https://img.shields.io/nuget/v/Archevolt?logo=nuget" alt="NuGet version"></a>
+</p>
+
 Archevolt is a headless archetype ECS for modern high performance .NET. Write components as structs and systems as C# methods. Its source generator builds typed queries, bundles, modules, and schedules; the runtime handles native component storage and serial or bounded parallel execution.
 
 The runtime has no package dependencies. The `Archevolt` package includes its generator. Generated declarations stay in your namespace and partial types.
