@@ -62,14 +62,14 @@ public sealed partial class ArchevoltGenerator
     static string BlockColumn(TermModel term) => term.Mode == "Read" ? $"block.Read<{term.Component.Type}>({term.Index})"
         : term.Component.Tracked ? $"block.Tracked<{term.Component.Type}>({term.Index}).WriteAll()" : $"block.Write<{term.Component.Type}>({term.Index})";
 
-    static void BindColumns(StringBuilder text, IReadOnlyList<TermModel> terms, string targetPrefix = "", string chunk = "chunk", bool declarations = false)
+    static void BindColumns(StringBuilder text, IReadOnlyList<TermModel> terms, string targetPrefix = "", bool declarations = false)
     {
         foreach (var term in terms.Where(static term => term.Mode is "Read" or "Write" or "Optional"))
         {
             var variable = targetPrefix + ColumnName(term);
             if (declarations) text.Append(ColumnType(term)).Append(' ').Append(variable).AppendLine(";");
-            if (term.Mode == "Optional") text.Append(chunk).Append(".TryRead<").Append(term.Component.Type).Append(">(").Append(term.Index).Append(", out ").Append(variable).AppendLine(");");
-            else text.Append(variable).Append(" = ").Append(chunk).Append('.').Append(term.Mode == "Read" ? "Read" : term.Component.Tracked ? "Tracked" : "Write")
+            if (term.Mode == "Optional") text.Append("block.TryRead<").Append(term.Component.Type).Append(">(").Append(term.Index).Append(", out ").Append(variable).AppendLine(");");
+            else text.Append(variable).Append(" = block.").Append(term.Mode == "Read" ? "Read" : term.Component.Tracked ? "Tracked" : "Write")
                 .Append('<').Append(term.Component.Type).Append(">(").Append(term.Index).AppendLine(");");
         }
     }
@@ -101,9 +101,9 @@ public sealed partial class ArchevoltGenerator
         text.AppendLine("public bool MoveNext()\n{\nwhile (true)\n{\nif (++_row < _count)\n{");
         if (filters.Length != 0)
             text.Append("if (!(").Append(string.Join(" && ", filters.Select((_, i) => $"_cursor.Window.Contains(_ticks{i}[_row])"))).AppendLine(")) continue;");
-        text.AppendLine("return true;\n}\nif (!_cursor.Next(out var chunk)) return false;\n_count = chunk.Count;\n_row = -1;\n_entities = chunk.Entities;");
+        text.AppendLine("return true;\n}\nif (!_cursor.Next(out var block)) return false;\n_count = block.Count;\n_row = -1;\n_entities = block.Entities;");
         BindColumns(text, terms);
-        for (int i = 0; i < filters.Length; i++) text.Append("_ticks").Append(i).Append(" = chunk.").Append(filters[i].Mode).Append('(').Append(filters[i].Index).AppendLine(");");
+        for (int i = 0; i < filters.Length; i++) text.Append("_ticks").Append(i).Append(" = block.").Append(filters[i].Mode).Append('(').Append(filters[i].Index).AppendLine(");");
         text.AppendLine("}\n}");
         text.Append("public Row Current => new(").Append(string.Join(", ", values.Select(ColumnName).Concat(new[] { "_entities", "_row" }))).AppendLine(");\n}");
         text.AppendLine("public readonly ref struct Row\n{\nreadonly global::Archevolt.EntityColumn _entities;\nreadonly int _row;");

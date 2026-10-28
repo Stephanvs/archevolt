@@ -208,13 +208,13 @@ public sealed class BoundSchedule : IDisposable
                 }
                 else if (instance.Descriptor.Partitionable && _world.MaxConcurrency > 1)
                 {
-                    int chunks = instance.Queries[0]!.TotalChunks;
-                    int partitions = Math.Max(1, Math.Min(chunks, _world.MaxConcurrency));
+                    int rows = instance.Queries[0]!.TotalRows;
+                    int partitions = Math.Max(1, Math.Min(rows, _world.MaxConcurrency));
                     _remaining[node] = partitions;
                     for (int partition = 0; partition < partitions; partition++)
                     {
-                        int first = (int)((long)chunks * partition / partitions);
-                        int end = (int)((long)chunks * (partition + 1) / partitions);
+                        int first = (int)((long)rows * partition / partitions);
+                        int end = (int)((long)rows * (partition + 1) / partitions);
                         _work[workCount++] = new WorkItem(node, first, end - first);
                     }
                 }
@@ -279,14 +279,14 @@ public sealed class BoundSchedule : IDisposable
         if (timed) Interlocked.Increment(ref _timingAccumulators[work.Node].BodyInvocations);
         try
         {
-            instance.Body.Execute(new SystemRun(instance, work.FirstChunk, work.ChunkCount));
+            instance.Body.Execute(new SystemRun(instance, work.FirstRow, work.RowCount));
         }
         catch (Exception exception)
         {
             if (timed) Interlocked.Increment(ref _timingAccumulators[work.Node].BodyFailures);
             Interlocked.Exchange(ref _failed[work.Node], 1);
             Interlocked.Exchange(ref _batchFailed, 1);
-            throw new SystemExecutionException(instance.Key, instance.Descriptor.Name, work.FirstChunk, work.ChunkCount, exception);
+            throw new SystemExecutionException(instance.Key, instance.Descriptor.Name, work.FirstRow, work.RowCount, exception);
         }
         finally
         {
@@ -315,7 +315,7 @@ public sealed class BoundSchedule : IDisposable
         _world.Schedules.Remove(this);
     }
 
-    private readonly record struct WorkItem(int Node, int FirstChunk, int ChunkCount);
+    private readonly record struct WorkItem(int Node, int FirstRow, int RowCount);
     private struct TimingAccumulator
     {
         internal int BodyInvocations;
@@ -346,17 +346,17 @@ public abstract class ConditionBody : SystemBody
 
 public sealed class SystemExecutionException : Exception
 {
-    internal SystemExecutionException(string instanceKey, string systemName, int firstChunk, int chunkCount, Exception inner)
+    internal SystemExecutionException(string instanceKey, string systemName, int firstRow, int rowCount, Exception inner)
         : base($"System '{instanceKey}' failed.", inner)
     {
         InstanceKey = instanceKey;
         SystemName = systemName;
-        FirstChunk = firstChunk;
-        ChunkCount = chunkCount;
+        FirstRow = firstRow;
+        RowCount = rowCount;
     }
 
     public string InstanceKey { get; }
     public string SystemName { get; }
-    public int FirstChunk { get; }
-    public int ChunkCount { get; }
+    public int FirstRow { get; }
+    public int RowCount { get; }
 }

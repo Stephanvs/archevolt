@@ -34,7 +34,7 @@ The generated loop calls `Motion.Move` directly for every entity that has both c
 
 - **Typed queries.** Named queries produce concrete rows with `ref` and `ref readonly` access. Nothing is boxed or looked up by type at run time.
 - **Declarative schedules.** Order systems with `Order`, `Before`, `After`, stages, and sets. The planner adds conservative ordering where access conflicts.
-- **Native storage.** Components live in dense, aligned, structure-of-arrays chunks grouped by archetype.
+- **Native storage.** Components live in dense, aligned, structure-of-arrays tables, one per archetype.
 - **Opt-in parallelism.** Serial execution is the reference behavior. Enable a bounded worker pool and mark eligible systems as partitioned.
 - **Change tracking, resources, messages.** Track added and changed components, share resources, and send messages with independent reader cursors.
 - **AOT-friendly.** The package runs under JIT, trimming, and NativeAOT.

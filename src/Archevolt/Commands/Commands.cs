@@ -217,9 +217,9 @@ public sealed partial class World
         ref var reservation = ref Entities.Entry(entity.Index);
         if (entity.WorldId != Id || reservation.Generation != entity.Generation || reservation.State != EntityState.Reserved)
             throw new InvalidOperationException("Spawn reservation is no longer valid.");
-        var location = binding.Archetype.Append(_pool, new EntityKey(entity.Index, entity.Generation));
-        WriteBundle(binding, payload, location.Chunk, location.Row, null, tick);
-        Entities.Materialize(entity, binding.Archetype, location.Chunk, location.Row);
+        int row = binding.Archetype.Table.Append(new EntityKey(entity.Index, entity.Generation));
+        WriteBundle(binding, payload, binding.Archetype, row, null, tick);
+        Entities.Materialize(entity, binding.Archetype, row);
     }
 
     private void ApplyBundle(Entity entity, BundleBinding binding, ReadOnlySpan<byte> payload, ulong tick)
@@ -234,19 +234,19 @@ public sealed partial class World
         }
         if (source != destination)
             Move(entity, destination);
-        WriteBundle(binding, payload, entry.Chunk!, entry.Row, source, tick);
+        WriteBundle(binding, payload, destination, entry.Row, source, tick);
     }
 
-    private static void WriteBundle(BundleBinding binding, ReadOnlySpan<byte> payload, NativeChunk chunk, int row, Archetype? source, ulong tick)
+    private static void WriteBundle(BundleBinding binding, ReadOnlySpan<byte> payload, Archetype target, int row, Archetype? source, ulong tick)
     {
         int offset = 0;
         for (int i = 0; i < binding.Ids.Length; i++)
         {
-            int column = Array.BinarySearch(chunk.Archetype.Ids, binding.Ids[i]);
+            int column = Array.BinarySearch(target.Ids, binding.Ids[i]);
             var component = binding.Descriptor.Components[i];
             if (!component.IsTag)
-                payload.Slice(offset, component.Size).CopyTo(chunk.ValueBytes(column, row));
-            Stamp(chunk, column, row, tick, source is null || !source.Has(binding.Ids[i]));
+                payload.Slice(offset, component.Size).CopyTo(target.Table.ValueBytes(column, row));
+            Stamp(target.Table, column, row, tick, source is null || !source.Has(binding.Ids[i]));
             offset += component.Size;
         }
     }
@@ -260,10 +260,11 @@ public sealed partial class World
         bool added = !entry.Archetype!.Has(id);
         if (added)
             Move(entity, Transition(entry.Archetype!, id, add: true));
-        int column = Array.BinarySearch(entry.Archetype!.Ids, id);
+        var table = entry.Archetype!.Table;
+        int column = Array.BinarySearch(entry.Archetype.Ids, id);
         if (!Registry.Components[id].IsTag)
-            payload.CopyTo(entry.Chunk!.ValueBytes(column, entry.Row));
-        Stamp(entry.Chunk!, column, entry.Row, tick, added);
+            payload.CopyTo(table.ValueBytes(column, entry.Row));
+        Stamp(table, column, entry.Row, tick, added);
     }
 
     private bool ApplyRemove(Entity entity, int id, ulong tick, bool optional)
@@ -291,7 +292,7 @@ public sealed partial class World
         ref var entry = ref Entities.Entry(entity.Index);
         foreach (var component in entry.Archetype!.Components)
             RecordRemoval(component.TypeKey, entity, tick);
-        entry.Archetype!.Remove(entry.Chunk!, entry.Row, Entities);
+        entry.Archetype!.Table.SwapRemove(entry.Row, Entities);
         Entities.Release(entity.Index);
         return true;
     }

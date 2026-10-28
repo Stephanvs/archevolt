@@ -23,7 +23,6 @@ internal struct EntityEntry
     internal uint Generation;
     internal EntityState State;
     internal Archetype? Archetype;
-    internal NativeChunk? Chunk;
     internal int Row;
 }
 
@@ -77,20 +76,19 @@ internal sealed class EntityTable
         && Entry(entity.Index).Generation == entity.Generation
         && Entry(entity.Index).State == EntityState.Alive;
 
-    internal void Materialize(Entity entity, Archetype archetype, NativeChunk chunk, int row)
+    internal void Materialize(Entity entity, Archetype archetype, int row)
     {
         ref var entry = ref Entry(entity.Index);
         if (entry.State != EntityState.Reserved || entry.Generation != entity.Generation)
             throw new InvalidOperationException("The entity reservation is no longer valid.");
-        Relocate(entity.Index, archetype, chunk, row);
+        Relocate(entity.Index, archetype, row);
         entry.State = EntityState.Alive;
     }
 
-    internal void Relocate(int index, Archetype archetype, NativeChunk chunk, int row)
+    internal void Relocate(int index, Archetype archetype, int row)
     {
         ref var entry = ref Entry(index);
         entry.Archetype = archetype;
-        entry.Chunk = chunk;
         entry.Row = row;
     }
 
@@ -112,7 +110,6 @@ internal sealed class EntityTable
     {
         ref var entry = ref Entry(index);
         entry.Archetype = null;
-        entry.Chunk = null;
         entry.Row = 0;
         if (entry.Generation == uint.MaxValue)
             entry.State = EntityState.Retired;

@@ -191,17 +191,17 @@ public readonly ref struct SystemRun
     private readonly SystemInstance? _instance;
     private readonly ulong _epoch;
     public TickWindow Window { get; }
-    internal int FirstChunk { get; }
-    internal int ChunkCount { get; }
-    internal bool IsPartitioned => FirstChunk != 0 || ChunkCount != int.MaxValue;
+    internal int FirstRow { get; }
+    internal int RowCount { get; }
+    internal bool IsPartitioned => FirstRow != 0 || RowCount != int.MaxValue;
 
-    internal SystemRun(SystemInstance instance, int firstChunk = 0, int chunkCount = int.MaxValue)
+    internal SystemRun(SystemInstance instance, int firstRow = 0, int rowCount = int.MaxValue)
     {
         _instance = instance;
         _epoch = instance.Epoch;
         Window = new TickWindow(instance.LastRun, instance.ThisRun);
-        FirstChunk = firstChunk;
-        ChunkCount = chunkCount;
+        FirstRow = firstRow;
+        RowCount = rowCount;
     }
 
     internal void Require(SystemInstance? owner)
@@ -259,14 +259,14 @@ internal sealed partial class SystemInstance
             query?.Refresh();
     }
 
-    internal SystemRun Begin(int firstChunk = 0, int chunkCount = int.MaxValue)
+    internal SystemRun Begin()
     {
         if (Active)
             throw new InvalidOperationException("The system instance is already executing.");
         Epoch = checked(Epoch + 1);
         ThisRun = World.NextTick();
         Active = true;
-        return new SystemRun(this, firstChunk, chunkCount);
+        return new SystemRun(this);
     }
 
     internal void Complete(bool success)

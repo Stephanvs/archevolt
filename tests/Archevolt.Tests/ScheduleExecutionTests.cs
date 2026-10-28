@@ -220,7 +220,7 @@ public sealed class ScheduleExecutionTests
     [InlineData(4)]
     public void Partitioned_each_updates_every_entity_once_and_uses_one_tick_per_invocation(int budget)
     {
-        using var world = new WorldBuilder().AddComponent<Position>(tracked: true).WithChunkBytes(128).UseParallelExecution(budget).Build();
+        using var world = new WorldBuilder().AddComponent<Position>(tracked: true).UseParallelExecution(budget).Build();
         var entities = Enumerable.Range(0, 200).Select(i =>
         {
             var entity = world.Spawn();
@@ -590,11 +590,11 @@ public sealed class ScheduleExecutionTests
         {
             int count = 0;
             var cursor = query.Begin(run);
-            while (cursor.Next(out var chunk))
+            while (cursor.Next(out var block))
             {
-                var positions = chunk.Read<Position>(0);
-                for (int row = 0; row < chunk.Count; row++)
-                    if (chunk.MatchesRow(row) && positions[row].Value == 7) count++;
+                var positions = block.Read<Position>(0);
+                for (int row = 0; row < block.Count; row++)
+                    if (block.MatchesRow(row) && positions[row].Value == 7) count++;
             }
             counts?.Add(count);
             return result && count > 0;
@@ -606,8 +606,8 @@ public sealed class ScheduleExecutionTests
         {
             int count = 0;
             var cursor = query.Begin(run);
-            while (cursor.Next(out var chunk))
-                for (int row = 0; row < chunk.Count; row++) if (chunk.MatchesRow(row)) count++;
+            while (cursor.Next(out var block))
+                for (int row = 0; row < block.Count; row++) if (block.MatchesRow(row)) count++;
             counts.Add(count);
         }
     }
@@ -636,10 +636,10 @@ public sealed class ScheduleExecutionTests
         protected override void Run(SystemRun run)
         {
             var cursor = query.Begin(run);
-            while (cursor.Next(out var chunk))
+            while (cursor.Next(out var block))
             {
-                var values = chunk.Write<Position>(0);
-                for (int row = 0; row < chunk.Count; row++) values[row] = new Position(transform(values[row].Value));
+                var values = block.Write<Position>(0);
+                for (int row = 0; row < block.Count; row++) values[row] = new Position(transform(values[row].Value));
             }
         }
     }
@@ -650,10 +650,10 @@ public sealed class ScheduleExecutionTests
             ticks.Add(run.Window.Now);
             Assert.True(together.SignalAndWait(Timeout));
             var cursor = query.Begin(run);
-            while (cursor.Next(out var chunk))
+            while (cursor.Next(out var block))
             {
-                var values = chunk.Tracked<Position>(0);
-                for (int row = 0; row < chunk.Count; row++)
+                var values = block.Tracked<Position>(0);
+                for (int row = 0; row < block.Count; row++)
                 {
                     ref var value = ref values.Write(row);
                     value = new Position(value.Value + 1);

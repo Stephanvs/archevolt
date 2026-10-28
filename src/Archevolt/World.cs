@@ -8,8 +8,6 @@ public sealed partial class World : IDisposable
     private static readonly object s_identityGate = new();
     private static long s_nextWorld;
     private readonly int _ownerThread = Environment.CurrentManagedThreadId;
-    private readonly int _chunkBytes;
-    private readonly ChunkPool _pool = new();
     private readonly Dictionary<string, Archetype> _archetypeByKey = new(StringComparer.Ordinal);
     private readonly Dictionary<int, BundleBinding> _bundles = [];
     private ulong _tick;
@@ -27,7 +25,10 @@ public sealed partial class World : IDisposable
         get
         {
             RequireIdle();
-            return _pool.AllocatedBytes;
+            long bytes = 0;
+            foreach (var archetype in Archetypes)
+                bytes += archetype.Table.Bytes;
+            return bytes;
         }
     }
 
@@ -35,7 +36,6 @@ public sealed partial class World : IDisposable
     {
         lock (s_identityGate)
             Id = s_nextWorld = checked(s_nextWorld + 1);
-        _chunkBytes = builder.ChunkBytes;
         MaxConcurrency = builder.MaxConcurrency;
         CommandCapacity = builder.CommandBytes;
         Registry = new ComponentRegistry(builder.Components);
@@ -61,8 +61,8 @@ public sealed partial class World : IDisposable
         try
         {
             var archetype = GetArchetype([]);
-            var location = archetype.Append(_pool, new EntityKey(entity.Index, entity.Generation));
-            Entities.Materialize(entity, archetype, location.Chunk, location.Row);
+            int row = archetype.Table.Append(new EntityKey(entity.Index, entity.Generation));
+            Entities.Materialize(entity, archetype, row);
             return entity;
         }
         catch { Entities.Release(entity.Index); throw; }
@@ -147,7 +147,7 @@ public sealed partial class World : IDisposable
         int column = Array.BinarySearch(entry.Archetype!.Ids, id);
         if (column < 0)
             return false;
-        value = entry.Chunk!.Values<T>(column)[entry.Row];
+        value = entry.Archetype.Table.Values<T>(column)[entry.Row];
         return true;
     }
 
@@ -180,6 +180,13 @@ public sealed partial class World : IDisposable
         if (!Entities.IsAlive(entity, Id))
             return false;
         return ApplyDespawn(entity, NextTick(), optional: true);
+    }
+
+    public void TrimExcess()
+    {
+        RequireIdle();
+        foreach (var archetype in Archetypes)
+            archetype.Table.Trim();
     }
 
     internal void RequireIdle()
@@ -227,7 +234,7 @@ public sealed partial class World : IDisposable
         string key = string.Join(",", ids);
         if (_archetypeByKey.TryGetValue(key, out var result))
             return result;
-        result = new Archetype(Archetypes.Count, ids, Registry, _chunkBytes);
+        result = new Archetype(Archetypes.Count, ids, Registry);
         _archetypeByKey.Add(key, result);
         Archetypes.Add(result);
         return result;
@@ -247,22 +254,21 @@ public sealed partial class World : IDisposable
     private void Move(Entity entity, Archetype destination)
     {
         ref var entry = ref Entities.Entry(entity.Index);
-        var source = entry.Archetype!;
-        var sourceChunk = entry.Chunk!;
+        var source = entry.Archetype!.Table;
         int sourceRow = entry.Row;
-        var location = destination.Append(_pool, new EntityKey(entity.Index, entity.Generation));
-        sourceChunk.CopyRowTo(sourceRow, location.Chunk, location.Row);
-        source.Remove(sourceChunk, sourceRow, Entities);
-        Entities.Relocate(entity.Index, destination, location.Chunk, location.Row);
+        int row = destination.Table.Append(new EntityKey(entity.Index, entity.Generation));
+        source.CopyRowTo(sourceRow, destination.Table, row);
+        source.SwapRemove(sourceRow, Entities);
+        Entities.Relocate(entity.Index, destination, row);
     }
 
-    private static void Stamp(NativeChunk chunk, int column, int row, ulong tick, bool added)
+    private static void Stamp(Table table, int column, int row, ulong tick, bool added)
     {
-        if (!chunk.Archetype.Components[column].Tracked)
+        if (!table.Components[column].Tracked)
             return;
         if (added)
-            chunk.Added(column)[row] = tick;
-        chunk.Changed(column)[row] = tick;
+            table.Added(column)[row] = tick;
+        table.Changed(column)[row] = tick;
     }
 
     public void Dispose()
@@ -275,9 +281,7 @@ public sealed partial class World : IDisposable
             throw new InvalidOperationException("Dispose all bound schedules before disposing their world.");
         _workers?.Dispose();
         foreach (var archetype in Archetypes)
-            foreach (var chunk in archetype.Chunks)
-                chunk.Dispose();
-        _pool.Dispose();
+            archetype.Table.Dispose();
         _disposed = true;
         DisposeResources();
     }
@@ -294,7 +298,6 @@ public sealed partial class WorldBuilder
     internal readonly List<ComponentDescriptor> Components = [];
     internal readonly List<BundleDescriptor> Bundles = [];
     internal readonly List<ResourceDescriptor> Resources = [];
-    internal int ChunkBytes = 16 * 1024;
     internal int EntityCapacity;
     internal int MaxConcurrency = 1;
     internal int CommandBytes = 4096;
@@ -351,13 +354,6 @@ public sealed partial class WorldBuilder
         EntityCapacity = entities;
         CommandBytes = commandBytesPerProducer;
         MessageCapacity = messagesPerType;
-        return this;
-    }
-
-    public WorldBuilder WithChunkBytes(int bytes)
-    {
-        ArgumentOutOfRangeException.ThrowIfLessThan(bytes, 64);
-        ChunkBytes = bytes;
         return this;
     }
 

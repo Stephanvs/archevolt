@@ -33,10 +33,10 @@ public sealed class QueryRuntimeTests
         {
             var step = _step.Read(run);
             var cursor = _query.Begin(run);
-            while (cursor.Next(out var chunk))
+            while (cursor.Next(out var block))
             {
-                var positions = chunk.Tracked<Position>(0);
-                var velocities = chunk.Read<Velocity>(1);
+                var positions = block.Tracked<Position>(0);
+                var velocities = block.Read<Velocity>(1);
                 for (int row = 0; row < positions.Length; row++)
                 {
                     ref Position position = ref positions.Write(row);
@@ -63,7 +63,7 @@ public sealed class QueryRuntimeTests
     }
 
     private static World CreateWorld() => new WorldBuilder().AddBundle<Particle>().AddComponent<Extra>()
-        .AddComponent<Frozen>(tag: true).AddResource<Step>().WithChunkBytes(256).Build();
+        .AddComponent<Frozen>(tag: true).AddResource<Step>().Build();
 
     [Fact]
     public void Bound_query_observes_new_archetypes_and_tag_membership_on_the_next_run()
@@ -122,9 +122,9 @@ public sealed class QueryRuntimeTests
         QueryAction touch = (run, query) =>
         {
             var cursor = query.Begin(run);
-            while (cursor.Next(out var chunk))
+            while (cursor.Next(out var block))
             {
-                var reference = chunk.Tracked<Position>(0).At(0);
+                var reference = block.Tracked<Position>(0).At(0);
                 if (acquire)
                 {
                     ref Position position = ref reference.Value;
@@ -145,9 +145,9 @@ public sealed class QueryRuntimeTests
     private static int Count(QueryCursor cursor)
     {
         int count = 0;
-        while (cursor.Next(out var chunk))
-            for (int row = 0; row < chunk.Count; row++)
-                if (chunk.MatchesRow(row))
+        while (cursor.Next(out var block))
+            for (int row = 0; row < block.Count; row++)
+                if (block.MatchesRow(row))
                     count++;
         return count;
     }
@@ -163,11 +163,11 @@ public sealed class QueryRuntimeTests
         QueryAction observe = (run, query) =>
         {
             var cursor = query.Begin(run);
-            while (cursor.Next(out var chunk))
+            while (cursor.Next(out var block))
             {
-                bool has = chunk.TryRead<Extra>(0, out var values);
-                for (int row = 0; row < chunk.Count; row++)
-                    observed[chunk.Entities[row]] = has ? values[row].Value : null;
+                bool has = block.TryRead<Extra>(0, out var values);
+                for (int row = 0; row < block.Count; row++)
+                    observed[block.Entities[row]] = has ? values[row].Value : null;
             }
         };
         var shape = QueryShape.Create("optional").Optional<Extra>(0).Build();
@@ -188,9 +188,9 @@ public sealed class QueryRuntimeTests
         QueryAction check = (run, query) =>
         {
             var cursor = query.Begin(run);
-            Assert.True(cursor.Next(out var chunk));
-            try { chunk.Write<Position>(0); } catch (InvalidOperationException) { rejected++; }
-            try { chunk.Read<Extra>(0); } catch (InvalidOperationException) { rejected++; }
+            Assert.True(cursor.Next(out var block));
+            try { block.Write<Position>(0); } catch (InvalidOperationException) { rejected++; }
+            try { block.Read<Extra>(0); } catch (InvalidOperationException) { rejected++; }
             try { query.Begin(default); } catch (InvalidOperationException) { rejected++; }
             Assert.Throws<InvalidOperationException>(() => world.Insert(entity, new Position(99)));
             Assert.Throws<InvalidOperationException>(() => world.Dispose());

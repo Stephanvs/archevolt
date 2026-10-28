@@ -57,7 +57,7 @@ These differences remain after mirroring the workload:
 - **Change ticks.** Bevy stores 32-bit added and changed ticks for every component and writes them on spawn, insert, and mutable access. Archevolt stores 64-bit ticks for `[TrackChanges]` components only. Of the components here, only `TrackedPosition` is tracked.
 - **Spawn.** Building an Archevolt world creates the archetype of every registered bundle. A Bevy world creates the particle archetype and table on its first spawn, inside the measured operation.
 - **Batch spawn.** `World::spawn_batch` reserves table storage for the iterator's size hint and allocates all entities with one `alloc_many` call.
-- **Storage.** Archevolt stores components in 16 KiB chunks. An unread `WidePayload` shares the chunk, so each chunk holds fewer rows. Bevy stores each component in its own contiguous table column, so the payload does not change the `Position` and `Velocity` columns.
+- **Storage.** Archevolt stores components in 16 KiB chunks. An unread `WidePayload` shares the chunk, so each chunk holds fewer rows. Bevy stores each component in its own contiguous table column, so the payload does not change the `Position` and `Velocity` columns. Step 3 replaced the chunks with one table per archetype, so this difference no longer holds after it.
 - **Entity handle.** Archevolt's `Entity` is 16 bytes and carries a world ID. Bevy's `Entity` is 8 bytes.
 - **Slices.** `bevy_contiguous` writes through `ContiguousMut`, which marks every row of the slice as changed.
 - **Statistics.** BenchmarkDotNet reports a mean per launch. Criterion reports a mean per run. Both time one operation per fresh world for spawn and despawn, and dispose or drop the world outside the timing.
@@ -70,7 +70,7 @@ Run from the repository root with PowerShell 7.2 or newer:
 ./scripts/baseline.ps1
 ```
 
-The script builds the benchmarks, runs the BenchmarkDotNet cases above and `ReferenceComparisonBenchmarks` with three launches, and runs `cargo bench` three times with `-C target-cpu=native`. Criterion runs under the High performance power plan, which BenchmarkDotNet also selects, and the script restores the previous plan. Results go to `artifacts/baseline/<UTC timestamp>/`. `summary.md` lists the median of the three per-process means and their range. `-Runs 5` takes more samples. `-Quick` shortens both harnesses to check the script, and its numbers are not baselines.
+The script builds the benchmarks, runs the BenchmarkDotNet cases above and `ReferenceComparisonBenchmarks` with three launches, and runs `cargo bench` three times with `-C target-cpu=native`. Criterion runs under the High performance power plan, which BenchmarkDotNet also selects, and the script restores the previous plan. Results go to `artifacts/baseline/<UTC timestamp>/`. `summary.md` lists the median of the three per-process means and their range. `-Runs 5` takes more samples. `-Quick` shortens both harnesses to check the script, and its numbers are not baselines. `./scripts/compare-baselines.ps1 -Before <dir> -After <dir>` joins two result directories and marks each case faster, slower, or within the before range.
 
 BenchmarkDotNet finds the project to build by searching the directory that holds `Archevolt.slnx`. It stops when two files named `Archevolt.Benchmarks.csproj` exist below that directory, for example in a copy of the repository under `artifacts/`. Run the script from a clean clone in that case.
 

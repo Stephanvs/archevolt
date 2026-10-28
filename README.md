@@ -111,7 +111,7 @@ Build, run, mutate, and dispose a world on its owner thread. Idle component read
 
 Dispose every bound schedule before disposing its world. `schedule.Plan` exposes dependencies and batches. Opt into per-system execution measurements with `schedule.EnableTiming()` and inspect `schedule.Timings` between runs.
 
-Serial execution is the default. Enable a bounded worker pool with `.UseParallelExecution(maxConcurrency: 4)` on `WorldBuilder`. This limit includes the owner thread. Opt eligible systems into chunk partitioning with `[Each(Partitioned = true)]`. Resource and component conflicts determine which systems can run together.
+Serial execution is the default. Enable a bounded worker pool with `.UseParallelExecution(maxConcurrency: 4)` on `WorldBuilder`. This limit includes the owner thread. Opt eligible systems into row-range partitioning with `[Each(Partitioned = true)]`. Resource and component conflicts determine which systems can run together.
 
 `[TrackChanges]` opts components and resources into tracking. Writable access stamps a change even when the replacement value is equal. Added and changed filters use each system instance's last successful execution.
 

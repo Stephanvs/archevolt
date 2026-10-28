@@ -20,7 +20,8 @@ sidebar:
 | `Contains(entity)` | Reports whether the handle identifies a live entity in this world. |
 | `Has<T>(entity)` | Tests component membership on a live entity. |
 | `Get<T>(entity)` / `TryGet<T>(entity, out value)` | Returns a component copy. Tags use `Has<T>`. |
-| `NativeBytes` | Reports native bytes held by the world's chunk allocator. |
+| `NativeBytes` | Reports native bytes held by the world's component tables, including retained capacity. |
+| `TrimExcess()` | Shrinks every table to its live rows and frees the tables that are empty. |
 
 ## Entity identity
 
@@ -32,7 +33,7 @@ World inspection and immediate mutation require an idle world and its owner thre
 
 ## Capacity
 
-`Reserve(entities, commandBytesPerProducer, messagesPerType)` reserves initial capacities. Capacities can grow. `WithChunkBytes(bytes)` sets the target chunk size, with a minimum of 64 bytes. Large component layouts can require a larger allocation for a single row.
+`Reserve(entities, commandBytesPerProducer, messagesPerType)` reserves initial capacities. Capacities can grow. Each archetype stores its components in one table that doubles its capacity when full. A table keeps its capacity when entities leave, so later spawns and moves into it do not allocate. Call `TrimExcess()` on an idle world to release that retained memory.
 
 ## Disposal
 

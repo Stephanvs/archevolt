@@ -14,7 +14,7 @@ The runtime owns entity allocation, native storage, query caches, parameter bind
 | Generated at compile time | Handled at run time |
 | --- | --- |
 | Named query rows, enumerators, and shapes | Which archetypes currently match a query |
-| Direct calls to your system methods | Chunk traversal and partitioning |
+| Direct calls to your system methods | Table traversal and row-range partitioning |
 | Bundle descriptors and module manifests | World registration and validation |
 | Declarative schedule plans | Binding, barriers, and command playback |
 
@@ -24,13 +24,13 @@ Diagnostics `AV001` through `AV010` report contract violations during compilatio
 
 An entity contains its world identity, slot, and generation. A paged entity table records free, reserved, alive, and retired states.
 
-A frozen registry assigns world-local component IDs. Archetypes contain canonical sorted component IDs and native structure-of-arrays chunks. Moving an entity between archetypes copies retained values and ticks, initializes additions, and repairs the moved entity after swap removal.
+A frozen registry assigns world-local component IDs. Each archetype holds canonical sorted component IDs and one native structure-of-arrays table. A table is a single 64-byte-aligned allocation that doubles when full and keeps its capacity when rows leave. `World.TrimExcess()` releases that retained capacity. Moving an entity between archetypes copies retained values and ticks, initializes additions, and repairs the moved entity after swap removal.
 
 ## Safe access
 
-`SystemBody` holds bindings for one system instance. `SystemBinder` validates bindings against the descriptor. `SystemRun` is a runtime-created ref struct carrying the instance, invocation epoch, tick interval, and assigned chunk range.
+`SystemBody` holds bindings for one system instance. `SystemBinder` validates bindings against the descriptor. `SystemRun` is a runtime-created ref struct carrying the instance, invocation epoch, tick interval, and assigned row range.
 
-`QueryState` belongs to one instance. The owner refreshes its matching-archetype cache before dispatch. A chunk exposes bounded readonly spans, bounded untracked writable spans, and tracked accessors that stamp before returning writable references.
+`QueryState` belongs to one instance. The owner refreshes its matching-archetype cache before dispatch. A block view covers a row range of one table and exposes bounded readonly spans, bounded untracked writable spans, and tracked accessors that stamp before returning writable references.
 
 Column binding checks component identity, access mode, and tracking policy. Equal byte sizes do not establish type identity, and callers cannot supply arbitrary span lengths.
 
