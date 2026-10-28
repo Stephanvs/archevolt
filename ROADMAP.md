@@ -36,6 +36,7 @@ These rules apply to every step:
 - Correctness gates timing. The benchmark driver validates every entity's values before and after measurement. All runtime tests pass unchanged unless the step changes the tested contract.
 - A warmed, fixed-capacity steady-state update allocates zero managed memory. Report structural growth, churn, and dispatch costs instead of hiding them.
 - Cross-language Bevy numbers are context, not a ranking, unless the workload and compiler settings are controlled. Compare Rust builds with `-C target-cpu=native`, because RyuJIT always targets the host CPU.
+- Routine .NET runs may reuse a recorded Bevy reference with its original date and environment. `scripts/baseline.ps1` runs .NET only by default; `-IncludeBevy` refreshes Bevy too. Refresh the reference when the Bevy version, workload, Rust toolchain, hardware, or relevant machine settings change, or when measuring machine drift. Reused results are historical context and must not be reported as newly measured.
 - Inspect representative JIT disassembly for row-loop shape, bounds checks, and vectorization whenever a step changes generated loops.
 
 ## Step 0a. Lifecycle microbenchmarks
@@ -167,3 +168,21 @@ Run steps 0a and 0b first. Run step 3 before steps 1 and 2, because it decides w
 - [`spawn_batch` allocation](https://github.com/bevyengine/bevy/blob/v0.20.0/crates/bevy_ecs/src/world/spawn_batch.rs#L41).
 - [`Table::allocate`](https://github.com/bevyengine/bevy/blob/v0.20.0/crates/bevy_ecs/src/storage/table/mod.rs#L489) and [`Tables::move_row`](https://github.com/bevyengine/bevy/blob/v0.20.0/crates/bevy_ecs/src/storage/table/mod.rs#L743).
 - [`Column` with its summary tick](https://github.com/bevyengine/bevy/blob/v0.20.0/crates/bevy_ecs/src/storage/table/column.rs#L27) and [`AtomicTick::set`](https://github.com/bevyengine/bevy/blob/v0.20.0/crates/bevy_ecs/src/change_detection/tick.rs#L123).
+
+## Amendments after step 3
+
+The text above predates step 3 and is kept as written. These notes record where it no longer matches the code.
+
+- "Findings that shape this plan" says Archevolt stores components in 16 KiB native chunks. Each archetype now owns one table.
+- Step 1 says the system receives one row at a time. `[EachBlock]` landed in PR #5 and now receives one span per table, or per row range in a partitioned run.
+- Step 4 says `EntityEntry` holds `Archetype?` and `NativeChunk?` references. It now holds only `Archetype?`, so a relocation pays one write barrier, not two.
+- Step 6 says the swap-remove that fills a hole binary-searches every column. Step 3 made it copy index for index within one table. Only `Table.CopyRowTo` still searches.
+- "Sequence" runs step 3 before steps 1 and 2. Step 1 landed first. Its generated code survived step 3 unchanged apart from a rename, and it got faster. Step 2 has not started.
+- Partitioned runs now split rows instead of chunks. [step3-partition-granularity.md](benchmarks/step3-partition-granularity.md) shows no measurable regression from that. It shows that a small partitioned run's cost is worker-pool dispatch. A minimum partition size and 64-row boundary rounding were measured and not adopted.
+
+Stale references outside this file:
+
+- `docs/concepts/architecture.mdx` links `.audit/design.md` as the runtime and generated-code contract. That file still describes chunks.
+- `benchmarks/benchmark.md` says Archevolt stores components in chunks. The file records a run at `414eb10`, when that was true.
+- `docs/performance.mdx` says a named query costs about twice as much as `[Each]`. Update it when step 2 lands.
+- `QueryCursor.Enumerate()` is public and has no callers.
