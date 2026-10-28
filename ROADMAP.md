@@ -1,6 +1,6 @@
 # Archevolt performance plan
 
-Status: step 0 done. Its baselines are in `benchmarks/baseline.md`. The v1 implementation plan is complete. Every stage passed its acceptance gate, and the evidence is in `.audit/acceptance.md`. The [v1 plan](https://github.com/Stephanvs/archevolt/blob/ebacf07059fefbf9b182e40a290812be584dd9ee/PLAN.md) remains in history as the record of the original design, its alternatives, and its gates.
+Status: steps 0, 1, and 3 done. Step 0's baselines are in `benchmarks/baseline.md`, recorded on .NET 10. Step 3's before and after numbers, on .NET 11, are in `benchmarks/step3-table-storage.md`. They are the baseline for later steps. Step 3 met its gate except for named queries, whose regression comes from enumerator codegen that step 2 rewrites. The v1 implementation plan is complete. Every stage passed its acceptance gate, and the evidence is in `.audit/acceptance.md`. The [v1 plan](https://github.com/Stephanvs/archevolt/blob/ebacf07059fefbf9b182e40a290812be584dd9ee/PLAN.md) remains in history as the record of the original design, its alternatives, and its gates.
 
 This plan covers the next stage. It makes Archevolt faster at dense iteration, structural change, and entity lifecycle. Each change is grounded in measured Archevolt costs or in what Bevy changed between v0.17.3, which v1 was designed against, and v0.20.0, the current release.
 
@@ -93,6 +93,8 @@ Regenerate the enumerator so the row-advance path inside a block is separate fro
 This step has no Bevy precedent. Bevy's `for` loop has the same per-row shape.
 
 Gate: named query within 1.2 times `[Each]` on the 100,000-entity movement case, and the wide-component case no slower. Disassembly shows no per-row span reconstruction or `Row` copy.
+
+Step 3 showed that the enumerator's speed depends on the PGO profile. When tiered PGO leaves `QueryCursor.Next` out of line, the enumerator stays on the stack and each row costs about 2 ns instead of 1.2 ns. One table per archetype made that the common case. Step 2's gate therefore also requires the named-query traversal cases to beat their chunked numbers in `benchmarks/step3-table-storage.md` at 1,000 and 100,000 entities, under the default runtime configuration.
 
 ## Step 3. Table storage with retained capacity
 
