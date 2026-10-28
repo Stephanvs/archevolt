@@ -7,7 +7,9 @@ Compares two scripts/baseline.ps1 result directories case by case.
 Joins the summary.csv of a before run and an after run on harness and case. For each case it
 reports both medians and ranges, the after/before ratio, and a verdict. "faster" and "slower"
 mean the after median lies outside the before range. "within" means it lies inside it, which
-the measurement rules treat as no change. Cases present on one side only are listed as such.
+the measurement rules treat as no change. Cases present on one side only retain their measurements.
+Compare a saved run that includes Bevy against a .NET-only run to keep the recorded Bevy values
+visible as references, without treating them as fresh measurements.
 
 Writes comparison.md next to the after run's summary and prints it.
 #>
@@ -32,6 +34,7 @@ function Read-Summary([string] $Directory) {
 $old = Read-Summary $Before
 $new = Read-Summary $After
 $lines = @("Before: $Before", '', "After: $After", '',
+    'Cases measured only before or after keep their original timings; no ratio or change verdict is calculated for them.', '',
     '| Harness | Case | Before µs [range] | After µs [range] | After/before | Verdict |',
     '| --- | --- | ---: | ---: | ---: | --- |')
 foreach ($key in @($old.Keys + $new.Keys | Sort-Object -Unique)) {
@@ -40,7 +43,10 @@ foreach ($key in @($old.Keys + $new.Keys | Sort-Object -Unique)) {
     $harness, $case = $key -split '\|', 2
     if (-not $b -or -not $a) {
         $only = if ($b) { 'before only' } else { 'after only' }
-        $lines += "| $harness | ``$case`` | | | | $only |"
+        if ($b -and $harness -eq 'criterion') { $only = 'Bevy reference; not rerun' }
+        $beforeValue = if ($b) { [string]::Format('{0:G4} [{1:G4}–{2:G4}]', [double]$b.MedianUs, [double]$b.MinUs, [double]$b.MaxUs) } else { '' }
+        $afterValue = if ($a) { [string]::Format('{0:G4} [{1:G4}–{2:G4}]', [double]$a.MedianUs, [double]$a.MinUs, [double]$a.MaxUs) } else { '' }
+        $lines += "| $harness | ``$case`` | $beforeValue | $afterValue | | $only |"
         continue
     }
     $ratio = [double]$a.MedianUs / [double]$b.MedianUs

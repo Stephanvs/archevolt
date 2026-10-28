@@ -70,7 +70,34 @@ Run from the repository root with PowerShell 7.2 or newer:
 ./scripts/baseline.ps1
 ```
 
-The script builds the benchmarks, runs the BenchmarkDotNet cases above and `ReferenceComparisonBenchmarks` with three launches, and runs `cargo bench` three times with `-C target-cpu=native`. Criterion runs under the High performance power plan, which BenchmarkDotNet also selects, and the script restores the previous plan. Results go to `artifacts/baseline/<UTC timestamp>/`. `summary.md` lists the median of the three per-process means and their range. `-Runs 5` takes more samples. `-Quick` shortens both harnesses to check the script, and its numbers are not baselines. `./scripts/compare-baselines.ps1 -Before <dir> -After <dir>` joins two result directories and marks each case faster, slower, or within the before range.
+The default run builds the .NET benchmarks and runs the BenchmarkDotNet cases above and `ReferenceComparisonBenchmarks` with three launches. It does not invoke Rust tools, read Criterion artifacts, or modify saved Bevy results. Results go to `artifacts/baseline/<UTC timestamp>/`. `summary.md` lists the median of the three per-process means and their range and states whether Bevy was measured. `-Runs 5` takes more samples. `-Quick` shortens the selected measurements to check the script, and its numbers are not baselines.
+
+To refresh the Bevy reference alongside .NET, opt in explicitly:
+
+```powershell
+./scripts/baseline.ps1 -IncludeBevy
+```
+
+This also runs `cargo bench --locked` three times with `-C target-cpu=native`. Criterion runs under the High performance power plan, which BenchmarkDotNet also selects, and the script restores the previous plan. `environment.txt` records the locked `bevy_ecs` version and Rust compiler. The crate pins `bevy_ecs` 0.20.0, the [latest stable Bevy release](https://github.com/bevyengine/bevy/releases/tag/v0.20.0) checked on 28 October 2026. Updating that pin and its lockfile is a separate, deliberate change.
+
+Select a smaller .NET group with `-Classes`. `-Benches` selects Rust targets and requires `-IncludeBevy`:
+
+```powershell
+./scripts/baseline.ps1 -Classes ReferenceComparisonBenchmarks
+./scripts/baseline.ps1 -IncludeBevy -Classes ReferenceComparisonBenchmarks -Benches movement
+```
+
+### Compare with a saved Bevy reference
+
+Keep a completed full run's result directory, including `summary.csv` and `environment.txt`, and compare later .NET-only runs against it:
+
+```powershell
+./scripts/compare-baselines.ps1 -Before <saved-full-run> -After <new-dotnet-run>
+```
+
+The report compares the .NET measurements and retains the old Bevy medians and ranges as `Bevy reference; not rerun`. It leaves their after values and ratios empty. Those rows keep the original run's date and environment; the new run's summary contains only measurements made in that run. The script matches cases within each harness; use the case mapping above to compare .NET with the corresponding Bevy operation. It does not compute cross-language ratios.
+
+Reuse the reference while the Bevy version, workload, Rust toolchain, hardware, and relevant machine settings remain unchanged. Refresh it when those conditions change or when a controlled comparison needs to measure machine drift. A saved reference cannot establish today's machine drift. The tracked results below and the newer [step 3 results](step3-table-storage.md#against-bevy-after-step-3) also retain Bevy 0.20.0 timings if the raw artifacts are unavailable.
 
 BenchmarkDotNet finds the project to build by searching the directory that holds `Archevolt.slnx`. It stops when two files named `Archevolt.Benchmarks.csproj` exist below that directory, for example in a copy of the repository under `artifacts/`. Run the script from a clean clone in that case.
 

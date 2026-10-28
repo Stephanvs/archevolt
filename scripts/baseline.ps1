@@ -1,34 +1,40 @@
 #Requires -Version 7.2
 <#
 .SYNOPSIS
-Records the ROADMAP step 0 baselines for Archevolt and its bevy-reference counterparts.
+Records Archevolt baselines, optionally including its Bevy counterparts.
 
 .DESCRIPTION
-Runs the BenchmarkDotNet cases that later roadmap steps gate on, with one launch per process run,
-and runs criterion once per process run with -C target-cpu=native. Each run yields one mean per
-case. The summary reports the median of those means and their range, per the measurement rules.
+Runs the BenchmarkDotNet cases that later roadmap steps gate on, with one launch per process run.
+With -IncludeBevy, also runs criterion once per process run with -C target-cpu=native.
+Each run yields one mean per case. The summary reports the median of those means and their range,
+per the measurement rules. The default run does not require Rust or access Criterion artifacts.
 
 Results go to artifacts/baseline/<UTC timestamp>/: environment.txt, the raw harness logs and
 exports, summary.csv, and summary.md.
 
-A step gate that compares only some cases passes -Classes and -Benches, for example
-./scripts/baseline.ps1 -Classes ReferenceComparisonBenchmarks -Benches movement.
+A step gate that compares only some cases passes -Classes, for example
+./scripts/baseline.ps1 -Classes ReferenceComparisonBenchmarks.
+Add -IncludeBevy -Benches movement to refresh the corresponding Bevy reference.
 #>
 [CmdletBinding()]
 param(
     [ValidateRange(1, 99)]
     [int] $Runs = 3,
-    # Shortens both harnesses to check that the script works. Quick results are not baselines.
+    # Shortens the selected harnesses to check that the script works. Quick results are not baselines.
     [switch] $Quick,
+    [switch] $IncludeBevy,
     [ValidateNotNullOrEmpty()]
     [string[]] $Classes = @('EntityPopulationBenchmarks', 'EntityStorageBenchmarks', 'TraversalMatrixBenchmarks',
         'FilterBenchmarks', 'ReferenceComparisonBenchmarks'),
-    # Criterion bench targets in bevy-reference. Empty runs all of them.
+    # Requires -IncludeBevy. Empty runs all Criterion bench targets in bevy-reference.
     [string[]] $Benches = @()
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+if ($Benches.Count -gt 0 -and -not $IncludeBevy) {
+    throw '-Benches requires -IncludeBevy. Omit -Benches to run only the .NET benchmarks.'
+}
 $Root = (Resolve-Path -LiteralPath (Split-Path -Parent $PSScriptRoot)).ProviderPath
 $Stamp = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss')
 $Output = Join-Path $Root "artifacts/baseline/$Stamp"
@@ -67,11 +73,20 @@ Push-Location $Root
 try {
     $cpu = if ($IsWindows) { (Get-CimInstance Win32_Processor).Name } else { (Get-Content /proc/cpuinfo | Select-String 'model name' | Select-Object -First 1).Line }
     $os = if ($IsWindows) { (Get-CimInstance Win32_OperatingSystem | ForEach-Object { "$($_.Caption) $($_.Version)" }) } else { (uname -sr) }
-    @("UTC=$Stamp", "Runs=$Runs", "Quick=$Quick", "CPU=$cpu", "OS=$os",
+    $environment = @("UTC=$Stamp", "Runs=$Runs", "Quick=$Quick", "IncludeBevy=$IncludeBevy", "CPU=$cpu", "OS=$os",
         "Head=$(git rev-parse HEAD)", "WorkingTree=$((git status --short) -join '; ')",
-        "DotnetSdk=$(dotnet --version)", "Rustc=$((rustc -vV) -join '; ')",
-        "RUSTFLAGS=-C target-cpu=native", "Configuration=Release") |
-        Set-Content -LiteralPath (Join-Path $Output 'environment.txt')
+        "DotnetSdk=$(dotnet --version)", "Configuration=Release")
+    if ($IncludeBevy) {
+        $bevyVersion = [regex]::Match((Get-Content -LiteralPath (Join-Path $Crate 'Cargo.lock') -Raw),
+            '(?m)^name = "bevy_ecs"\r?\nversion = "([^"]+)"')
+        if (-not $bevyVersion.Success) { throw 'Could not find the bevy_ecs version in Cargo.lock.' }
+        $environment += @("BevyEcs=$($bevyVersion.Groups[1].Value)", "Rustc=$((rustc -vV) -join '; ')",
+            "RUSTFLAGS=-C target-cpu=native")
+    }
+    else {
+        Write-Host 'Bevy benchmarks skipped. Use -IncludeBevy to refresh the Bevy baseline.'
+    }
+    $environment | Set-Content -LiteralPath (Join-Path $Output 'environment.txt')
 
     Invoke-Logged 'dotnet-build.txt' 'dotnet' @('build', $Project, '-c', 'Release', '-warnaserror')
     $bdnResults = Join-Path $Output 'bdn'
@@ -82,24 +97,26 @@ try {
     $reports = @(Get-ChildItem -LiteralPath (Join-Path $bdnResults 'results') -Filter '*-report-full-compressed.json' -ErrorAction SilentlyContinue)
     if ($reports.Count -ne $Classes.Count) { throw "BenchmarkDotNet exported $($reports.Count) of $($Classes.Count) reports; see $(Join-Path $Output 'bdn.txt')" }
 
-    $savedFlags = $env:RUSTFLAGS
-    $savedTarget = $env:CARGO_TARGET_DIR
-    $savedScheme = if ($IsWindows) { [regex]::Match((powercfg /getactivescheme), '[0-9a-f-]{36}').Value } else { $null }
-    try {
-        $env:RUSTFLAGS = '-C target-cpu=native'
-        $env:CARGO_TARGET_DIR = $CargoTarget
-        # BenchmarkDotNet selects the High performance plan for its own runs; give criterion the same.
-        if ($savedScheme) { powercfg /setactive SCHEME_MIN }
-        $criterionArguments = if ($Quick) { @('--warm-up-time', '0.5', '--measurement-time', '1', '--sample-size', '10') } else { @() }
-        for ($run = 1; $run -le $Runs; $run++) {
-            Invoke-Logged "criterion-run$run.txt" 'cargo' (@('bench', '--manifest-path', (Join-Path $Crate 'Cargo.toml')) +
-                @($Benches | ForEach-Object { '--bench', $_ }) + @('--', '--save-baseline', "$Stamp-run$run") + $criterionArguments)
+    if ($IncludeBevy) {
+        $savedFlags = $env:RUSTFLAGS
+        $savedTarget = $env:CARGO_TARGET_DIR
+        $savedScheme = if ($IsWindows) { [regex]::Match((powercfg /getactivescheme), '[0-9a-f-]{36}').Value } else { $null }
+        try {
+            $env:RUSTFLAGS = '-C target-cpu=native'
+            $env:CARGO_TARGET_DIR = $CargoTarget
+            # BenchmarkDotNet selects the High performance plan for its own runs; give criterion the same.
+            if ($savedScheme) { powercfg /setactive SCHEME_MIN }
+            $criterionArguments = if ($Quick) { @('--warm-up-time', '0.5', '--measurement-time', '1', '--sample-size', '10') } else { @() }
+            for ($run = 1; $run -le $Runs; $run++) {
+                Invoke-Logged "criterion-run$run.txt" 'cargo' (@('bench', '--locked', '--manifest-path', (Join-Path $Crate 'Cargo.toml')) +
+                    @($Benches | ForEach-Object { '--bench', $_ }) + @('--', '--save-baseline', "$Stamp-run$run") + $criterionArguments)
+            }
         }
-    }
-    finally {
-        $env:RUSTFLAGS = $savedFlags
-        $env:CARGO_TARGET_DIR = $savedTarget
-        if ($savedScheme) { powercfg /setactive $savedScheme }
+        finally {
+            $env:RUSTFLAGS = $savedFlags
+            $env:CARGO_TARGET_DIR = $savedTarget
+            if ($savedScheme) { powercfg /setactive $savedScheme }
+        }
     }
 
     $rows = [Collections.Generic.List[object]]::new()
@@ -113,17 +130,21 @@ try {
             $rows.Add((New-Row 'BenchmarkDotNet' "$($benchmark.Type).$($benchmark.Method)($($benchmark.Parameters))" $perLaunch))
         }
     }
-    $criterion = Get-ChildItem -LiteralPath (Join-Path $CargoTarget 'criterion') -Recurse -Directory |
-        Where-Object { $_.Name -like "$Stamp-run*" }
-    $criterion | Group-Object { (Get-Content -LiteralPath (Join-Path $_.FullName 'benchmark.json') -Raw | ConvertFrom-Json).full_id } |
-        ForEach-Object {
-            $means = @($_.Group | ForEach-Object {
-                (Get-Content -LiteralPath (Join-Path $_.FullName 'estimates.json') -Raw | ConvertFrom-Json).mean.point_estimate })
-            $rows.Add((New-Row 'criterion' $_.Name $means))
-        }
+    if ($IncludeBevy) {
+        $criterion = Get-ChildItem -LiteralPath (Join-Path $CargoTarget 'criterion') -Recurse -Directory |
+            Where-Object { $_.Name -like "$Stamp-run*" }
+        $criterion | Group-Object { (Get-Content -LiteralPath (Join-Path $_.FullName 'benchmark.json') -Raw | ConvertFrom-Json).full_id } |
+            ForEach-Object {
+                $means = @($_.Group | ForEach-Object {
+                    (Get-Content -LiteralPath (Join-Path $_.FullName 'estimates.json') -Raw | ConvertFrom-Json).mean.point_estimate })
+                $rows.Add((New-Row 'criterion' $_.Name $means))
+            }
+    }
 
     $rows | Export-Csv -LiteralPath (Join-Path $Output 'summary.csv') -NoTypeInformation
-    $table = @('| Harness | Case | Runs | Median µs | Min µs | Max µs |', '| --- | --- | ---: | ---: | ---: | ---: |') +
+    $bevyStatus = if ($IncludeBevy) { 'measured in this run' } else { 'not run; use a saved Bevy baseline for reference' }
+    $table = @("Bevy benchmarks: $bevyStatus.", '',
+        '| Harness | Case | Runs | Median µs | Min µs | Max µs |', '| --- | --- | ---: | ---: | ---: | ---: |') +
         @($rows | ForEach-Object {
             [string]::Format('| {0} | `{1}` | {2} | {3:F3} | {4:F3} | {5:F3} |',
                 $_.Harness, $_.Case, $_.Runs, $_.MedianUs, $_.MinUs, $_.MaxUs) })
