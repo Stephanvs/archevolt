@@ -552,6 +552,57 @@ public sealed class GeneratorTests
     }
 
     [Theory]
+    [InlineData("EachBlock", 2)]
+    [InlineData("EachBlock(Partitioned = true)", 5)]
+    public void EachBlock_skips_retained_empty_tables_and_splits_partitions_at_table_boundaries(string attribute, int expectedCalls)
+    {
+        var assembly = CompileAndLoad($$"""
+            using Archevolt;
+            using System;
+            using System.Threading;
+            [Component] public readonly record struct Position(int Value);
+            [Component] public readonly record struct Velocity(int Value);
+            [Component] public readonly struct Marked { }
+            [Component] public readonly struct Other { }
+            [Bundle] public readonly partial record struct Particle(Position Position, Velocity Velocity);
+            public static partial class Motion
+            {
+                public static int Calls, Rows, Failure;
+                [{{attribute}}]
+                public static void Integrate(scoped Span<Position> positions, scoped ReadOnlySpan<Velocity> velocities, scoped EntityColumn entities)
+                {
+                    Interlocked.Increment(ref Calls);
+                    Interlocked.Add(ref Rows, positions.Length);
+                    if (positions.Length == 0) Interlocked.CompareExchange(ref Failure, -1, 0);
+                    if (velocities.Length != positions.Length || entities.Length != positions.Length) Interlocked.CompareExchange(ref Failure, -2, 0);
+                    for (int i = 0; i < positions.Length; i++) positions[i] = new(positions[i].Value + velocities[i].Value);
+                }
+            }
+            [EcsModule, IncludeSystems(typeof(Motion)), IncludeBundle<Particle>, IncludeComponent<Marked>, IncludeComponent<Other>] public static partial class Game { }
+            [Schedule, Run(typeof(Motion), nameof(Motion.Integrate))] public sealed partial class Simulation { }
+            public static class Acceptance
+            {
+                public static int Run()
+                {
+                    using var world = new WorldBuilder().UseParallelExecution(4).AddModule(Game.Module).Build();
+                    var entities = new Entity[80500];
+                    for (int i = 0; i < entities.Length; i++) entities[i] = world.Spawn(new Particle(new(i), new(i % 7 + 1)));
+                    for (int i = 30000; i < 30500; i++) world.Insert(entities[i], new Marked());
+                    for (int i = 30500; i < entities.Length; i++) world.Insert(entities[i], new Other());
+                    for (int i = 30000; i < 30500; i++) world.Despawn(entities[i]);
+                    using var simulation = Simulation.Create(world); simulation.Run();
+                    if (Motion.Failure != 0) return Motion.Failure;
+                    if (Motion.Rows != 80000) return -3;
+                    for (int i = 0; i < entities.Length; i++)
+                        if ((i < 30000 || i >= 30500) && world.Get<Position>(entities[i]).Value != i + i % 7 + 1) return -4;
+                    return Motion.Calls;
+                }
+            }
+            """);
+        Execute(assembly).Should().Be(expectedCalls);
+    }
+
+    [Theory]
     [InlineData("block", "Move")]
     [InlineData("cursor", "Move")]
     [InlineData("run", "Move")]
