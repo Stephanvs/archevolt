@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Archeoids | Archevolt + WebGPU</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./main.js"></script>
+</head>
+<body>
+  <main aria-label="Archeoids">
+    <canvas id="game" tabindex="0" aria-label="Archeoids game" aria-describedby="controls">
+      Archeoids requires a browser with WebGPU support.
+    </canvas>
+    <canvas id="hud" aria-hidden="true"></canvas>
+    <div id="status" role="status">Loading Archeoids…</div>
+  </main>
+  <p id="controls">Click the game or press Tab to focus. A/D or Left/Right: turn.
+    W or Up: thrust. Space: fire. P: pause or resume. R: restart.</p>
+</body>
+</html>
