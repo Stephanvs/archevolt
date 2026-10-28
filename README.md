@@ -3,7 +3,16 @@
 </h1>
 
 <p align="center">
-  <a href="https://www.nuget.org/packages/Archevolt"><img src="https://img.shields.io/nuget/v/Archevolt?logo=nuget" alt="NuGet version"></a>
+  <a href="https://www.nuget.org/packages/Archevolt"><img src="https://img.shields.io/nuget/v/Archevolt?logo=nuget&style=flat-square" alt="NuGet version"></a>
+  <a href="https://www.nuget.org/packages/Archevolt"><img src="https://img.shields.io/nuget/dt/Archevolt?logo=nuget&style=flat-square" alt="NuGet downloads"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Stephanvs/archevolt?style=flat-square" alt="MIT license"></a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/.NET-11-512BD4?logo=dotnet&style=flat-square" alt=".NET 11">
+  <img src="https://img.shields.io/badge/C%23-15-239120?logo=csharp&style=flat-square" alt="C# 15">
+  <img src="https://img.shields.io/badge/NativeAOT-ready-brightgreen?style=flat-square" alt="NativeAOT ready">
+  <img src="https://img.shields.io/badge/dependencies-0-brightgreen?style=flat-square" alt="Zero dependencies">
 </p>
 
 Archevolt is a headless archetype ECS for modern high performance .NET. Write components as structs and systems as C# methods. Its source generator builds typed queries, bundles, modules, and schedules; the runtime handles native component storage and serial or bounded parallel execution.
