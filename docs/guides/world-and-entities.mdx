@@ -33,7 +33,7 @@ World inspection and immediate mutation require an idle world and its owner thre
 
 ## Capacity
 
-`Reserve(entities, commandBytesPerProducer, messagesPerType)` reserves initial capacities. Capacities can grow. Each archetype stores its components in one table that doubles its capacity when full. A table keeps its capacity when entities leave, so later spawns and moves into it do not allocate. Call `TrimExcess()` on an idle world to release that retained memory.
+`WorldBuilder.Reserve(entities, commandBytesPerProducer, messagesPerType)` reserves initial capacities for entity handles, command buffers, and messages. It does not size component tables. Capacities can grow. Each archetype stores its components in one table that doubles its capacity when full. A table keeps its capacity when entities leave, so later spawns and moves into it do not allocate. Call `TrimExcess()` on an idle world to release that retained memory.
 
 ## Disposal
 

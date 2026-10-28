@@ -1,6 +1,6 @@
 ---
 title: Systems and traversal
-description: Write systems with EcsSystem and Each, and opt traversals into partitioning.
+description: Write systems with EcsSystem, Each, and EachBlock, and opt traversals into partitioning.
 sidebar:
   order: 5
 ---
@@ -31,11 +31,32 @@ public static partial class MotionKernel
 - Membership and change-filter attributes apply to the method.
 - Components passed by value are rejected.
 
+## `[EachBlock]`
+
+```csharp
+public static partial class MotionKernel
+{
+    [EachBlock(Partitioned = true), Without<Frozen>]
+    public static void MoveBlock(scoped Span<Position> positions, scoped ReadOnlySpan<Velocity> velocities)
+    {
+        for (int i = 0; i < positions.Length; i++)
+            positions[i] = positions[i] with { X = positions[i].X + velocities[i].X };
+    }
+}
+```
+
+`[EachBlock]` calls the method once per block of matching entities and passes each component as a span over that block. A block is a contiguous run of entities from one archetype. Use it when you want to write the row loop yourself, for example with `Vector256`.
+
+- Use `scoped Span<T>` for writes and `scoped ReadOnlySpan<T>` for reads. Every span in one call has the same length.
+- An optional `scoped EntityColumn` parameter supplies identity. `entities[i]` returns the `Entity` for row `i`.
+- `With<T>` and `Without<T>` apply to the method. `Added<T>` and `Changed<T>` are rejected ([`AV011`](/reference/diagnostics)), because the method receives whole blocks. Use `[Each]` for change-filtered traversal.
+- A writable span of a [tracked component](/guides/change-tracking) stamps every row in the block as changed.
+
 ## Partitioning
 
-`[Each]` executes one traversal by default. `[Each(Partitioned = true)]` opts into splitting the matched rows into contiguous ranges, one per worker in the world's execution budget, which matters once [parallel execution](/guides/execution) is enabled.
+`[Each]` and `[EachBlock]` execute one traversal by default. `Partitioned = true` opts into splitting the matched rows into contiguous ranges, one per worker in the world's execution budget, which matters once [parallel execution](/guides/execution) is enabled. A partitioned `[EachBlock]` method can receive several blocks from one archetype.
 
-Partitioned methods accept component refs, `Entity`, and readonly unmanaged resources, including optional resources without owner-thread affinity. Locals, commands, messages, managed resources, mutable resources, and named queries are excluded. An unsafe partition request is reported as [`AV010`](/reference/diagnostics).
+Partitioned methods accept component refs or spans, `Entity` or `EntityColumn`, and readonly unmanaged resources, including optional resources without owner-thread affinity. Locals, commands, messages, managed resources, mutable resources, and named queries are excluded. An unsafe partition request is reported as [`AV010`](/reference/diagnostics).
 
 ## Descriptors
 

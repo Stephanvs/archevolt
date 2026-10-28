@@ -9,9 +9,9 @@ The implementation is validated against the [v1 implementation plan](https://git
 
 ## Verified
 
-- Release build with zero warnings, and 127 tests, on Windows and on Ubuntu 24.04.
+- Release build with zero warnings, and all successful tests, on Windows and on Ubuntu 24.04.
 - Storage, entity identity, migration, reservations, and disposal, including a fixed-seed randomized comparison against a dictionary model.
-- Generated queries, namespace placement, diagnostics `AV001` through `AV010`, and incremental generator caching.
+- Generated queries, namespace placement, diagnostics, and incremental generator caching.
 - Planner ordering, disjoint query proofs, global resource conflicts, cycles, and barriers.
 - Parallel execution under worker-pool stress across budgets of 1, 2, and 4.
 - Packed-package consumers under JIT, trimming, and NativeAOT.

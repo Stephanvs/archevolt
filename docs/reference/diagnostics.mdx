@@ -1,6 +1,6 @@
 ---
 title: Diagnostics
-description: Compiler diagnostics AV001 through AV010 reported by the Archevolt generator.
+description: Compiler diagnostics reported by the Archevolt generator.
 sidebar:
   order: 1
 ---
@@ -19,6 +19,7 @@ All generator diagnostics are errors except `AV008`, which is a warning. Runtime
 | `AV008` | Conflicting systems have no explicit dependency. The planner supplies a conservative order. |
 | `AV009` | Missing or incompatible module or system metadata, registration, or export. |
 | `AV010` | Unsafe partition request or condition capability. |
+| `AV011` | Change filter on an `[EachBlock]` method. |
 
 ## Common fixes
 
@@ -28,3 +29,4 @@ All generator diagnostics are errors except `AV008`, which is a warning. Runtime
 - **AV006.** Add `[TrackChanges]` to the component or resource. See [Change tracking](/guides/change-tracking).
 - **AV007.** Check `Before`, `After`, `Order`, and instance keys on your [`Run` declarations](/guides/schedules).
 - **AV008.** Add an explicit `Before` or `After` dependency between the two systems.
+- **AV011.** Move the change filter to an `[Each]` method. See [Systems and traversal](/guides/systems).

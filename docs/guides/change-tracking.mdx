@@ -20,7 +20,7 @@ A system observes stamps satisfying `lastSuccessfulRun < stamp <= thisRun`. A sk
 | Moving between archetypes | Preserved | Preserved for surviving components |
 | Readonly access | Unchanged | Unchanged |
 
-A generated writable row property stamps before returning its ref. `[Each]` stamps tracked writable refs before the method call. `ResMut<T>.Value` follows the same rule.
+A generated writable row property stamps before returning its ref. `[Each]` stamps tracked writable refs before the method call. `[EachBlock]` stamps every row of a tracked writable span before the method call. `ResMut<T>.Value` follows the same rule.
 
 :::note
 Taking a writable ref counts as a change even when the method leaves the value unchanged. Use `Read<T>` or `scoped in` when you do not intend to write.

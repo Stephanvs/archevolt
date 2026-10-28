@@ -9,7 +9,7 @@ sidebar:
 
 Serial execution is the default. `WorldBuilder.UseParallelExecution(maxConcurrency)` enables the world-owned reusable worker pool. The positive limit includes the owner thread.
 
-A bound schedule borrows this pool, so disposing one schedule does not stop other schedules. Resource and component conflicts determine which systems can run together, and `[Each(Partitioned = true)]` opts eligible systems into [row-range partitioning](/guides/systems#partitioning).
+A bound schedule borrows this pool, so disposing one schedule does not stop other schedules. Resource and component conflicts determine which systems can run together, and `Partitioned = true` on `[Each]` or `[EachBlock]` opts eligible systems into [row-range partitioning](/guides/systems#partitioning).
 
 ```csharp
 using var world = new WorldBuilder()
