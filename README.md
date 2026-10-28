@@ -2,11 +2,11 @@
   <img src=".github/assets/archevolt-geometric.png" alt="Archevolt" width="720">
 </h1>
 
-Archevolt is a headless archetype ECS for .NET 11 and C# 15. Write components as structs and systems as C# methods. Its source generator builds typed queries, bundles, modules, and schedules; the runtime handles native component storage and serial or bounded parallel execution.
+Archevolt is a headless archetype ECS for modern high performance .NET. Write components as structs and systems as C# methods. Its source generator builds typed queries, bundles, modules, and schedules; the runtime handles native component storage and serial or bounded parallel execution.
 
 The runtime has no package dependencies. The `Archevolt` package includes its generator. Generated declarations stay in your namespace and partial types.
 
-See the [documentation site](docs/index.mdx) for the supported declarations and runtime operations, and the [acceptance record](.audit/acceptance.md) for validation against the [v1 implementation plan](https://github.com/Stephanvs/archevolt/blob/ebacf07059fefbf9b182e40a290812be584dd9ee/PLAN.md). [ROADMAP.md](ROADMAP.md) holds the current performance plan.
+See the [documentation site](docs/index.mdx) for the supported declarations and runtime operations.
 
 ## See it in action
 
@@ -108,21 +108,9 @@ Message readers keep independent cursors. Call `world.AdvanceMessages()` once pe
 
 After an execution fault or cancellation, all active workers join before the call returns. Completed writes remain. Inspect those effects before calling `schedule.Reset()` to acknowledge the failure.
 
-## Documentation site
-
-The `docs/` folder is a [Blume](https://useblume.dev) site. It needs Node.js 22.19 or newer.
-
-```bash
-pnpm install
-pnpm dev
-pnpm build
-```
-
-`pnpm dev` serves the docs with hot reload. `pnpm build` writes static HTML to `dist/`.
-
 ## Build and verify
 
-Package publication and changelog updates run from `main`. See [release setup and recovery](.github/RELEASING.md) for NuGet trust and Cloudflare configuration.
+Package publication and changelog updates run from `main`. See [release setup and recovery](.github/RELEASING.md) for details.
 
 The SDK is pinned in `global.json`. Run verification with PowerShell 7.2 or newer:
 
