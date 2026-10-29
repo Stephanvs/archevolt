@@ -174,6 +174,10 @@ Run steps 0a and 0b first. Run step 3 before steps 1 and 2, because it decides w
 - The 8-byte `Entity` handle. Archevolt's 16-byte handle carries a world ID so that handles from another world are rejected. Removing it is a design decision about safety, not a performance fix.
 - Resources stored as entities (Bevy 0.19, [#20934](https://github.com/bevyengine/bevy/pull/20934)). It changes Bevy's resource model, not its hot paths.
 
+## Open decisions
+
+- Sparse-set storage for frequently toggled components. Today every insert or remove moves the entity's whole row to another archetype, about 50 ns per operation at 100,000 entities, and each tag combination splits archetypes. A per-component sparse set, as in seecs, EnTT, and Bevy's `StorageType::SparseSet`, makes add and remove O(1) without moving the row. The cost falls on queries: a term or filter on a sparse component checks membership per row through the sparse array, which breaks the contiguous spans that `[Each]` and `[EachBlock]` rely on. The generator could fix the storage policy per component at compile time, as it does for tracking. Decide once a workload toggles markers often enough for structural moves to dominate.
+
 ## Bevy v0.20.0 sources inspected
 
 - [`Query::contiguous_iter_mut`](https://github.com/bevyengine/bevy/blob/v0.20.0/crates/bevy_ecs/src/system/query.rs#L1552) and [`QueryContiguousIter`](https://github.com/bevyengine/bevy/blob/v0.20.0/crates/bevy_ecs/src/query/iter.rs#L1139).
@@ -215,3 +219,4 @@ Follow-up, not yet a numbered step: [step3-partition-granularity.md](benchmarks/
 - Directory pages still hold 1,024 entries and never move. `IsAlive` binds an entry once for generation and state checks, and page lookup uses unsigned slot arithmetic. Swap-removal already repaired only the row after step 3.
 - The [step 4 measurements](benchmarks/step4-integer-entity-directory.md) include the initial comparison and a repeat against unchanged code after machine drift affected two cases. Random reads at 100,000 entities hold under the median/range rule, with no demonstrated speedup and substantial process-to-process variance.
 - Steps 5 and 6 can now proceed independently.
+- Step 6's dense component-to-column lookup has two more call sites than it lists. `ApplyInsert` binary-searches the destination archetype after every insert. `WriteBundle` searches per member on every spawn, although a bundle's destination columns never change, so `BundleBinding` can hold them. `TryGet` also binds the directory entry twice, once in `IsAlive` and once to read the location. At 1,000 entities, where everything is cached, `Get<T>` costs about 8 ns against Bevy's 4.2 ns, so the gap is instructions rather than cache misses.
