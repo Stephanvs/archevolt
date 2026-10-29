@@ -24,7 +24,7 @@ The runtime owns entity allocation, native storage, query caches, parameter bind
 
 An entity contains its world identity, slot, and generation. A paged entity table records free, reserved, alive, and retired states.
 
-A frozen registry assigns world-local component IDs. Each archetype holds canonical sorted component IDs and one native structure-of-arrays table. A table is a single 64-byte-aligned allocation that doubles when full and keeps its capacity when rows leave. `World.TrimExcess()` releases that retained capacity. Moving an entity between archetypes copies retained values and ticks, initializes additions, and repairs the moved entity after swap removal.
+A frozen registry assigns world-local component IDs. Each archetype holds canonical sorted component IDs, a component-to-column lookup, and one native structure-of-arrays table. The world interns archetypes by their component bitmask. Each cached add, remove, or bundle transition stores the column mapping for its move, so a structural change copies columns without searching for them. A table is a single 64-byte-aligned allocation that doubles when full and keeps its capacity when rows leave. `World.TrimExcess()` releases that retained capacity. Moving an entity between archetypes copies retained values and ticks, initializes additions, and repairs the moved entity after swap removal.
 
 ## Safe access
 

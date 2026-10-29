@@ -120,11 +120,17 @@ internal sealed class EntityTable
             Entry(Append()).State = EntityState.Reserved;
     }
 
-    internal bool IsAlive(Entity entity, long world)
+    internal bool IsAlive(Entity entity, long world) => TryLocate(entity, world, out _, out _);
+
+    internal bool TryLocate(Entity entity, long world, out int archetypeId, out int row)
     {
+        archetypeId = 0;
+        row = 0;
         if (entity.WorldId != world || (uint)entity.Index >= (uint)Volatile.Read(ref _count))
             return false;
         ref var entry = ref Entry(entity.Index);
+        archetypeId = entry.ArchetypeId;
+        row = entry.Row;
         return entry.Generation == entity.Generation && entry.State == EntityState.Alive;
     }
 
