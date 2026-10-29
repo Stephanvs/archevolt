@@ -153,6 +153,18 @@ Precedent: Bevy 0.20 added opt-in `#[component(summary_tick)]` ([#25157](https:/
 
 Gate: a sparse-change benchmark shows the skip. Untracked and dense-change iteration does not regress. Every change-detection correctness scenario from v1 still passes.
 
+## Step 8. Write immediate spawns in place
+
+`World.Spawn<TBundle>` writes the bundle into a staging buffer, on the stack up to 1,024 bytes and rented above that. It then validates the buffer and copies each member into the table through `WriteBundle`. `Commands` needs that buffer to hold the payload until playback. An immediate spawn does not.
+
+Append the row first, then point the `BundleWriter` at the row's destination columns, so the bundle's `Write` stores each member where it will live. The writer still checks member order and types. If `Write` fails, remove the row before releasing the reservation. `Commands` keeps the staging path.
+
+Step 6 removes the per-member column search from `WriteBundle`. This step removes the staging copy that remains. Step 5's batch spawn writes rows directly into the destination table, so both can share the column-targeting writer.
+
+Precedent: seecs constructs each component in place at the end of its dense array. Bevy's bundle spawner writes each bundle component directly into its table column.
+
+Gate: step 0a's spawn case improves at 1,000 and 100,000 entities and allocates no more managed memory. Spawn and command tests pass, including a bundle write that fails partway and must leave no row or reservation behind.
+
 ## Sequence
 
 Run steps 0a and 0b first. Run step 3 before steps 1 and 2, because it decides what a storage block is and therefore what spans the generator binds. Step 4 depends on step 3, because a table row replaces the chunk reference. Steps 5 and 6 are independent of each other once step 4 lands. Step 7 comes last, because it extends step 1's slice form. Each step is its own commit or pull request with its measurements.
