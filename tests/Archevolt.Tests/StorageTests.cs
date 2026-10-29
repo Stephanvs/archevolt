@@ -111,6 +111,30 @@ public sealed class StorageTests
     }
 
     [Fact]
+    public void Warmed_structural_moves_allocate_no_managed_memory()
+    {
+        using var world = new WorldBuilder().AddBundle<Particle>().AddComponent<Extra>().AddComponent<Frozen>(tag: true).Build();
+        var entities = Enumerable.Range(0, 100).Select(i => world.Spawn(new Particle(new Position(i), new Velocity(i)))).ToArray();
+        void RoundTrip()
+        {
+            foreach (var entity in entities)
+            {
+                world.Insert(entity, default(Frozen));
+                world.Insert(entity, new Extra(1));
+                world.Remove<Frozen>(entity);
+                world.Remove<Extra>(entity);
+            }
+        }
+        RoundTrip();
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        RoundTrip();
+
+        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+        Assert.Equal(Enumerable.Range(0, 100), entities.Select(e => world.Get<Position>(e).Value));
+    }
+
+    [Fact]
     public void Trimming_a_world_with_no_live_entities_releases_all_native_memory()
     {
         using var world = new WorldBuilder().AddBundle<Particle>().AddComponent<Extra>().AddComponent<Frozen>(tag: true).Build();

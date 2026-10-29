@@ -246,11 +246,14 @@ public sealed partial class World : IDisposable
         var cache = add ? source.AddTransitions : source.RemoveTransitions;
         if (cache.TryGetValue(id, out var result))
             return result;
-        int[] ids = add ? source.Ids.Append(id).Order().ToArray() : source.Ids.Where(i => i != id).ToArray();
-        result = GetArchetype(ids);
+        result = GetArchetype(TransitionIds(source, id, add));
         cache.Add(id, result);
         return result;
     }
+
+    // Kept out of Transition: a lambda capturing id would allocate its closure on every call, including cache hits.
+    private static int[] TransitionIds(Archetype source, int id, bool add) =>
+        add ? source.Ids.Append(id).Order().ToArray() : source.Ids.Where(i => i != id).ToArray();
 
     private void Move(Entity entity, Archetype destination)
     {
