@@ -219,14 +219,14 @@ public sealed partial class World
             throw new InvalidOperationException("Spawn reservation is no longer valid.");
         int row = binding.Archetype.Table.Append(new EntityKey(entity.Index, entity.Generation));
         WriteBundle(binding, payload, binding.Archetype, row, null, tick);
-        Entities.Materialize(entity, binding.Archetype, row);
+        Entities.Materialize(entity, binding.Archetype.Index, row);
     }
 
     private void ApplyBundle(Entity entity, BundleBinding binding, ReadOnlySpan<byte> payload, ulong tick)
     {
         RequireAlive(entity);
         ref var entry = ref Entities.Entry(entity.Index);
-        var source = entry.Archetype!;
+        var source = Archetypes[entry.ArchetypeId];
         if (!binding.Destinations.TryGetValue(source.Index, out var destination))
         {
             destination = GetArchetype(source.Ids.Union(binding.Ids).Order().ToArray());
@@ -257,11 +257,15 @@ public sealed partial class World
         if (payload.Length != Registry.Components[id].Size)
             throw new InvalidOperationException("Component payload size is invalid.");
         ref var entry = ref Entities.Entry(entity.Index);
-        bool added = !entry.Archetype!.Has(id);
+        var archetype = Archetypes[entry.ArchetypeId];
+        bool added = !archetype.Has(id);
         if (added)
-            Move(entity, Transition(entry.Archetype!, id, add: true));
-        var table = entry.Archetype!.Table;
-        int column = Array.BinarySearch(entry.Archetype.Ids, id);
+        {
+            archetype = Transition(archetype, id, add: true);
+            Move(entity, archetype);
+        }
+        var table = archetype.Table;
+        int column = Array.BinarySearch(archetype.Ids, id);
         if (!Registry.Components[id].IsTag)
             payload.CopyTo(table.ValueBytes(column, entry.Row));
         Stamp(table, column, entry.Row, tick, added);
@@ -269,13 +273,13 @@ public sealed partial class World
 
     private bool ApplyRemove(Entity entity, int id, ulong tick, bool optional)
     {
-        if (!Entities.IsAlive(entity, Id) || !Entities.Entry(entity.Index).Archetype!.Has(id))
+        if (!Entities.IsAlive(entity, Id) || !Archetypes[Entities.Entry(entity.Index).ArchetypeId].Has(id))
         {
             if (optional)
                 return false;
             throw new InvalidOperationException("Remove target or component is absent.");
         }
-        var source = Entities.Entry(entity.Index).Archetype!;
+        var source = Archetypes[Entities.Entry(entity.Index).ArchetypeId];
         RecordRemoval(Registry.Components[id].TypeKey, entity, tick);
         Move(entity, Transition(source, id, add: false));
         return true;
@@ -290,9 +294,10 @@ public sealed partial class World
             throw new InvalidOperationException("Despawn target is stale or absent.");
         }
         ref var entry = ref Entities.Entry(entity.Index);
-        foreach (var component in entry.Archetype!.Components)
+        var archetype = Archetypes[entry.ArchetypeId];
+        foreach (var component in archetype.Components)
             RecordRemoval(component.TypeKey, entity, tick);
-        entry.Archetype!.Table.SwapRemove(entry.Row, Entities);
+        archetype.Table.SwapRemove(entry.Row, Entities);
         Entities.Release(entity.Index);
         return true;
     }

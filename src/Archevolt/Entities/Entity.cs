@@ -22,7 +22,7 @@ internal struct EntityEntry
 {
     internal uint Generation;
     internal EntityState State;
-    internal Archetype? Archetype;
+    internal int ArchetypeId;
     internal int Row;
 }
 
@@ -42,7 +42,7 @@ internal sealed class EntityTable
             _pages[i] = new EntityEntry[PageSize];
     }
 
-    internal ref EntityEntry Entry(int index) => ref Volatile.Read(ref _pages)[index / PageSize][index % PageSize];
+    internal ref EntityEntry Entry(int index) => ref Volatile.Read(ref _pages)[(uint)index / PageSize][(uint)index % PageSize];
 
     internal Entity Reserve(long world)
     {
@@ -71,24 +71,27 @@ internal sealed class EntityTable
         }
     }
 
-    internal bool IsAlive(Entity entity, long world) =>
-        entity.WorldId == world && (uint)entity.Index < (uint)Volatile.Read(ref _count)
-        && Entry(entity.Index).Generation == entity.Generation
-        && Entry(entity.Index).State == EntityState.Alive;
+    internal bool IsAlive(Entity entity, long world)
+    {
+        if (entity.WorldId != world || (uint)entity.Index >= (uint)Volatile.Read(ref _count))
+            return false;
+        ref var entry = ref Entry(entity.Index);
+        return entry.Generation == entity.Generation && entry.State == EntityState.Alive;
+    }
 
-    internal void Materialize(Entity entity, Archetype archetype, int row)
+    internal void Materialize(Entity entity, int archetypeId, int row)
     {
         ref var entry = ref Entry(entity.Index);
         if (entry.State != EntityState.Reserved || entry.Generation != entity.Generation)
             throw new InvalidOperationException("The entity reservation is no longer valid.");
-        Relocate(entity.Index, archetype, row);
+        Relocate(entity.Index, archetypeId, row);
         entry.State = EntityState.Alive;
     }
 
-    internal void Relocate(int index, Archetype archetype, int row)
+    internal void Relocate(int index, int archetypeId, int row)
     {
         ref var entry = ref Entry(index);
-        entry.Archetype = archetype;
+        entry.ArchetypeId = archetypeId;
         entry.Row = row;
     }
 
@@ -109,7 +112,7 @@ internal sealed class EntityTable
     private void ReleaseCore(int index)
     {
         ref var entry = ref Entry(index);
-        entry.Archetype = null;
+        entry.ArchetypeId = 0;
         entry.Row = 0;
         if (entry.Generation == uint.MaxValue)
             entry.State = EntityState.Retired;

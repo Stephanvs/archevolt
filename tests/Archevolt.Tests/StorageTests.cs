@@ -232,6 +232,38 @@ public sealed class StorageTests
     }
 
     [Fact]
+    public void Despawning_the_last_generation_retires_the_slot_instead_of_reusing_it()
+    {
+        using var world = new WorldBuilder().AddBundle<Particle>().Build();
+        Entity original = world.Spawn(new Particle(new Position(7), new Velocity(8)));
+        Assert.True(world.Despawn(original));
+
+        // Seed the final generation without billions of spawn/despawn operations or a runtime test hook.
+        const System.Reflection.BindingFlags fields = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        object directory = typeof(World).GetField("Entities", fields)!.GetValue(world)!;
+        var pages = (Array)directory.GetType().GetField("_pages", fields)!.GetValue(directory)!;
+        var page = (Array)pages.GetValue(0)!;
+        object entry = page.GetValue(original.Index)!;
+        entry.GetType().GetField("Generation", fields)!.SetValue(entry, uint.MaxValue);
+        page.SetValue(entry, original.Index);
+
+        Entity terminal = world.Spawn(new Particle(new Position(7), new Velocity(8)));
+        Assert.Equal(original.Index, terminal.Index);
+        Assert.Equal(uint.MaxValue, terminal.Generation);
+        Entity survivor = world.Spawn(new Particle(new Position(9), new Velocity(10)));
+
+        Assert.True(world.Contains(terminal));
+        Assert.True(world.Despawn(terminal));
+        Assert.False(world.Contains(terminal));
+        Assert.False(world.Contains(original));
+        Entity replacement = world.Spawn(new Particle(new Position(11), new Velocity(12)));
+        Assert.NotEqual(original.Index, replacement.Index);
+        Assert.Equal(9, world.Get<Position>(survivor).Value);
+        Assert.Equal(10, world.Get<Velocity>(survivor).Value);
+        Assert.Equal(11, world.Get<Position>(replacement).Value);
+    }
+
+    [Fact]
     public void Membership_extends_beyond_one_machine_word()
     {
         var builder = new WorldBuilder();

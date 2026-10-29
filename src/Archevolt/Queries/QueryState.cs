@@ -62,7 +62,7 @@ public sealed class QueryState
             return false;
         ref var entry = ref Owner.World.Entities.Entry(entity.Index);
         foreach (var match in Matches)
-            if (match.Archetype == entry.Archetype)
+            if (match.Archetype.Index == entry.ArchetypeId)
             {
                 block = new BlockView(this, match, 0, match.Archetype.Table.Count, run);
                 row = entry.Row;

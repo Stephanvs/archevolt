@@ -1,6 +1,8 @@
 # Archevolt performance plan
 
-Status: steps 0, 1, 2, and 3 done. Step 0's baselines are in `benchmarks/baseline.md`, recorded on .NET 10. Step 3's before and after numbers, on .NET 11, are in `benchmarks/step3-table-storage.md`. They are the baseline for later steps. Step 3 met its gate except for named queries, whose regression came from enumerator codegen. Step 2 rewrote that enumerator and met its gate. Its numbers are in `benchmarks/step2-named-query-enumerator.md`. The v1 implementation plan is complete. Every stage passed its acceptance gate, and the evidence is in `.audit/acceptance.md`. The [v1 plan](https://github.com/Stephanvs/archevolt/blob/ebacf07059fefbf9b182e40a290812be584dd9ee/PLAN.md) remains in history as the record of the original design, its alternatives, and its gates.
+Status: steps 0, 1, 2, 3, and 4 done. Step 0's baselines are in `benchmarks/baseline.md`, recorded on .NET 10. Step 3's before and after numbers, on .NET 11, are in `benchmarks/step3-table-storage.md`. Later steps record fresh before and after comparisons on the same SDK. Step 3 met its gate except for named queries, whose regression came from enumerator codegen. Step 2 rewrote that enumerator and met its gate. Its numbers are in `benchmarks/step2-named-query-enumerator.md`. Step 4 replaced directory references with integers and met the median/range gate after an unchanged-code drift control. Its measurements and the remaining variance in large random reads are in `benchmarks/step4-integer-entity-directory.md`.
+
+The v1 implementation plan is complete. Every stage passed its acceptance gate, and the evidence is in `.audit/acceptance.md`. The [v1 plan](https://github.com/Stephanvs/archevolt/blob/ebacf07059fefbf9b182e40a290812be584dd9ee/PLAN.md) remains in history as the record of the original design, its alternatives, and its gates.
 
 This plan covers the next stage. It makes Archevolt faster at dense iteration, structural change, and entity lifecycle. Each change is grounded in measured Archevolt costs or in what Bevy changed between v0.17.3, which v1 was designed against, and v0.20.0, the current release.
 
@@ -177,7 +179,7 @@ The text above predates step 3 and is kept as written. These notes record where 
 - Step 1 says the system receives one row at a time. `[EachBlock]` landed in PR #5 and now receives one span per table, or per row range in a partitioned run.
 - Step 4 says `EntityEntry` holds `Archetype?` and `NativeChunk?` references. It now holds only `Archetype?`, so a relocation pays one write barrier, not two.
 - Step 6 says the swap-remove that fills a hole binary-searches every column. Step 3 made it copy index for index within one table. Only `Table.CopyRowTo` still searches.
-- "Sequence" runs step 3 before steps 1 and 2. Step 1 landed first. Its generated code survived step 3 unchanged apart from a rename, and it got faster. Step 2 has not started.
+- "Sequence" runs step 3 before steps 1 and 2. Step 1 landed first. Its generated code survived step 3 unchanged apart from a rename, and it got faster. Step 2 then landed after step 3 and met its gate; see the amendments below and [its measurements](benchmarks/step2-named-query-enumerator.md).
 - Partitioned runs now split rows instead of chunks. [step3-partition-granularity.md](benchmarks/step3-partition-granularity.md) shows no measurable regression from that. It shows that a small partitioned run's cost is worker-pool dispatch. A minimum partition size and 64-row boundary rounding were measured and not adopted.
 
 Stale references outside this file:
@@ -194,3 +196,10 @@ Stale references outside this file:
 - Step 2's measurement found that `[Each]` runs about twice as slow with `DOTNET_TieredPGO=0`, at 180 to 211 µs instead of about 98 µs on the 100,000-entity movement case. Its generated loop depends on the PGO profile, as the old named-query enumerator did. No step covers it yet.
 
 Follow-up, not yet a numbered step: [step3-partition-granularity.md](benchmarks/step3-partition-granularity.md) found that a four-worker run over 1,000 entities costs 14 to 22 µs, almost all of it worker-pool dispatch, against about 1 µs on one worker. Running a batch's single work item on the calling thread, or keeping small partitionable queries serial, targets that cost. It is an absolute cost that only matters in small worlds. Measuring it needs an idle machine, because four-worker cases drifted by up to 37% between identical runs on a machine in normal use.
+
+## Amendments after step 4
+
+- `EntityEntry` now contains only generation, state, archetype ID, and table row. On the measured x64 runtime it shrank from 24 to 16 bytes and no longer contains managed references. The public 16-byte `Entity` handle still includes the world ID.
+- Directory pages still hold 1,024 entries and never move. `IsAlive` binds an entry once for generation and state checks, and page lookup uses unsigned slot arithmetic. Swap-removal already repaired only the row after step 3.
+- The [step 4 measurements](benchmarks/step4-integer-entity-directory.md) include the initial comparison and a repeat against unchanged code after machine drift affected two cases. Random reads at 100,000 entities hold under the median/range rule, with no demonstrated speedup and substantial process-to-process variance.
+- Steps 5 and 6 can now proceed independently.

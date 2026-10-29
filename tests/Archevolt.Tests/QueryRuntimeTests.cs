@@ -90,6 +90,52 @@ public sealed class QueryRuntimeTests
     }
 
     [Fact]
+    public void Entity_lookup_follows_migration_swap_removal_and_reuse_across_directory_pages()
+    {
+        using var world = CreateWorld();
+        using var other = CreateWorld();
+        Entity foreign = other.Spawn(new Particle(new Position(-1), new Velocity(-1)));
+        Entity[] entities = Enumerable.Range(0, 1030)
+            .Select(i => world.Spawn(new Particle(new Position(i), new Velocity(-i)))).ToArray();
+        var expected = entities.Select((entity, i) => (entity, i)).ToDictionary(pair => pair.entity, pair => pair.i);
+        var absent = new List<Entity> { default, foreign };
+        var shape = QueryShape.Create("lookup").Read<Position>(0).Without<Frozen>().Build();
+        QueryAction check = (run, query) =>
+        {
+            foreach (var (entity, value) in expected)
+            {
+                Assert.True(query.TryLocate(run, entity, out var block, out int row));
+                Assert.Equal(entity, block.Entities[row]);
+                Assert.Equal(value, block.Read<Position>(0)[row].Value);
+            }
+            foreach (var entity in absent)
+                Assert.False(query.TryLocate(run, entity, out _, out _));
+        };
+        using var schedule = BoundSchedule.Bind(world,
+            SystemDescriptor.Create("lookup", b => new QueryBody(b, check)).Query(shape).Build());
+        schedule.Run(TestContext.Current.CancellationToken);
+
+        world.Insert(entities[0], new Extra(10));
+        world.Insert(entities[1024], new Extra(20));
+        world.Insert(entities[1], default(Frozen));
+        expected.Remove(entities[1]);
+        absent.Add(entities[1]);
+        Assert.True(world.Despawn(entities[2]));
+        expected.Remove(entities[2]);
+        absent.Add(entities[2]);
+        Entity replacement = world.Spawn(new Particle(new Position(9000), new Velocity(9)));
+        Assert.Equal(entities[2].Index, replacement.Index);
+        expected.Add(replacement, 9000);
+        schedule.Run(TestContext.Current.CancellationToken);
+
+        Assert.True(world.Remove<Extra>(entities[0]));
+        Assert.True(world.Remove<Frozen>(entities[1]));
+        absent.Remove(entities[1]);
+        expected.Add(entities[1], 1);
+        schedule.Run(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
     public void Tracking_observes_equal_writes_preserves_added_and_ignores_structural_migration()
     {
         using var world = CreateWorld();

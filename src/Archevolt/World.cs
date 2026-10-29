@@ -62,7 +62,7 @@ public sealed partial class World : IDisposable
         {
             var archetype = GetArchetype([]);
             int row = archetype.Table.Append(new EntityKey(entity.Index, entity.Generation));
-            Entities.Materialize(entity, archetype, row);
+            Entities.Materialize(entity, archetype.Index, row);
             return entity;
         }
         catch { Entities.Release(entity.Index); throw; }
@@ -131,7 +131,7 @@ public sealed partial class World : IDisposable
     {
         RequireIdle();
         RequireAlive(entity);
-        return Entities.Entry(entity.Index).Archetype!.Has(Registry.Id<T>());
+        return Archetypes[Entities.Entry(entity.Index).ArchetypeId].Has(Registry.Id<T>());
     }
 
     public bool TryGet<T>(Entity entity, out T value) where T : unmanaged
@@ -144,10 +144,11 @@ public sealed partial class World : IDisposable
         if (Registry.Components[id].IsTag)
             throw new InvalidOperationException("Tags have no stored value. Use Has<T>.");
         ref var entry = ref Entities.Entry(entity.Index);
-        int column = Array.BinarySearch(entry.Archetype!.Ids, id);
+        var archetype = Archetypes[entry.ArchetypeId];
+        int column = Array.BinarySearch(archetype.Ids, id);
         if (column < 0)
             return false;
-        value = entry.Archetype.Table.Values<T>(column)[entry.Row];
+        value = archetype.Table.Values<T>(column)[entry.Row];
         return true;
     }
 
@@ -168,7 +169,7 @@ public sealed partial class World : IDisposable
         RequireIdle();
         RequireAlive(entity);
         int id = Registry.Id<T>();
-        var source = Entities.Entry(entity.Index).Archetype!;
+        var source = Archetypes[Entities.Entry(entity.Index).ArchetypeId];
         if (!source.Has(id))
             return false;
         return ApplyRemove(entity, id, NextTick(), optional: true);
@@ -254,12 +255,12 @@ public sealed partial class World : IDisposable
     private void Move(Entity entity, Archetype destination)
     {
         ref var entry = ref Entities.Entry(entity.Index);
-        var source = entry.Archetype!.Table;
+        var source = Archetypes[entry.ArchetypeId].Table;
         int sourceRow = entry.Row;
         int row = destination.Table.Append(new EntityKey(entity.Index, entity.Generation));
         source.CopyRowTo(sourceRow, destination.Table, row);
         source.SwapRemove(sourceRow, Entities);
-        Entities.Relocate(entity.Index, destination, row);
+        Entities.Relocate(entity.Index, destination.Index, row);
     }
 
     private static void Stamp(Table table, int column, int row, ulong tick, bool added)
