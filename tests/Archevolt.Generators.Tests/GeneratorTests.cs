@@ -866,6 +866,61 @@ public sealed class GeneratorTests
     }
 
     [Fact]
+    public void Named_query_rows_stamp_only_accessed_tracked_rows_and_report_their_entities_across_tables()
+    {
+        var assembly = CompileAndLoad("""
+            using Archevolt;
+            using System.Collections.Generic;
+            [Component, TrackChanges] public readonly record struct Position(int Value);
+            [Component] public readonly record struct Velocity(int Value);
+            [Component] public readonly struct Tag { }
+            [Bundle] public readonly partial record struct Mover(Position Position, Velocity Velocity);
+            [Bundle] public readonly partial record struct Still(Position Position);
+            [Query, Write<Position>, Read<Velocity>] public readonly ref partial struct Movers { }
+            [Query, Read<Position>, Changed<Position>] public readonly ref partial struct Changes { }
+            public static partial class Systems
+            {
+                public static readonly List<Entity> Visited = new();
+                public static int Count, Sum;
+                [EcsSystem] public static void Step(scoped Movers movers)
+                {
+                    foreach (var row in movers)
+                    {
+                        Visited.Add(row.Entity);
+                        if (row.Velocity.Value % 2 != 0) row.Position = new(row.Position.Value + row.Velocity.Value);
+                    }
+                }
+                [EcsSystem] public static void Observe(scoped Changes changes) { foreach (var row in changes) { Count++; Sum += row.Position.Value; } }
+            }
+            [EcsModule, IncludeSystems(typeof(Systems)), IncludeBundle<Mover>, IncludeBundle<Still>, IncludeComponent<Tag>] public static partial class Game { }
+            [Schedule, Run(typeof(Systems), nameof(Systems.Step))] public partial class Stepper { }
+            [Schedule, Run(typeof(Systems), nameof(Systems.Observe))] public partial class Observer { }
+            public static class Acceptance
+            {
+                public static int Run()
+                {
+                    using var world = new WorldBuilder().AddModule(Game.Module).Build();
+                    var movers = new HashSet<Entity>();
+                    for (int i = 1; i <= 6; i++)
+                    {
+                        var entity = world.Spawn(new Mover(new(10 * i), new(i)));
+                        if (i % 3 == 0) world.Insert(entity, default(Tag));
+                        movers.Add(entity);
+                    }
+                    world.Spawn(new Still(new(1000)));
+                    using var stepper = Stepper.Create(world); using var observer = Observer.Create(world);
+                    observer.Run();
+                    Systems.Count = 0; Systems.Sum = 0;
+                    stepper.Run(); observer.Run();
+                    if (Systems.Visited.Count != 6 || !movers.SetEquals(Systems.Visited)) return -1;
+                    return Systems.Count * 1000 + Systems.Sum;
+                }
+            }
+            """);
+        Execute(assembly).Should().Be(3099);
+    }
+
+    [Fact]
     public void Named_query_resources_and_nested_bundles_execute_the_plan_programming_model()
     {
         var assembly = CompileAndLoad("""

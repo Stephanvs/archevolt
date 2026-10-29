@@ -94,32 +94,124 @@ public sealed partial class ArchevoltGenerator
         text.AppendLine("readonly global::Archevolt.QueryState? _state;\nreadonly global::Archevolt.SystemRun _run;");
         text.Append("internal ").Append(Escape(symbol.Name)).AppendLine("(global::Archevolt.QueryState state, global::Archevolt.SystemRun run) { _state = state; _run = run; }");
         text.AppendLine("public Enumerator GetEnumerator() => new((_state ?? throw new global::System.InvalidOperationException(\"A default query has no active execution lease.\")).Begin(_run));");
-        text.AppendLine("public ref struct Enumerator\n{\nprivate global::Archevolt.QueryCursor _cursor;\nprivate int _row;\nprivate int _count;\nprivate global::Archevolt.EntityColumn _entities;");
-        foreach (var term in values) text.Append("private ").Append(ColumnType(term)).Append(' ').Append(ColumnName(term)).AppendLine(";");
-        for (int i = 0; i < filters.Length; i++) text.Append("private global::System.ReadOnlySpan<ulong> _ticks").Append(i).AppendLine(";");
-        text.AppendLine("internal Enumerator(global::Archevolt.QueryCursor cursor) { this = default; _cursor = cursor; _row = -1; }");
-        text.AppendLine("public bool MoveNext()\n{\nwhile (true)\n{\nif (++_row < _count)\n{");
-        if (filters.Length != 0)
-            text.Append("if (!(").Append(string.Join(" && ", filters.Select((_, i) => $"_cursor.Window.Contains(_ticks{i}[_row])"))).AppendLine(")) continue;");
-        text.AppendLine("return true;\n}\nif (!_cursor.Next(out var block)) return false;\n_count = block.Count;\n_row = -1;\n_entities = block.Entities;");
-        BindColumns(text, terms);
-        for (int i = 0; i < filters.Length; i++) text.Append("_ticks").Append(i).Append(" = block.").Append(filters[i].Mode).Append('(').Append(filters[i].Index).AppendLine(");");
-        text.AppendLine("}\n}");
-        text.Append("public Row Current => new(").Append(string.Join(", ", values.Select(ColumnName).Concat(new[] { "_entities", "_row" }))).AppendLine(");\n}");
-        text.AppendLine("public readonly ref struct Row\n{\nreadonly global::Archevolt.EntityColumn _entities;\nreadonly int _row;");
-        foreach (var term in values) text.Append("readonly ").Append(ColumnType(term)).Append(' ').Append(ColumnName(term)).AppendLine(";");
-        text.Append("internal Row(").Append(string.Join(", ", values.Select(term => ColumnType(term) + " " + ColumnName(term))
-            .Concat(new[] { "global::Archevolt.EntityColumn entities", "int row" }))).AppendLine(")\n{\n_entities = entities; _row = row;");
-        foreach (var term in values) text.Append("this.").Append(ColumnName(term)).Append(" = ").Append(ColumnName(term)).AppendLine(";");
-        text.AppendLine("}\npublic global::Archevolt.Entity Entity => _entities[_row];");
+        GenerateEnumerator(text, values, filters);
+        GenerateRow(text, values);
+        return Unit(symbol, "Query", Close(text, symbol), problems);
+    }
+
+    const string Inline = "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]";
+    const string Unsafe = "global::System.Runtime.CompilerServices.Unsafe";
+    const string BaseOf = "global::System.Runtime.InteropServices.MemoryMarshal.GetReference";
+    static bool Stamped(TermModel term) => term.Mode == "Write" && term.Component.Tracked;
+
+    // The enumerator holds a ref to each column's current element and the rows left in the block. MoveNext advances
+    // every ref, then tests the row count, so the per-row path is one block that ends in the loop's branch. With a
+    // conditional advance, the JIT chose between two equally weighted layouts and the top-tested one ran about twice
+    // as slow. NextBlock calls QueryCursor.Next on a local copy, so an out-of-line Next exposes that copy and not the
+    // enumerator, whose fields can then stay in registers whatever the PGO profile.
+    static void GenerateEnumerator(StringBuilder text, IReadOnlyList<TermModel> values, IReadOnlyList<TermModel> filters)
+    {
+        bool window = filters.Count != 0 || values.Any(Stamped);
+        text.AppendLine("public ref struct Enumerator\n{\nprivate global::Archevolt.QueryCursor _cursor;\nprivate global::Archevolt.EntityColumn _entities;\nprivate int _count;\nprivate int _remaining;");
+        if (window) text.AppendLine("private global::Archevolt.TickWindow _window;");
+        var advance = new StringBuilder();
+        var clear = new StringBuilder();
+        void Ref(string type, string field, string stride)
+        {
+            text.Append("private ref ").Append(type).Append(' ').Append(field).AppendLine(";");
+            advance.Append(field).Append(" = ref ").Append(Unsafe).Append(".Add(ref ").Append(field).Append(", ").Append(stride).AppendLine(");");
+            clear.Append(field).Append(" = ref ").Append(Unsafe).Append(".NullRef<").Append(type).AppendLine(">();");
+        }
         foreach (var term in values)
         {
-            if (term.Mode == "Optional") text.Append("public bool Has").Append(term.Alias).Append(" => !").Append(ColumnName(term)).AppendLine(".IsEmpty;");
+            // An absent optional column binds a null ref and a stride of zero, so it stays null without a per-row branch.
+            if (term.Mode == "Optional") text.Append("private int _stride").Append(term.Index).AppendLine(";");
+            Ref(term.Component.Type, ColumnName(term), term.Mode == "Optional" ? "_stride" + term.Index : "1");
+            if (Stamped(term)) Ref("ulong", "_changed" + term.Index, "1");
+        }
+        for (int i = 0; i < filters.Count; i++) Ref("ulong", "_ticks" + i, "1");
+        text.Append("internal Enumerator(global::Archevolt.QueryCursor cursor) { this = default; _cursor = cursor;").Append(window ? " _window = cursor.Window;" : "").AppendLine(" }");
+        text.AppendLine(Inline);
+        if (filters.Count == 0)
+            text.Append("public bool MoveNext()\n{\n").Append(advance).AppendLine("if (_remaining-- != 0) return true;\nreturn NextBlock();\n}");
+        else
+            text.Append("public bool MoveNext()\n{\nwhile (true)\n{\n").Append(advance).AppendLine("if (_remaining-- == 0 && !NextBlock()) return false;")
+                .Append("if (").Append(string.Join(" && ", filters.Select((_, i) => $"_window.Contains(_ticks{i})"))).AppendLine(") return true;\n}\n}");
+        // QueryCursor.Next never returns an empty block, and every column is sliced to block.Count rows. The refs step
+        // one element past a column's end before NextBlock rebinds them. Columns live in native table slabs, so the GC
+        // never sees those refs. Once the cursor is exhausted the refs are nulled, so Current cannot read past the end.
+        text.AppendLine(Inline).Append("private bool NextBlock()\n{\nvar cursor = _cursor;\nbool found = cursor.Next(out var block);\n_cursor = cursor;\nif (!found)\n{\n_remaining = 0;\n")
+            .Append(clear).AppendLine("return false;\n}\n_count = block.Count;\n_remaining = _count - 1;\n_entities = block.Entities;");
+        foreach (var term in values)
+        {
+            var column = ColumnName(term);
+            var type = term.Component.Type;
+            if (term.Mode == "Optional")
+                text.Append("block.TryRead<").Append(type).Append(">(").Append(term.Index).Append(", out var optional").Append(term.Index).AppendLine(");")
+                    .Append(column).Append(" = ref ").Append(BaseOf).Append("(optional").Append(term.Index).AppendLine(");")
+                    .Append("_stride").Append(term.Index).Append(" = optional").Append(term.Index).AppendLine(".IsEmpty ? 0 : 1;");
+            else if (Stamped(term))
+                text.Append("var tracked").Append(term.Index).Append(" = block.Tracked<").Append(type).Append(">(").Append(term.Index).AppendLine(");")
+                    .Append(column).Append(" = ref ").Append(BaseOf).Append("(tracked").Append(term.Index).AppendLine(".Values);")
+                    .Append("_changed").Append(term.Index).Append(" = ref ").Append(BaseOf).Append("(tracked").Append(term.Index).AppendLine(".Changed);");
+            else
+                text.Append(column).Append(" = ref ").Append(BaseOf).Append("(block.").Append(term.Mode).Append('<').Append(type).Append(">(").Append(term.Index).AppendLine("));");
+        }
+        for (int i = 0; i < filters.Count; i++)
+            text.Append("_ticks").Append(i).Append(" = ref ").Append(BaseOf).Append("(block.").Append(filters[i].Mode).Append('(').Append(filters[i].Index).AppendLine("));");
+        text.AppendLine("return true;\n}");
+        var arguments = new List<string>();
+        foreach (var term in values)
+        {
+            arguments.Add("ref " + ColumnName(term));
+            if (Stamped(term)) arguments.Add("ref _changed" + term.Index);
+        }
+        arguments.Add("_entities");
+        arguments.Add("_count - 1 - _remaining");
+        if (values.Any(Stamped)) arguments.Add("_window.Now");
+        text.Append("public Row Current\n{\n").Append(Inline).Append("\nget => new(").Append(string.Join(", ", arguments)).AppendLine(");\n}\n}");
+    }
+
+    // A row holds a ref to each column's current element. Entity reads index the entity column, because EntityKey is
+    // internal to the runtime.
+    static void GenerateRow(StringBuilder text, IReadOnlyList<TermModel> values)
+    {
+        bool stamped = values.Any(Stamped);
+        var parameters = new List<string>();
+        text.AppendLine("public readonly ref struct Row\n{");
+        foreach (var term in values)
+        {
+            var reference = term.Mode == "Write" ? "ref " : "ref readonly ";
+            text.Append("readonly ").Append(reference).Append(term.Component.Type).Append(" _value").Append(term.Index).AppendLine(";");
+            parameters.Add(reference + term.Component.Type + " value" + term.Index);
+            if (!Stamped(term)) continue;
+            text.Append("readonly ref ulong _changed").Append(term.Index).AppendLine(";");
+            parameters.Add("ref ulong changed" + term.Index);
+        }
+        text.AppendLine("readonly global::Archevolt.EntityColumn _entities;\nreadonly int _row;");
+        parameters.Add("global::Archevolt.EntityColumn entities");
+        parameters.Add("int row");
+        if (stamped)
+        {
+            text.AppendLine("readonly ulong _now;");
+            parameters.Add("ulong now");
+        }
+        text.Append("internal Row(").Append(string.Join(", ", parameters)).AppendLine(")\n{");
+        foreach (var term in values)
+        {
+            text.Append("_value").Append(term.Index).Append(" = ref value").Append(term.Index).AppendLine(";");
+            if (Stamped(term)) text.Append("_changed").Append(term.Index).Append(" = ref changed").Append(term.Index).AppendLine(";");
+        }
+        text.Append("_entities = entities;\n_row = row;\n").AppendLine(stamped ? "_now = now;\n}" : "}");
+        text.AppendLine("public global::Archevolt.Entity Entity => _entities[_row];");
+        foreach (var term in values)
+        {
+            if (term.Mode == "Optional") text.Append("public bool Has").Append(term.Alias).Append(" => !").Append(Unsafe).Append(".IsNullRef(in _value").Append(term.Index).AppendLine(");");
             text.Append("public ref ").Append(term.Mode == "Write" ? "" : "readonly ").Append(term.Component.Type).Append(' ').Append(Escape(term.Alias)).AppendLine("\n{\nget\n{");
             if (term.Mode == "Optional") text.Append("if (!Has").Append(term.Alias).AppendLine(") throw new global::System.InvalidOperationException(\"The optional component is absent.\");");
-            text.Append("return ref ").Append(Element(term, "_row")).AppendLine(";\n}\n}");
+            if (Stamped(term)) text.Append("_changed").Append(term.Index).AppendLine(" = _now;");
+            text.Append("return ref _value").Append(term.Index).AppendLine(";\n}\n}");
         }
         text.AppendLine("}");
-        return Unit(symbol, "Query", Close(text, symbol), problems);
     }
 }

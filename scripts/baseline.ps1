@@ -14,6 +14,7 @@ exports, summary.csv, and summary.md.
 
 A step gate that compares only some cases passes -Classes, for example
 ./scripts/baseline.ps1 -Classes ReferenceComparisonBenchmarks.
+An entry may also name one method, for example ReferenceComparisonBenchmarks.GeneratedQuery.
 Add -IncludeBevy -Benches movement to refresh the corresponding Bevy reference.
 #>
 [CmdletBinding()]
@@ -90,12 +91,14 @@ try {
 
     Invoke-Logged 'dotnet-build.txt' 'dotnet' @('build', $Project, '-c', 'Release', '-warnaserror')
     $bdnResults = Join-Path $Output 'bdn'
-    $bdnArguments = @($Assembly, '--filter') + @($Classes | ForEach-Object { "*.$_.*" }) +
+    $bdnArguments = @($Assembly, '--filter') + @($Classes | ForEach-Object { if ($_.Contains('.')) { "*.$_" } else { "*.$_.*" } }) +
         @('--launchCount', "$Runs", '--exporters', 'json', '--artifacts', $bdnResults)
     if ($Quick) { $bdnArguments += @('--warmupCount', '1', '--iterationCount', '3') }
     Invoke-Logged 'bdn.txt' 'dotnet' $bdnArguments
+    # BenchmarkDotNet exports one report per class, however many of its methods were selected.
+    $classCount = @($Classes | ForEach-Object { $_.Split('.')[0] } | Sort-Object -Unique).Count
     $reports = @(Get-ChildItem -LiteralPath (Join-Path $bdnResults 'results') -Filter '*-report-full-compressed.json' -ErrorAction SilentlyContinue)
-    if ($reports.Count -ne $Classes.Count) { throw "BenchmarkDotNet exported $($reports.Count) of $($Classes.Count) reports; see $(Join-Path $Output 'bdn.txt')" }
+    if ($reports.Count -ne $classCount) { throw "BenchmarkDotNet exported $($reports.Count) of $classCount reports; see $(Join-Path $Output 'bdn.txt')" }
 
     if ($IncludeBevy) {
         $savedFlags = $env:RUSTFLAGS

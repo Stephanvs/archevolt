@@ -1,6 +1,6 @@
 # Archevolt performance plan
 
-Status: steps 0, 1, and 3 done. Step 0's baselines are in `benchmarks/baseline.md`, recorded on .NET 10. Step 3's before and after numbers, on .NET 11, are in `benchmarks/step3-table-storage.md`. They are the baseline for later steps. Step 3 met its gate except for named queries, whose regression comes from enumerator codegen that step 2 rewrites. The v1 implementation plan is complete. Every stage passed its acceptance gate, and the evidence is in `.audit/acceptance.md`. The [v1 plan](https://github.com/Stephanvs/archevolt/blob/ebacf07059fefbf9b182e40a290812be584dd9ee/PLAN.md) remains in history as the record of the original design, its alternatives, and its gates.
+Status: steps 0, 1, 2, and 3 done. Step 0's baselines are in `benchmarks/baseline.md`, recorded on .NET 10. Step 3's before and after numbers, on .NET 11, are in `benchmarks/step3-table-storage.md`. They are the baseline for later steps. Step 3 met its gate except for named queries, whose regression came from enumerator codegen. Step 2 rewrote that enumerator and met its gate. Its numbers are in `benchmarks/step2-named-query-enumerator.md`. The v1 implementation plan is complete. Every stage passed its acceptance gate, and the evidence is in `.audit/acceptance.md`. The [v1 plan](https://github.com/Stephanvs/archevolt/blob/ebacf07059fefbf9b182e40a290812be584dd9ee/PLAN.md) remains in history as the record of the original design, its alternatives, and its gates.
 
 This plan covers the next stage. It makes Archevolt faster at dense iteration, structural change, and entity lifecycle. Each change is grounded in measured Archevolt costs or in what Bevy changed between v0.17.3, which v1 was designed against, and v0.20.0, the current release.
 
@@ -184,5 +184,13 @@ Stale references outside this file:
 
 - `docs/concepts/architecture.mdx` links `.audit/design.md` as the runtime and generated-code contract. That file still describes chunks.
 - `benchmarks/benchmark.md` says Archevolt stores components in chunks. The file records a run at `414eb10`, when that was true.
-- `docs/performance.mdx` says a named query costs about twice as much as `[Each]`. Update it when step 2 lands.
 - `QueryCursor.Enumerate()` is public and has no callers.
+
+## Amendments after step 2
+
+- Step 2 says to bind each column once per block and bounds-check once per block, which suggests a base ref plus a row index. The generated enumerator instead holds a ref to each column's current element and advances every ref by one element per row. It decrements the remaining-row count after advancing, so the per-row path is a single block ending in the loop's branch. With a conditional advance, tiered PGO chose between two equally weighted block layouts, and the top-tested layout ran about twice as slow as the bottom-tested one.
+- `Row` holds a ref to each column's current element, as planned, plus the entity column and row index. `EntityKey` is internal to the runtime, so generated code cannot hold a ref to it, and `Entity` reads stay bounds-checked.
+- `TrackedColumn<T>` exposes its `Values` and `Changed` spans, so a generated row can stamp one row per access without bounds-checking both spans.
+- Step 2's measurement found that `[Each]` runs about twice as slow with `DOTNET_TieredPGO=0`, at 180 to 211 µs instead of about 98 µs on the 100,000-entity movement case. Its generated loop depends on the PGO profile, as the old named-query enumerator did. No step covers it yet.
+
+Follow-up, not yet a numbered step: [step3-partition-granularity.md](benchmarks/step3-partition-granularity.md) found that a four-worker run over 1,000 entities costs 14 to 22 µs, almost all of it worker-pool dispatch, against about 1 µs on one worker. Running a batch's single work item on the calling thread, or keeping small partitionable queries serial, targets that cost. It is an absolute cost that only matters in small worlds. Measuring it needs an idle machine, because four-worker cases drifted by up to 37% between identical runs on a machine in normal use.

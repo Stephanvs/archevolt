@@ -259,6 +259,9 @@ public readonly ref struct TrackedColumn<T> where T : unmanaged
         _now = now;
     }
     public int Length => _values.Length;
+    // Generated named-query rows stamp one row per access, so they take both spans and bounds-check once per block.
+    public Span<T> Values => _values;
+    public Span<ulong> Changed => _changed;
     public ref T Write(int row) { _changed[row] = _now; return ref _values[row]; }
     public Span<T> WriteAll() { _changed.Fill(_now); return _values; }
     public StampedRef<T> At(int row) => new(ref _values[row], ref _changed[row], _now);
