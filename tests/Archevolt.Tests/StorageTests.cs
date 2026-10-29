@@ -360,6 +360,21 @@ public sealed class StorageTests
     }
 
     [Fact]
+    public void Bundle_insertion_over_members_already_present_overwrites_them_without_moving_other_rows()
+    {
+        using var world = new WorldBuilder().AddBundle<Particle>().AddComponent<Extra>().Build();
+        Entity first = world.Spawn(new Particle(new Position(1), new Velocity(2)));
+        Entity second = world.Spawn(new Particle(new Position(3), new Velocity(4)));
+        world.Insert(first, new Extra(9));
+        world.Insert(second, new Extra(10));
+
+        world.InsertBundle(first, new Particle(new Position(5), new Velocity(6)));
+
+        Assert.Equal((5, 6, 9L), (world.Get<Position>(first).Value, world.Get<Velocity>(first).Value, world.Get<Extra>(first).Value));
+        Assert.Equal((3, 4, 10L), (world.Get<Position>(second).Value, world.Get<Velocity>(second).Value, world.Get<Extra>(second).Value));
+    }
+
+    [Fact]
     public void Membership_extends_beyond_one_machine_word()
     {
         var builder = new WorldBuilder();

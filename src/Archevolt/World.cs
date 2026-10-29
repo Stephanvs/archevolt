@@ -8,8 +8,9 @@ public sealed partial class World : IDisposable
     private static readonly object s_identityGate = new();
     private static long s_nextWorld;
     private readonly int _ownerThread = Environment.CurrentManagedThreadId;
-    private readonly Dictionary<string, Archetype> _archetypeByKey = new(StringComparer.Ordinal);
+    private readonly Dictionary<ulong[], Archetype> _archetypeByMask = new(ArchetypeMaskComparer.Instance);
     private readonly Dictionary<int, BundleBinding> _bundles = [];
+    private readonly Archetype _empty;
     private ulong _tick;
     private bool _disposed;
     private bool _running;
@@ -40,14 +41,16 @@ public sealed partial class World : IDisposable
         CommandCapacity = builder.CommandBytes;
         Registry = new ComponentRegistry(builder.Components);
         Entities = new EntityTable(builder.EntityCapacity);
+        _empty = GetArchetype(NewMask());
         foreach (var descriptor in builder.Bundles)
         {
             if (_bundles.ContainsKey(descriptor.TypeKey))
                 continue;
             int[] ids = descriptor.Components.Select(c => Registry.Id(c.TypeKey)).ToArray();
-            int[] sorted = (int[])ids.Clone();
-            Array.Sort(sorted);
-            _bundles.Add(descriptor.TypeKey, new BundleBinding(descriptor, GetArchetype(sorted), ids));
+            var mask = NewMask();
+            foreach (int id in ids)
+                mask[id / 64] |= 1UL << (id % 64);
+            _bundles.Add(descriptor.TypeKey, new BundleBinding(descriptor, GetArchetype(mask), ids));
         }
         InitializeResources(builder.Resources);
         InitializeMessages(builder.Messages, builder.MessageCapacity);
@@ -60,9 +63,8 @@ public sealed partial class World : IDisposable
         Entity entity = Entities.Reserve(Id);
         try
         {
-            var archetype = GetArchetype([]);
-            int row = archetype.Table.Append(new EntityKey(entity.Index, entity.Generation));
-            Entities.Materialize(entity, archetype.Index, row);
+            int row = _empty.Table.Append(new EntityKey(entity.Index, entity.Generation));
+            Entities.Materialize(entity, _empty.Index, row);
             return entity;
         }
         catch { Entities.Release(entity.Index); throw; }
@@ -187,17 +189,16 @@ public sealed partial class World : IDisposable
     {
         RequireIdle();
         value = default;
-        if (!Entities.IsAlive(entity, Id))
+        if (!Entities.TryLocate(entity, Id, out int archetypeId, out int row))
             return false;
         int id = Registry.Id<T>();
         if (Registry.Components[id].IsTag)
             throw new InvalidOperationException("Tags have no stored value. Use Has<T>.");
-        ref var entry = ref Entities.Entry(entity.Index);
-        var archetype = Archetypes[entry.ArchetypeId];
-        int column = Array.BinarySearch(archetype.Ids, id);
+        var archetype = Archetypes[archetypeId];
+        int column = archetype.Columns[id];
         if (column < 0)
             return false;
-        value = archetype.Table.Values<T>(column)[entry.Row];
+        value = archetype.Table.Values<T>(column)[row];
         return true;
     }
 
@@ -283,40 +284,44 @@ public sealed partial class World : IDisposable
         }
     }
 
-    private Archetype GetArchetype(int[] ids)
+    private ulong[] NewMask() => new ulong[(Registry.Components.Length + 63) / 64];
+
+    // The dictionary keeps the mask as its key, so callers pass a mask they no longer write to.
+    private Archetype GetArchetype(ulong[] mask)
     {
-        string key = string.Join(",", ids);
-        if (_archetypeByKey.TryGetValue(key, out var result))
+        if (_archetypeByMask.TryGetValue(mask, out var result))
             return result;
-        result = new Archetype(Archetypes.Count, ids, Registry);
-        _archetypeByKey.Add(key, result);
+        result = new Archetype(Archetypes.Count, mask, Registry);
+        _archetypeByMask.Add(mask, result);
         Archetypes.Add(result);
         return result;
     }
 
-    private Archetype Transition(Archetype source, int id, bool add)
+    private ArchetypeEdge Transition(Archetype source, int id, bool add)
     {
         var cache = add ? source.AddTransitions : source.RemoveTransitions;
-        if (cache.TryGetValue(id, out var result))
-            return result;
-        result = GetArchetype(TransitionIds(source, id, add));
-        cache.Add(id, result);
-        return result;
+        if (cache.TryGetValue(id, out var edge))
+            return edge;
+        var mask = (ulong[])source.Mask.Clone();
+        if (add)
+            mask[id / 64] |= 1UL << (id % 64);
+        else
+            mask[id / 64] &= ~(1UL << (id % 64));
+        edge = source.EdgeTo(GetArchetype(mask));
+        cache.Add(id, edge);
+        return edge;
     }
 
-    // Kept out of Transition: a lambda capturing id would allocate its closure on every call, including cache hits.
-    private static int[] TransitionIds(Archetype source, int id, bool add) =>
-        add ? source.Ids.Append(id).Order().ToArray() : source.Ids.Where(i => i != id).ToArray();
-
-    private void Move(Entity entity, Archetype destination)
+    private void Move(Entity entity, ArchetypeEdge edge)
     {
         ref var entry = ref Entities.Entry(entity.Index);
         var source = Archetypes[entry.ArchetypeId].Table;
+        var target = edge.Target;
         int sourceRow = entry.Row;
-        int row = destination.Table.Append(new EntityKey(entity.Index, entity.Generation));
-        source.CopyRowTo(sourceRow, destination.Table, row);
+        int row = target.Table.Append(new EntityKey(entity.Index, entity.Generation));
+        source.CopyRowTo(sourceRow, target.Table, row, edge.TargetColumns);
         source.SwapRemove(sourceRow, Entities);
-        Entities.Relocate(entity.Index, destination.Index, row);
+        Entities.Relocate(entity.Index, target.Index, row);
     }
 
     private static void Stamp(Table table, int column, int row, ulong tick, bool added)
@@ -345,7 +350,7 @@ public sealed partial class World : IDisposable
 
     internal sealed record BundleBinding(BundleDescriptor Descriptor, Archetype Archetype, int[] Ids)
     {
-        internal readonly Dictionary<int, Archetype> Destinations = [];
+        internal readonly Dictionary<int, ArchetypeEdge> Destinations = [];
     }
 }
 

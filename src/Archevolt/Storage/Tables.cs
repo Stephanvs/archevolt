@@ -1,10 +1,10 @@
+using System.Numerics;
 using System.Runtime.InteropServices;
 
 namespace Archevolt;
 
 internal sealed unsafe class Table : IDisposable
 {
-    private readonly int[] _ids;
     private readonly nint[] _values;
     private readonly nint[] _added;
     private readonly nint[] _changed;
@@ -15,9 +15,8 @@ internal sealed unsafe class Table : IDisposable
     internal int Capacity { get; private set; }
     internal long Bytes { get; private set; }
 
-    internal Table(int[] ids, ComponentDescriptor[] components)
+    internal Table(ComponentDescriptor[] components)
     {
-        _ids = ids;
         Components = components;
         _values = new nint[components.Length];
         _added = new nint[components.Length];
@@ -69,11 +68,11 @@ internal sealed unsafe class Table : IDisposable
         Count--;
     }
 
-    internal void CopyRowTo(int source, Table target, int destination)
+    internal void CopyRowTo(int source, Table target, int destination, int[] targetColumns)
     {
-        for (int i = 0; i < _ids.Length; i++)
+        for (int i = 0; i < targetColumns.Length; i++)
         {
-            int targetColumn = Array.BinarySearch(target._ids, _ids[i]);
+            int targetColumn = targetColumns[i];
             if (targetColumn < 0)
                 continue;
             if (!Components[i].IsTag)
@@ -153,22 +152,52 @@ internal sealed class Archetype
     internal readonly ulong[] Mask;
     internal readonly ComponentDescriptor[] Components;
     internal readonly Table Table;
-    internal readonly Dictionary<int, Archetype> AddTransitions = [];
-    internal readonly Dictionary<int, Archetype> RemoveTransitions = [];
+    internal readonly int[] Columns;
+    internal readonly Dictionary<int, ArchetypeEdge> AddTransitions = [];
+    internal readonly Dictionary<int, ArchetypeEdge> RemoveTransitions = [];
 
-    internal Archetype(int index, int[] ids, ComponentRegistry registry)
+    internal Archetype(int index, ulong[] mask, ComponentRegistry registry)
     {
         Index = index;
-        Ids = ids;
-        Mask = new ulong[(registry.Components.Length + 63) / 64];
-        Components = new ComponentDescriptor[ids.Length];
-        for (int i = 0; i < ids.Length; i++)
+        Mask = mask;
+        var ids = new List<int>();
+        for (int word = 0; word < mask.Length; word++)
+            for (ulong bits = mask[word]; bits != 0; bits &= bits - 1)
+                ids.Add(word * 64 + BitOperations.TrailingZeroCount(bits));
+        Ids = ids.ToArray();
+        Components = new ComponentDescriptor[Ids.Length];
+        Columns = new int[registry.Components.Length];
+        Array.Fill(Columns, -1);
+        for (int i = 0; i < Ids.Length; i++)
         {
-            Mask[ids[i] / 64] |= 1UL << (ids[i] % 64);
-            Components[i] = registry.Components[ids[i]];
+            Components[i] = registry.Components[Ids[i]];
+            Columns[Ids[i]] = i;
         }
-        Table = new Table(ids, Components);
+        Table = new Table(Components);
     }
 
     internal bool Has(int component) => (Mask[component / 64] & (1UL << (component % 64))) != 0;
+
+    internal ArchetypeEdge EdgeTo(Archetype target)
+    {
+        var columns = new int[Ids.Length];
+        for (int i = 0; i < Ids.Length; i++)
+            columns[i] = target.Columns[Ids[i]];
+        return new ArchetypeEdge(target, columns);
+    }
+}
+
+// TargetColumns[i] is the target table's column for this archetype's column i, or -1 when the target lacks it.
+internal sealed record ArchetypeEdge(Archetype Target, int[] TargetColumns);
+
+internal sealed class ArchetypeMaskComparer : IEqualityComparer<ulong[]>
+{
+    internal static readonly ArchetypeMaskComparer Instance = new();
+    public bool Equals(ulong[]? x, ulong[]? y) => x.AsSpan().SequenceEqual(y);
+    public int GetHashCode(ulong[] mask)
+    {
+        var hash = new HashCode();
+        hash.AddBytes(MemoryMarshal.AsBytes(mask.AsSpan()));
+        return hash.ToHashCode();
+    }
 }
