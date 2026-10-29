@@ -127,7 +127,7 @@ Gate: step 0a's `Get<T>`, despawn, and move cases improve or hold. Stale-handle,
 
 Separate allocation from directory metadata, as Bevy 0.18 did. The allocator owns the free list and the next fresh index. The directory owns generations and locations. The owner thread reserves without locking. Concurrent command-buffer reservations use one atomic operation per batch. Add a batch spawn that reserves N indices once, then writes rows directly into the destination table, reserving table capacity up front.
 
-Precedent: Bevy 0.18 split `EntityAllocator` from `Entities` and removed the pending/flush step ([#19451](https://github.com/bevyengine/bevy/pull/19451)). Bevy reported despawn 24% faster and command spawning about twice as fast. Bevy 0.19 made allocation lock-free ([#18670](https://github.com/bevyengine/bevy/pull/18670)), and `spawn_batch` calls `alloc_many` once.
+Precedent: Bevy 0.18 split `EntityAllocator` from `Entities` and removed the pending/flush step ([#19451](https://github.com/bevyengine/bevy/pull/19451)). Bevy reported despawn 24% faster and command spawning about twice as fast. Bevy 0.19 made allocation lock-free ([#18670](https://github.com/bevyengine/bevy/pull/18670)), and `spawn_batch` calls `alloc_many` once. Archevolt follows the split but keeps a flush. A command-buffer claim only moves the allocator's cursor, so the owner writes pending claims into the directory before playback, before discarding commands, and when a run exits. The amendments after step 5 record why.
 
 Do not copy Bevy's 128-entry local free cache ([#22658](https://github.com/bevyengine/bevy/pull/22658)). It exists to recover the cost of Bevy's atomic remote allocation, which Archevolt does not have. Add it only if step 0a shows release-side atomics dominate despawn.
 
@@ -155,15 +155,15 @@ Gate: a sparse-change benchmark shows the skip. Untracked and dense-change itera
 
 ## Step 8. Write immediate spawns in place
 
-`World.Spawn<TBundle>` writes the bundle into a staging buffer, on the stack up to 1,024 bytes and rented above that. It then validates the buffer and copies each member into the table through `WriteBundle`. `Commands` needs that buffer to hold the payload until playback. An immediate spawn does not.
+`World.Spawn<TBundle>` and `World.SpawnBatch<TBundle>` write each bundle into a staging buffer, on the stack up to 1,024 bytes and rented above that. They then validate the buffer and copy each member into the table through `WriteBundle`. `Commands` needs that buffer to hold the payload until playback. An immediate spawn does not.
 
-Append the row first, then point the `BundleWriter` at the row's destination columns, so the bundle's `Write` stores each member where it will live. The writer still checks member order and types. If `Write` fails, remove the row before releasing the reservation. `Commands` keeps the staging path.
+Append the row first, then point the `BundleWriter` at the row's destination columns, so the bundle's `Write` stores each member where it will live. The writer still checks member order and types. If `Write` fails, `Spawn` removes the row before releasing the reservation, and `SpawnBatch` truncates every row of the batch before releasing its reservations. `Commands` keeps the staging path.
 
-Step 6 removes the per-member column search from `WriteBundle`. This step removes the staging copy that remains. Step 5's batch spawn writes rows directly into the destination table, so both can share the column-targeting writer.
+Step 6 removes the per-member column search from `WriteBundle`. This step removes the staging copy that remains in both immediate spawns, so they share one column-targeting writer.
 
 Precedent: seecs constructs each component in place at the end of its dense array. Bevy's bundle spawner writes each bundle component directly into its table column.
 
-Gate: step 0a's spawn case improves at 1,000 and 100,000 entities and allocates no more managed memory. Spawn and command tests pass, including a bundle write that fails partway and must leave no row or reservation behind.
+Gate: step 0a's spawn and batch spawn cases improve at 1,000 and 100,000 entities and allocate no more managed memory. Spawn, batch spawn, and command tests pass, including a bundle write that fails partway and must leave no row or reservation behind.
 
 ## Sequence
 
@@ -226,5 +226,5 @@ Follow-up, not yet a numbered step: [step3-partition-granularity.md](benchmarks/
 - Step 5 says the allocator owns the free list and the next fresh index. `EntityAllocator` owns the free list and the claim cursor. The directory's length is still the next fresh index. A claim past the free list returns an offset from that length, and the owner adds those slots when it flushes. A claim never writes to the directory, so pages grow only on the owner thread.
 - Step 5 says concurrent reservations use one atomic operation per batch. Each `Commands.Spawn` uses one `Interlocked.Decrement`. `Commands` has no batch spawn. `World.SpawnBatch` runs on the owner thread and uses no atomic operations.
 - The owner flushes pending claims before command playback, before commands are discarded, and when a run exits. Idle-world reservation and release assume that no claim is pending.
-- `SpawnBatch` still stages each bundle and binary-searches each member's column, once per entity. Step 6 removes the search and step 8 the staging copy, as planned.
+- `SpawnBatch` still stages each bundle and binary-searches each member's column, once per entity. Step 6 removes the search. Step 8 originally assumed that batch spawn already wrote in place, so its scope and gate now name `SpawnBatch` too.
 - At 100,000 entities, batch spawn takes 3.7 ms against Bevy's recorded 3.2 ms, and individual spawn 5.9 ms against 4.8 ms. Despawn is about twice as fast as Bevy's recorded figure at both sizes.

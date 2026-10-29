@@ -37,7 +37,7 @@ internal sealed class EntityAllocator
     internal EntityAllocator(int capacity) => _free = new int[Math.Max(capacity, 16)];
 
     internal int FreeCount => _freeCount;
-    internal int Pop() => _cursor = --_freeCount;
+    internal int Pop() => _free[_cursor = --_freeCount];
     internal int Slot(int position) => _free[position];
 
     internal void Push(int index)
@@ -82,7 +82,7 @@ internal sealed class EntityTable
 
     internal Entity Reserve(long world)
     {
-        int index = _allocator.FreeCount != 0 ? _allocator.Slot(_allocator.Pop()) : Append();
+        int index = _allocator.FreeCount != 0 ? _allocator.Pop() : Append();
         ref var entry = ref Entry(index);
         entry.State = EntityState.Reserved;
         return new Entity(world, index, entry.Generation);
@@ -90,22 +90,9 @@ internal sealed class EntityTable
 
     internal void Reserve(long world, Span<Entity> entities)
     {
-        int reused = Math.Min(entities.Length, _allocator.FreeCount);
-        for (int i = 0; i < reused; i++)
-        {
-            int index = _allocator.Slot(_allocator.Pop());
-            ref var entry = ref Entry(index);
-            entry.State = EntityState.Reserved;
-            entities[i] = new Entity(world, index, entry.Generation);
-        }
-        Grow(entities.Length - reused);
-        for (int i = reused; i < entities.Length; i++)
-        {
-            int index = Append();
-            ref var entry = ref Entry(index);
-            entry.State = EntityState.Reserved;
-            entities[i] = new Entity(world, index, entry.Generation);
-        }
+        Grow(entities.Length - _allocator.FreeCount);
+        for (int i = 0; i < entities.Length; i++)
+            entities[i] = Reserve(world);
     }
 
     // Any thread while a schedule runs. Flush records the reservation in the directory.
