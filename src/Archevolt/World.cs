@@ -114,7 +114,7 @@ public sealed partial class World : IDisposable
         Span<byte> payload = binding.Descriptor.PayloadBytes <= 1024
             ? stackalloc byte[binding.Descriptor.PayloadBytes]
             : (rented = ArrayPool<byte>.Shared.Rent(binding.Descriptor.PayloadBytes)).AsSpan(0, binding.Descriptor.PayloadBytes);
-        ulong tick = NextTick();
+        ulong tick = checked(_tick + 1);
         Entities.Reserve(Id, entities);
         int first = table.Count;
         try
@@ -142,6 +142,7 @@ public sealed partial class World : IDisposable
             if (rented is not null)
                 ArrayPool<byte>.Shared.Return(rented);
         }
+        _tick = tick;
         for (int i = 0; i < entities.Length; i++)
             Entities.Materialize(entities[i], archetype.Index, first + i);
     }
