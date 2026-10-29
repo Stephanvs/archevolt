@@ -40,6 +40,13 @@ internal sealed unsafe class Table : IDisposable
         return row;
     }
 
+    internal void Reserve(int additional)
+    {
+        int needed = checked(Count + additional);
+        if (needed > Capacity)
+            Reallocate(Math.Max(needed, Math.Max(8, checked(Capacity * 2))));
+    }
+
     internal void SwapRemove(int row, EntityTable entities)
     {
         int last = Count - 1;

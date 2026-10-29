@@ -13,6 +13,7 @@ sidebar:
 | --- | --- |
 | `Spawn()` | Creates an entity with no components. |
 | `Spawn<TBundle>(in bundle)` | Creates an entity with the registered bundle's components. |
+| `SpawnBatch<TBundle>(bundles, entities)` | Creates one entity per bundle and writes its handle to the same position in `entities`, which must have the same length. If any bundle fails to write, no entity is created and `entities` is cleared. |
 | `Insert<T>(entity, in value)` | Adds or replaces one registered component. |
 | `InsertBundle<TBundle>(entity, in bundle)` | Adds or replaces bundle members and preserves unrelated components. |
 | `Remove<T>(entity)` | Removes a component and returns whether it was present. An invalid entity is an error. |
@@ -33,7 +34,7 @@ World inspection and immediate mutation require an idle world and its owner thre
 
 ## Capacity
 
-`WorldBuilder.Reserve(entities, commandBytesPerProducer, messagesPerType)` reserves initial capacities for entity handles, command buffers, and messages. It does not size component tables. Capacities can grow. Each archetype stores its components in one table that doubles its capacity when full. A table keeps its capacity when entities leave, so later spawns and moves into it do not allocate. Call `TrimExcess()` on an idle world to release that retained memory.
+`WorldBuilder.Reserve(entities, commandBytesPerProducer, messagesPerType)` reserves initial capacities for entity handles, command buffers, and messages. It does not size component tables. Capacities can grow. `SpawnBatch` grows its table once for the whole batch. Each archetype stores its components in one table that doubles its capacity when full. A table keeps its capacity when entities leave, so later spawns and moves into it do not allocate. Call `TrimExcess()` on an idle world to release that retained memory.
 
 ## Disposal
 

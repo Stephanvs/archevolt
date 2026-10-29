@@ -9,7 +9,7 @@ The .NET cases live in [Archevolt.Benchmarks](Archevolt.Benchmarks). The Rust ca
 | Roadmap case | Archevolt, BenchmarkDotNet | Bevy, criterion | Entities |
 | --- | --- | --- | --- |
 | Spawn a two-component bundle | `EntityPopulationBenchmarks.Spawn` | `lifecycle/spawn` | 1,000 and 100,000 |
-| Spawn a batch | none until step 5 | `lifecycle/spawn_batch` | 1,000 and 100,000 |
+| Spawn a batch | `EntityPopulationBenchmarks.SpawnBatch`, added in step 5 | `lifecycle/spawn_batch` | 1,000 and 100,000 |
 | Despawn | `EntityPopulationBenchmarks.Despawn` | `lifecycle/despawn` | 1,000 and 100,000 |
 | `Get<T>(entity)` on random live entities | `EntityStorageBenchmarks.Get` | `lifecycle/get` | 1,000 and 100,000 |
 | Add and remove a tag | `EntityStorageBenchmarks.TagRoundTrip` | `lifecycle/tag_round_trip` | 1,000 and 100,000 |
@@ -21,7 +21,7 @@ The .NET cases live in [Archevolt.Benchmarks](Archevolt.Benchmarks). The Rust ca
 | Optional term on half the entities | `FilterBenchmarks.OptionalHalfPresent` | `filters/optional_half_present` | 1,000 and 100,000 |
 | Movement through per-table slices | none until step 1 | `movement/bevy_contiguous` | 100,000 |
 
-Archevolt has no batch spawn API. Until step 5 adds one, `EntityPopulationBenchmarks.Spawn` is the batch baseline. Step 1 adds the Archevolt slice form. Until then, `ReferenceComparisonBenchmarks.GeneratedEach` is the movement baseline, as step 1's gate states.
+Archevolt had no batch spawn API when this baseline was recorded, so `EntityPopulationBenchmarks.Spawn` served as the batch baseline. Step 5 added `SpawnBatch`; see [its measurements](step5-lock-free-reservation.md). Step 1 adds the Archevolt slice form. Until then, `ReferenceComparisonBenchmarks.GeneratedEach` is the movement baseline, as step 1's gate states.
 
 ## Workloads
 

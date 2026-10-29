@@ -288,6 +288,78 @@ public sealed class StorageTests
     }
 
     [Fact]
+    public void Batch_spawn_reuses_free_slots_before_growing_the_directory_across_pages()
+    {
+        using var world = new WorldBuilder().AddBundle<Particle>().Build();
+        var early = new Entity[3];
+        world.SpawnBatch<Particle>([new(new(1), new(1)), new(new(2), new(2)), new(new(3), new(3))], early);
+        Assert.True(world.Despawn(early[0]));
+        Assert.True(world.Despawn(early[2]));
+
+        var bundles = new Particle[2500];
+        for (int i = 0; i < bundles.Length; i++)
+            bundles[i] = new Particle(new Position(i), new Velocity(-i));
+        var batch = new Entity[bundles.Length];
+        world.SpawnBatch<Particle>(bundles, batch);
+
+        Assert.Equal([early[2].Index, early[0].Index], batch[..2].Select(e => e.Index));
+        Assert.All(batch[..2], e => Assert.Equal(2u, e.Generation));
+        Assert.Equal(Enumerable.Range(3, bundles.Length - 2), batch[2..].Select(e => e.Index));
+        Assert.False(world.Contains(early[0]));
+        Assert.Equal(2, world.Get<Position>(early[1]).Value);
+        for (int i = 0; i < batch.Length; i++)
+        {
+            Assert.Equal(i, world.Get<Position>(batch[i]).Value);
+            Assert.Equal(-i, world.Get<Velocity>(batch[i]).Value);
+        }
+        var seen = new List<int>();
+        using var added = Collect(world, QueryShape.Create("added").Read<Position>(0).Added<Position>(0).Build(), seen);
+        added.Run(TestContext.Current.CancellationToken);
+        Assert.Equal(bundles.Length + 1, seen.Count);
+    }
+
+    private readonly record struct Fragile(Position Position, Velocity Velocity) : IBundle<Fragile>
+    {
+        public static BundleDescriptor Descriptor { get; } = BundleDescriptor.Create<Fragile>(
+            ComponentDescriptor.Of<Position>(tracked: true), ComponentDescriptor.Of<Velocity>());
+        public static void Write(in Fragile value, ref BundleWriter writer)
+        {
+            writer.Put(value.Position);
+            if (value.Velocity.Value < 0)
+                throw new ArgumentException("negative velocity");
+            writer.Put(value.Velocity);
+        }
+    }
+
+    [Fact]
+    public void Batch_spawn_that_fails_partway_leaves_no_row_or_reservation()
+    {
+        using var world = new WorldBuilder().AddBundle<Fragile>().Build();
+        Entity survivor = world.Spawn(new Fragile(new Position(7), new Velocity(7)));
+        Entity freed = world.Spawn(new Fragile(new Position(8), new Velocity(8)));
+        Assert.True(world.Despawn(freed));
+
+        var batch = new Entity[3];
+        Assert.Throws<ArgumentException>(() => world.SpawnBatch<Fragile>(
+            [new(new(1), new(1)), new(new(2), new(2)), new(new(3), new(-1))], batch));
+        Assert.All(batch, e => Assert.True(e.IsNull));
+
+        var seen = new List<int>();
+        using var all = Collect(world, QueryShape.Create("all").Read<Position>(0).Build(), seen);
+        all.Run(TestContext.Current.CancellationToken);
+        Assert.Equal([7], seen);
+        Assert.Equal(7, world.Get<Position>(survivor).Value);
+
+        var retry = new Entity[3];
+        world.SpawnBatch<Fragile>([new(new(1), new(1)), new(new(2), new(2)), new(new(3), new(3))], retry);
+        Assert.Equal(3, retry.Select(e => e.Index).Distinct().Count());
+        Assert.DoesNotContain(survivor.Index, retry.Select(e => e.Index));
+        Assert.Equal([1, 2, 3], retry.Select(e => world.Get<Position>(e).Value));
+        Assert.False(world.Contains(freed));
+        Assert.Throws<ArgumentException>(() => world.SpawnBatch<Fragile>([new(new(1), new(1))], new Entity[2]));
+    }
+
+    [Fact]
     public void Membership_extends_beyond_one_machine_word()
     {
         var builder = new WorldBuilder();

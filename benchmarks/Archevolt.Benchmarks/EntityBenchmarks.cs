@@ -8,9 +8,18 @@ public class EntityPopulationBenchmarks
 {
     private World _world = null!;
     private Entity[] _entities = null!;
+    private Particle[] _bundles = null!;
     [Params(1_000, 100_000)] public int Count { get; set; }
 
-    [IterationSetup(Target = nameof(Spawn))]
+    [GlobalSetup(Target = nameof(SpawnBatch))]
+    public void CreateBundles()
+    {
+        _bundles = new Particle[Count];
+        for (int i = 0; i < Count; i++)
+            _bundles[i] = MatrixPopulation.ParticleAt(i);
+    }
+
+    [IterationSetup(Targets = [nameof(Spawn), nameof(SpawnBatch)])]
     public void CreateEmptyWorld()
     {
         _world = MatrixPopulation.Build();
@@ -33,6 +42,10 @@ public class EntityPopulationBenchmarks
             _entities[i] = _world.Spawn(MatrixPopulation.ParticleAt(i));
     }
 
+    // Bevy's spawn_batch builds each bundle from an iterator during the measurement; this case reads them from an array.
+    [Benchmark]
+    public void SpawnBatch() => _world.SpawnBatch<Particle>(_bundles, _entities);
+
     [Benchmark]
     public void Despawn()
     {
@@ -40,7 +53,7 @@ public class EntityPopulationBenchmarks
             _world.Despawn(entity);
     }
 
-    [IterationCleanup(Target = nameof(Spawn))]
+    [IterationCleanup(Targets = [nameof(Spawn), nameof(SpawnBatch)])]
     public void RequireSpawned()
     {
         try { MatrixPopulation.RequireParticles(_world, _entities); }

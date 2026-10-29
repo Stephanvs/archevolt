@@ -211,6 +211,56 @@ public sealed class CommandTests
                 Assert.Equal(producer * 1000 + i, world.Get<Position>(handles[producer][i]).Value);
     }
 
+    [Fact]
+    public void Parallel_producers_claim_free_slots_before_fresh_ones_and_discarded_claims_return_them()
+    {
+        using var world = new WorldBuilder().AddBundle<Particle>().UseParallelExecution(4).Reserve(commandBytesPerProducer: 4096).Build();
+        var freed = new Entity[40];
+        for (int i = 0; i < freed.Length; i++)
+            freed[i] = world.Spawn(new Particle(new Position(-1)));
+        Entity kept = world.Spawn(new Particle(new Position(-2)));
+        foreach (Entity entity in freed)
+            Assert.True(world.Despawn(entity));
+
+        var handles = new Entity[4][];
+        bool fail = true;
+        var systems = new SystemDescriptor[4];
+        for (int producer = 0; producer < systems.Length; producer++)
+        {
+            int slot = producer;
+            handles[slot] = new Entity[25];
+            ActionBody spawn = (_, commands, _) =>
+            {
+                for (int i = 0; i < handles[slot].Length; i++)
+                    handles[slot][i] = commands.Spawn(new Particle(new Position(slot * 1000 + i)));
+                if (fail && slot == 0)
+                    throw new ArithmeticException("producer failure");
+            };
+            systems[slot] = SystemDescriptor.Create($"producer-{slot}", b => new CommandBody(b, spawn)).Commands().Build();
+        }
+        using var schedule = BoundSchedule.Bind(world, systems);
+        Assert.Throws<AggregateException>(() => schedule.Run(TestContext.Current.CancellationToken));
+        // A failure skips producers that have not started, so the number of discarded claims varies.
+        var discarded = handles.SelectMany(h => h).Where(e => !e.IsNull).ToArray();
+        Assert.Equal(discarded.Length, discarded.Distinct().Count());
+        Assert.Equal(Math.Min(discarded.Length, freed.Length), discarded.Count(e => e.Index < freed.Length));
+        Assert.All(discarded, e => Assert.False(world.Contains(e)));
+
+        fail = false;
+        schedule.Reset();
+        schedule.Run(TestContext.Current.CancellationToken);
+        var spawned = handles.SelectMany(h => h).ToArray();
+        Assert.Empty(spawned.Intersect(discarded));
+        Assert.Equal(Enumerable.Range(0, 101).Where(i => i != kept.Index), spawned.Select(e => e.Index).Order());
+        for (int producer = 0; producer < handles.Length; producer++)
+            for (int i = 0; i < handles[producer].Length; i++)
+                Assert.Equal(producer * 1000 + i, world.Get<Position>(handles[producer][i]).Value);
+        Assert.Equal(-2, world.Get<Position>(kept).Value);
+        Entity idle = world.Spawn(new Particle(new Position(5)));
+        Assert.DoesNotContain(idle.Index, spawned.Select(e => e.Index));
+        Assert.Equal(5, world.Get<Position>(idle).Value);
+    }
+
     private static int Count(QueryCursor cursor)
     {
         int result = 0;

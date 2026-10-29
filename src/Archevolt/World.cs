@@ -98,6 +98,54 @@ public sealed partial class World : IDisposable
         }
     }
 
+    // Spawns bundles[i] as entities[i] with one reservation and one table growth for the whole batch.
+    // If any bundle fails to write, no entity from the batch is spawned and every handle is cleared.
+    public void SpawnBatch<TBundle>(ReadOnlySpan<TBundle> bundles, Span<Entity> entities) where TBundle : unmanaged, IBundle<TBundle>
+    {
+        RequireIdle();
+        if (entities.Length != bundles.Length)
+            throw new ArgumentException("Provide one entity slot per bundle.", nameof(entities));
+        var binding = GetBundle<TBundle>();
+        if (bundles.IsEmpty)
+            return;
+        var archetype = binding.Archetype;
+        var table = archetype.Table;
+        byte[]? rented = null;
+        Span<byte> payload = binding.Descriptor.PayloadBytes <= 1024
+            ? stackalloc byte[binding.Descriptor.PayloadBytes]
+            : (rented = ArrayPool<byte>.Shared.Rent(binding.Descriptor.PayloadBytes)).AsSpan(0, binding.Descriptor.PayloadBytes);
+        ulong tick = NextTick();
+        Entities.Reserve(Id, entities);
+        int first = table.Count;
+        try
+        {
+            table.Reserve(bundles.Length);
+            for (int i = 0; i < bundles.Length; i++)
+            {
+                var writer = new BundleWriter(binding.Descriptor, payload);
+                TBundle.Write(in bundles[i], ref writer);
+                writer.Complete();
+                int row = table.Append(new EntityKey(entities[i].Index, entities[i].Generation));
+                WriteBundle(binding, payload, archetype, row, null, tick);
+            }
+        }
+        catch
+        {
+            table.Count = first;
+            foreach (Entity entity in entities)
+                Entities.Release(entity.Index);
+            entities.Clear();
+            throw;
+        }
+        finally
+        {
+            if (rented is not null)
+                ArrayPool<byte>.Shared.Return(rented);
+        }
+        for (int i = 0; i < entities.Length; i++)
+            Entities.Materialize(entities[i], archetype.Index, first + i);
+    }
+
     public void InsertBundle<TBundle>(Entity entity, in TBundle bundle) where TBundle : unmanaged, IBundle<TBundle>
     {
         RequireIdle();
@@ -218,7 +266,11 @@ public sealed partial class World : IDisposable
         _running = true;
     }
 
-    internal void ExitRun() => _running = false;
+    internal void ExitRun()
+    {
+        Entities.Flush();
+        _running = false;
+    }
     internal bool IsRunning => _running && !_disposed;
     internal WorkerPool Workers
     {

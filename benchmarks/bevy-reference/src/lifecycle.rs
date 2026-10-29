@@ -49,7 +49,7 @@ pub fn spawn(world: &mut World, entities: &mut Vec<Entity>, count: usize) {
     }
 }
 
-/// Archevolt has no batch spawn until ROADMAP step 5; its `Spawn` case is the batch baseline.
+/// The counterpart of Archevolt's `SpawnBatch`, which reads prepared bundles from an array.
 pub fn spawn_batch(world: &mut World, entities: &mut Vec<Entity>, count: usize) {
     entities.extend(world.spawn_batch((0..count).map(particle)));
 }

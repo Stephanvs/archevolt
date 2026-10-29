@@ -77,7 +77,7 @@ public readonly ref struct Commands
         var writer = new BundleWriter(binding.Descriptor, buffer.Prepare(binding.Descriptor.PayloadBytes));
         TBundle.Write(in bundle, ref writer);
         writer.Complete();
-        Entity entity = _owner.World.Entities.Reserve(_owner.World.Id);
+        Entity entity = _owner.World.Entities.ReserveConcurrent(_owner.World.Id);
         buffer.Commit(CommandKind.Spawn, entity, binding.Descriptor.TypeKey, binding.Descriptor.PayloadBytes);
         return entity;
     }
@@ -149,6 +149,7 @@ public sealed partial class World
 
     internal void FlushCommands(SystemInstance[] instances, IReadOnlyList<int> nodeOrder, ulong tick)
     {
+        Entities.Flush();
         for (int ordinal = 0; ordinal < nodeOrder.Count; ordinal++)
         {
             var instance = instances[nodeOrder[ordinal]];
@@ -171,6 +172,7 @@ public sealed partial class World
 
     internal void DiscardCommands(SystemInstance[] instances, IReadOnlyList<int> nodeOrder)
     {
+        Entities.Flush();
         for (int ordinal = 0; ordinal < nodeOrder.Count; ordinal++)
         {
             var buffer = instances[nodeOrder[ordinal]].Commands;
