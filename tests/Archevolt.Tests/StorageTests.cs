@@ -359,6 +359,66 @@ public sealed class StorageTests
         Assert.Throws<ArgumentException>(() => world.SpawnBatch<Fragile>([new(new(1), new(1))], new Entity[2]));
     }
 
+    private readonly record struct Partial(Position Position, Velocity Velocity) : IBundle<Partial>
+    {
+        public static BundleDescriptor Descriptor { get; } = BundleDescriptor.Create<Partial>(
+            ComponentDescriptor.Of<Position>(tracked: true), ComponentDescriptor.Of<Velocity>());
+        public static void Write(in Partial value, ref BundleWriter writer) => writer.Put(value.Position);
+    }
+
+    [Fact]
+    public void Spawn_that_fails_partway_leaves_no_row_or_reservation()
+    {
+        using var world = new WorldBuilder().AddBundle<Fragile>().AddBundle<Partial>().Build();
+        Entity survivor = world.Spawn(new Fragile(new Position(7), new Velocity(7)));
+
+        Assert.Throws<ArgumentException>(() => world.Spawn(new Fragile(new Position(1), new Velocity(-1))));
+        Assert.Throws<InvalidOperationException>(() => world.Spawn(new Partial(new Position(2), new Velocity(2))));
+
+        var seen = new List<int>();
+        using var all = Collect(world, QueryShape.Create("all").Read<Position>(0).Build(), seen);
+        all.Run(TestContext.Current.CancellationToken);
+        Assert.Equal([7], seen);
+        Assert.Equal(7, world.Get<Position>(survivor).Value);
+
+        Entity next = world.Spawn(new Fragile(new Position(3), new Velocity(3)));
+        Assert.Equal(1, next.Index);
+        Assert.Equal(3u, next.Generation);
+        Assert.Equal(3, world.Get<Position>(next).Value);
+        Assert.Equal(3, world.Get<Velocity>(next).Value);
+    }
+
+    private readonly record struct Reentrant(Position Position) : IBundle<Reentrant>
+    {
+        [ThreadStatic] internal static World? Target;
+        public static BundleDescriptor Descriptor { get; } = BundleDescriptor.Create<Reentrant>(ComponentDescriptor.Of<Position>());
+        public static void Write(in Reentrant value, ref BundleWriter writer)
+        {
+            writer.Put(value.Position);
+            Target?.Spawn(new Reentrant(new Position(-1)));
+        }
+    }
+
+    [Fact]
+    public void Bundle_write_cannot_spawn_into_the_world_it_is_writing_to()
+    {
+        using var world = new WorldBuilder().AddBundle<Reentrant>().Build();
+        Entity survivor = world.Spawn(new Reentrant(new Position(7)));
+        Reentrant.Target = world;
+        try
+        {
+            Assert.Throws<InvalidOperationException>(() => world.Spawn(new Reentrant(new Position(1))));
+            Assert.Throws<InvalidOperationException>(() => world.SpawnBatch<Reentrant>([new(new(2)), new(new(3))], new Entity[2]));
+        }
+        finally { Reentrant.Target = null; }
+
+        var seen = new List<int>();
+        using var all = Collect(world, QueryShape.Create("all").Read<Position>(0).Build(), seen);
+        all.Run(TestContext.Current.CancellationToken);
+        Assert.Equal([7], seen);
+        Assert.Equal(7, world.Get<Position>(survivor).Value);
+    }
+
     [Fact]
     public void Bundle_insertion_over_members_already_present_overwrites_them_without_moving_other_rows()
     {
