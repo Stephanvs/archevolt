@@ -41,7 +41,7 @@ public sealed class QueryState
                 foreach (int id in _excluded)
                     if (archetype.Has(id)) { matches = false; break; }
             if (matches)
-                Matches.Add(new QueryMatch(archetype, ComponentIds.Select(id => Array.BinarySearch(archetype.Ids, id)).ToArray()));
+                Matches.Add(new QueryMatch(archetype, ComponentIds.Select(id => archetype.Columns[id]).ToArray()));
         }
     }
 

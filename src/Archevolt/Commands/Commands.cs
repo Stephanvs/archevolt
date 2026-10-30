@@ -229,14 +229,17 @@ public sealed partial class World
         RequireAlive(entity);
         ref var entry = ref Entities.Entry(entity.Index);
         var source = Archetypes[entry.ArchetypeId];
-        if (!binding.Destinations.TryGetValue(source.Index, out var destination))
+        if (!binding.Destinations.TryGetValue(source.Index, out var edge))
         {
-            destination = GetArchetype(source.Ids.Union(binding.Ids).Order().ToArray());
-            binding.Destinations.Add(source.Index, destination);
+            var mask = (ulong[])source.Mask.Clone();
+            for (int word = 0; word < mask.Length; word++)
+                mask[word] |= binding.Archetype.Mask[word];
+            edge = source.EdgeTo(GetArchetype(mask));
+            binding.Destinations.Add(source.Index, edge);
         }
-        if (source != destination)
-            Move(entity, destination);
-        WriteBundle(binding, payload, destination, entry.Row, source, tick);
+        if (edge.Target != source)
+            Move(entity, edge);
+        WriteBundle(binding, payload, edge.Target, entry.Row, source, tick);
     }
 
     private static void WriteBundle(BundleBinding binding, ReadOnlySpan<byte> payload, Archetype target, int row, Archetype? source, ulong tick)
@@ -244,7 +247,7 @@ public sealed partial class World
         int offset = 0;
         for (int i = 0; i < binding.Ids.Length; i++)
         {
-            int column = Array.BinarySearch(target.Ids, binding.Ids[i]);
+            int column = target.Columns[binding.Ids[i]];
             var component = binding.Descriptor.Components[i];
             if (!component.IsTag)
                 payload.Slice(offset, component.Size).CopyTo(target.Table.ValueBytes(column, row));
@@ -263,11 +266,12 @@ public sealed partial class World
         bool added = !archetype.Has(id);
         if (added)
         {
-            archetype = Transition(archetype, id, add: true);
-            Move(entity, archetype);
+            var edge = Transition(archetype, id, add: true);
+            Move(entity, edge);
+            archetype = edge.Target;
         }
         var table = archetype.Table;
-        int column = Array.BinarySearch(archetype.Ids, id);
+        int column = archetype.Columns[id];
         if (!Registry.Components[id].IsTag)
             payload.CopyTo(table.ValueBytes(column, entry.Row));
         Stamp(table, column, entry.Row, tick, added);
