@@ -12,7 +12,7 @@ sidebar:
 | API | Behavior |
 | --- | --- |
 | `Spawn()` | Creates an entity with no components. |
-| `Spawn<TBundle>(in bundle)` | Creates an entity with the registered bundle's components. |
+| `Spawn<TBundle>(in bundle)` | Creates an entity with the registered bundle's components. If the bundle fails to write, no entity is created. |
 | `SpawnBatch<TBundle>(bundles, entities)` | Creates one entity per bundle and writes its handle to the same position in `entities`, which must have the same length. If any bundle fails to write, no entity is created and `entities` is cleared. |
 | `Insert<T>(entity, in value)` | Adds or replaces one registered component. |
 | `InsertBundle<TBundle>(entity, in bundle)` | Adds or replaces bundle members and preserves unrelated components. |

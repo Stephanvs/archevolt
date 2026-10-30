@@ -79,10 +79,15 @@ public interface IBundle<TSelf> where TSelf : unmanaged, IBundle<TSelf>
     static abstract void Write(in TSelf value, ref BundleWriter writer);
 }
 
+// Writes each member either into a staging payload or, when given a table, straight into the row's columns.
 public ref struct BundleWriter
 {
     private readonly BundleDescriptor _descriptor;
     private readonly Span<byte> _payload;
+    private readonly Table? _table;
+    private readonly int[]? _columns;
+    private readonly int _row;
+    private readonly ulong _tick;
     private int _member;
     private int _offset;
 
@@ -90,8 +95,16 @@ public ref struct BundleWriter
     {
         _descriptor = descriptor;
         _payload = payload;
-        _member = 0;
-        _offset = 0;
+    }
+
+    // columns[i] is the table column of descriptor member i. Tracked members get tick as their added and changed tick.
+    internal BundleWriter(BundleDescriptor descriptor, Table table, int[] columns, int row, ulong tick)
+    {
+        _descriptor = descriptor;
+        _table = table;
+        _columns = columns;
+        _row = row;
+        _tick = tick;
     }
 
     public void Put<T>(in T value) where T : unmanaged
@@ -101,15 +114,29 @@ public ref struct BundleWriter
         var component = _descriptor.Components[_member];
         if (component.TypeKey != TypeKey<T>.Value)
             throw new InvalidOperationException("The bundle member type differs from its descriptor.");
-        if (!component.IsTag)
-            MemoryMarshal.Write(_payload.Slice(_offset, component.Size), in value);
-        _offset += component.Size;
+        if (_table is null)
+        {
+            if (!component.IsTag)
+                MemoryMarshal.Write(_payload.Slice(_offset, component.Size), in value);
+            _offset += component.Size;
+        }
+        else
+        {
+            int column = _columns![_member];
+            if (!component.IsTag)
+                _table.Values<T>(column)[_row] = value;
+            if (component.Tracked)
+            {
+                _table.Added(column)[_row] = _tick;
+                _table.Changed(column)[_row] = _tick;
+            }
+        }
         _member++;
     }
 
     internal readonly void Complete()
     {
-        if (_member != _descriptor.Components.Length || _offset != _payload.Length)
+        if (_member != _descriptor.Components.Length || (_table is null && _offset != _payload.Length))
             throw new InvalidOperationException("The bundle did not write every declared member.");
     }
 }

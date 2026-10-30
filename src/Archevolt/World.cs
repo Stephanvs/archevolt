@@ -70,34 +70,34 @@ public sealed partial class World : IDisposable
         catch { Entities.Release(entity.Index); throw; }
     }
 
+    // Writes the bundle straight into its new row. If the write fails, the row and the reservation are removed.
+    // The world counts as running during the write, so a bundle's Write cannot reach the world and move the row.
     public Entity Spawn<TBundle>(in TBundle bundle) where TBundle : unmanaged, IBundle<TBundle>
     {
         RequireIdle();
-        if (!_bundles.TryGetValue(TypeKey<TBundle>.Value, out var binding))
-            throw new InvalidOperationException($"Bundle {typeof(TBundle).Name} is not registered.");
-        byte[]? rented = null;
-        Span<byte> payload = binding.Descriptor.PayloadBytes <= 1024
-            ? stackalloc byte[binding.Descriptor.PayloadBytes]
-            : (rented = ArrayPool<byte>.Shared.Rent(binding.Descriptor.PayloadBytes)).AsSpan(0, binding.Descriptor.PayloadBytes);
+        var binding = GetBundle<TBundle>();
+        var table = binding.Archetype.Table;
+        ulong tick = checked(_tick + 1);
+        Entity entity = Entities.Reserve(Id);
+        int row = table.Count;
+        _running = true;
         try
         {
-            var writer = new BundleWriter(binding.Descriptor, payload);
+            table.Append(new EntityKey(entity.Index, entity.Generation));
+            var writer = new BundleWriter(binding.Descriptor, table, binding.Columns, row, tick);
             TBundle.Write(in bundle, ref writer);
             writer.Complete();
-            ulong tick = NextTick();
-            Entity entity = Entities.Reserve(Id);
-            try
-            {
-                ApplySpawn(entity, binding, payload, tick);
-                return entity;
-            }
-            catch { Entities.Release(entity.Index); throw; }
         }
-        finally
+        catch
         {
-            if (rented is not null)
-                ArrayPool<byte>.Shared.Return(rented);
+            table.Count = row;
+            Entities.Release(entity.Index);
+            throw;
         }
+        finally { _running = false; }
+        _tick = tick;
+        Entities.Materialize(entity, binding.Archetype.Index, row);
+        return entity;
     }
 
     // Spawns bundles[i] as entities[i] with one reservation and one table growth for the whole batch.
@@ -112,23 +112,19 @@ public sealed partial class World : IDisposable
             return;
         var archetype = binding.Archetype;
         var table = archetype.Table;
-        byte[]? rented = null;
-        Span<byte> payload = binding.Descriptor.PayloadBytes <= 1024
-            ? stackalloc byte[binding.Descriptor.PayloadBytes]
-            : (rented = ArrayPool<byte>.Shared.Rent(binding.Descriptor.PayloadBytes)).AsSpan(0, binding.Descriptor.PayloadBytes);
         ulong tick = checked(_tick + 1);
         Entities.Reserve(Id, entities);
         int first = table.Count;
+        _running = true;
         try
         {
             table.Reserve(bundles.Length);
             for (int i = 0; i < bundles.Length; i++)
             {
-                var writer = new BundleWriter(binding.Descriptor, payload);
+                int row = table.Append(new EntityKey(entities[i].Index, entities[i].Generation));
+                var writer = new BundleWriter(binding.Descriptor, table, binding.Columns, row, tick);
                 TBundle.Write(in bundles[i], ref writer);
                 writer.Complete();
-                int row = table.Append(new EntityKey(entities[i].Index, entities[i].Generation));
-                WriteBundle(binding, payload, archetype, row, null, tick);
             }
         }
         catch
@@ -139,11 +135,7 @@ public sealed partial class World : IDisposable
             entities.Clear();
             throw;
         }
-        finally
-        {
-            if (rented is not null)
-                ArrayPool<byte>.Shared.Return(rented);
-        }
+        finally { _running = false; }
         _tick = tick;
         for (int i = 0; i < entities.Length; i++)
             Entities.Materialize(entities[i], archetype.Index, first + i);
@@ -350,6 +342,8 @@ public sealed partial class World : IDisposable
 
     internal sealed record BundleBinding(BundleDescriptor Descriptor, Archetype Archetype, int[] Ids)
     {
+        // Columns[i] is the bundle archetype's table column for member i, so an immediate spawn writes without lookup.
+        internal readonly int[] Columns = Array.ConvertAll(Ids, id => Archetype.Columns[id]);
         internal readonly Dictionary<int, ArchetypeEdge> Destinations = [];
     }
 }
