@@ -58,7 +58,7 @@ public sealed partial class ArchevoltGenerator
         : $"global::System.ReadOnlySpan<{term.Component.Type}>";
     static string ColumnName(TermModel term) => "_column" + term.Index;
     static string Element(TermModel term, string row) => term.Mode == "Write" && term.Component.Tracked
-        ? $"{ColumnName(term)}.Write({row})" : $"{ColumnName(term)}[{row}]";
+        ? $"{ColumnName(term)}.Values[{row}]" : $"{ColumnName(term)}[{row}]";
     static string BlockColumn(TermModel term) => term.Mode == "Read" ? $"block.Read<{term.Component.Type}>({term.Index})"
         : term.Component.Tracked ? $"block.Tracked<{term.Component.Type}>({term.Index}).WriteAll()" : $"block.Write<{term.Component.Type}>({term.Index})";
 
@@ -103,6 +103,8 @@ public sealed partial class ArchevoltGenerator
     const string Unsafe = "global::System.Runtime.CompilerServices.Unsafe";
     const string BaseOf = "global::System.Runtime.InteropServices.MemoryMarshal.GetReference";
     static bool Stamped(TermModel term) => term.Mode == "Write" && term.Component.Tracked;
+    // Change-filtered queries skip blocks whose table has no stamp since the last run. Only they pay for that check.
+    static string NextBlock(IEnumerable<TermModel> terms) => terms.Any(static term => term.Mode is "Added" or "Changed") ? "NextChanged" : "Next";
 
     // The enumerator holds a ref to each column's current element and the rows left in the block. MoveNext advances
     // every ref, then tests the row count, so the per-row path is one block that ends in the loop's branch. With a
@@ -127,7 +129,11 @@ public sealed partial class ArchevoltGenerator
             // An absent optional column binds a null ref and a stride of zero, so it stays null without a per-row branch.
             if (term.Mode == "Optional") text.Append("private int _stride").Append(term.Index).AppendLine(";");
             Ref(term.Component.Type, ColumnName(term), term.Mode == "Optional" ? "_stride" + term.Index : "1");
-            if (Stamped(term)) Ref("ulong", "_changed" + term.Index, "1");
+            if (Stamped(term))
+            {
+                Ref("ulong", "_changed" + term.Index, "1");
+                text.Append("private ref ulong _summary").Append(term.Index).AppendLine(";");
+            }
         }
         for (int i = 0; i < filters.Count; i++) Ref("ulong", "_ticks" + i, "1");
         text.Append("internal Enumerator(global::Archevolt.QueryCursor cursor) { this = default; _cursor = cursor;").Append(window ? " _window = cursor.Window;" : "").AppendLine(" }");
@@ -140,7 +146,7 @@ public sealed partial class ArchevoltGenerator
         // QueryCursor.Next never returns an empty block, and every column is sliced to block.Count rows. The refs step
         // one element past a column's end before NextBlock rebinds them. Columns live in native table slabs, so the GC
         // never sees those refs. Once the cursor is exhausted the refs are nulled, so Current cannot read past the end.
-        text.AppendLine(Inline).Append("private bool NextBlock()\n{\nvar cursor = _cursor;\nbool found = cursor.Next(out var block);\n_cursor = cursor;\nif (!found)\n{\n_remaining = 0;\n")
+        text.AppendLine(Inline).Append("private bool NextBlock()\n{\nvar cursor = _cursor;\nbool found = cursor.").Append(NextBlock(filters)).Append("(out var block);\n_cursor = cursor;\nif (!found)\n{\n_remaining = 0;\n")
             .Append(clear).AppendLine("return false;\n}\n_count = block.Count;\n_remaining = _count - 1;\n_entities = block.Entities;");
         foreach (var term in values)
         {
@@ -153,7 +159,8 @@ public sealed partial class ArchevoltGenerator
             else if (Stamped(term))
                 text.Append("var tracked").Append(term.Index).Append(" = block.Tracked<").Append(type).Append(">(").Append(term.Index).AppendLine(");")
                     .Append(column).Append(" = ref ").Append(BaseOf).Append("(tracked").Append(term.Index).AppendLine(".Values);")
-                    .Append("_changed").Append(term.Index).Append(" = ref ").Append(BaseOf).Append("(tracked").Append(term.Index).AppendLine(".Changed);");
+                    .Append("_changed").Append(term.Index).Append(" = ref ").Append(BaseOf).Append("(tracked").Append(term.Index).AppendLine(".Changed);")
+                    .Append("_summary").Append(term.Index).Append(" = ref tracked").Append(term.Index).AppendLine(".Summary;");
             else
                 text.Append(column).Append(" = ref ").Append(BaseOf).Append("(block.").Append(term.Mode).Append('<').Append(type).Append(">(").Append(term.Index).AppendLine("));");
         }
@@ -164,7 +171,9 @@ public sealed partial class ArchevoltGenerator
         foreach (var term in values)
         {
             arguments.Add("ref " + ColumnName(term));
-            if (Stamped(term)) arguments.Add("ref _changed" + term.Index);
+            if (!Stamped(term)) continue;
+            arguments.Add("ref _changed" + term.Index);
+            arguments.Add("ref _summary" + term.Index);
         }
         arguments.Add("_entities");
         arguments.Add("_count - 1 - _remaining");
@@ -185,8 +194,10 @@ public sealed partial class ArchevoltGenerator
             text.Append("readonly ").Append(reference).Append(term.Component.Type).Append(" _value").Append(term.Index).AppendLine(";");
             parameters.Add(reference + term.Component.Type + " value" + term.Index);
             if (!Stamped(term)) continue;
-            text.Append("readonly ref ulong _changed").Append(term.Index).AppendLine(";");
+            text.Append("readonly ref ulong _changed").Append(term.Index).AppendLine(";")
+                .Append("readonly ref ulong _summary").Append(term.Index).AppendLine(";");
             parameters.Add("ref ulong changed" + term.Index);
+            parameters.Add("ref ulong summary" + term.Index);
         }
         text.AppendLine("readonly global::Archevolt.EntityColumn _entities;\nreadonly int _row;");
         parameters.Add("global::Archevolt.EntityColumn entities");
@@ -200,7 +211,9 @@ public sealed partial class ArchevoltGenerator
         foreach (var term in values)
         {
             text.Append("_value").Append(term.Index).Append(" = ref value").Append(term.Index).AppendLine(";");
-            if (Stamped(term)) text.Append("_changed").Append(term.Index).Append(" = ref changed").Append(term.Index).AppendLine(";");
+            if (Stamped(term))
+                text.Append("_changed").Append(term.Index).Append(" = ref changed").Append(term.Index).AppendLine(";")
+                    .Append("_summary").Append(term.Index).Append(" = ref summary").Append(term.Index).AppendLine(";");
         }
         text.Append("_entities = entities;\n_row = row;\n").AppendLine(stamped ? "_now = now;\n}" : "}");
         text.AppendLine("public global::Archevolt.Entity Entity => _entities[_row];");
@@ -209,7 +222,9 @@ public sealed partial class ArchevoltGenerator
             if (term.Mode == "Optional") text.Append("public bool Has").Append(term.Alias).Append(" => !").Append(Unsafe).Append(".IsNullRef(in _value").Append(term.Index).AppendLine(");");
             text.Append("public ref ").Append(term.Mode == "Write" ? "" : "readonly ").Append(term.Component.Type).Append(' ').Append(Escape(term.Alias)).AppendLine("\n{\nget\n{");
             if (term.Mode == "Optional") text.Append("if (!Has").Append(term.Alias).AppendLine(") throw new global::System.InvalidOperationException(\"The optional component is absent.\");");
-            if (Stamped(term)) text.Append("_changed").Append(term.Index).AppendLine(" = _now;");
+            if (Stamped(term))
+                text.Append("_changed").Append(term.Index).AppendLine(" = _now;")
+                    .Append("if (_summary").Append(term.Index).Append(" < _now) _summary").Append(term.Index).AppendLine(" = _now;");
             text.Append("return ref _value").Append(term.Index).AppendLine(";\n}\n}");
         }
         text.AppendLine("}");

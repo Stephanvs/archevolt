@@ -26,7 +26,7 @@ param(
     [switch] $IncludeBevy,
     [ValidateNotNullOrEmpty()]
     [string[]] $Classes = @('EntityPopulationBenchmarks', 'EntityStorageBenchmarks', 'TraversalMatrixBenchmarks',
-        'FilterBenchmarks', 'ReferenceComparisonBenchmarks'),
+        'FilterBenchmarks', 'SparseChangeBenchmarks', 'ReferenceComparisonBenchmarks'),
     # Requires -IncludeBevy. Empty runs all Criterion bench targets in bevy-reference.
     [string[]] $Benches = @()
 )

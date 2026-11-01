@@ -63,6 +63,52 @@ public class FilterBenchmarks
     public void Cleanup() { _writer?.Dispose(); _changed?.Dispose(); _optional?.Dispose(); _world?.Dispose(); }
 }
 
+// Sixteen archetypes of tracked particles. Each update changes one archetype, then scans for changes.
+[MemoryDiagnoser, MinColumn, MaxColumn, MedianColumn]
+public class SparseChangeBenchmarks
+{
+    private World _world = null!;
+    private BoundSchedule _writer = null!;
+    private BoundSchedule _changed = null!;
+    [Params(1_000, 100_000)] public int Count { get; set; }
+    public long NativeBytes => _world.NativeBytes;
+    public long LastScanCount => _world.GetResource<ScanTotal>().Count;
+    public int ExpectedScanCount => Count / 16;
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _world = MatrixPopulation.Build();
+        _world.InsertResource(new ScanTotal());
+        for (int i = 0; i < Count; i++)
+        {
+            Entity entity = _world.Spawn(new TrackedParticle(new TrackedPosition(i % 97, 0, 0), new Velocity(1, 2, 3)));
+            int mask = i % 16;
+            if ((mask & 1) != 0) _world.Insert(entity, default(MatrixTag0));
+            if ((mask & 2) != 0) _world.Insert(entity, default(MatrixTag1));
+            if ((mask & 4) != 0) _world.Insert(entity, default(MatrixTag2));
+            if ((mask & 8) != 0) _world.Insert(entity, default(MatrixTag3));
+        }
+        _writer = SparseTrackedMovement.Create(_world);
+        _changed = ChangedScan.Create(_world);
+        _changed.Run();
+        SparseWriteThenChanged();
+        RequireScan();
+    }
+    [Benchmark] public void SparseWriteThenChanged() { _writer.Run(); _changed.Run(); }
+    public void RequireScan()
+    {
+        if (LastScanCount != ExpectedScanCount)
+            throw new InvalidOperationException($"Changed scan saw {LastScanCount} rows, not {ExpectedScanCount}.");
+    }
+    [GlobalCleanup]
+    public void Cleanup()
+    {
+        try { if (_world is not null) RequireScan(); }
+        finally { _writer?.Dispose(); _changed?.Dispose(); _world?.Dispose(); }
+    }
+}
+
 [MemoryDiagnoser, MinColumn, MaxColumn, MedianColumn]
 public class LifecycleBenchmarks
 {

@@ -22,6 +22,12 @@ A system observes stamps satisfying `lastSuccessfulRun < stamp <= thisRun`. A sk
 
 A generated writable row property stamps before returning its ref. `[Each]` stamps tracked writable refs before the method call. `[EachBlock]` stamps every row of a tracked writable span before the method call. `ResMut<T>.Value` follows the same rule.
 
+## Skipping unchanged archetypes
+
+Each archetype keeps the newest added and changed stamp of every tracked component. An `Added<T>` or `Changed<T>` filter skips an archetype whose newest stamp predates the system's last successful run, without reading its rows. A scan in a world where little changed therefore costs time in proportion to the archetypes that did change, not to every entity.
+
+Removing or moving an entity does not lower an archetype's newest stamp. The filter then reads that archetype's rows and finds no match, so the result is still exact. `[EachBlock]` is the exception: it applies the filter [per block](/guides/systems#eachblock), not per row.
+
 :::note
 Taking a writable ref counts as a change even when the method leaves the value unchanged. Use `Read<T>` or `scoped in` when you do not intend to write.
 :::

@@ -71,6 +71,17 @@ public static class PerformanceMeasurement
             }
             finally { filters.Cleanup(); }
         }
+        foreach (int count in new[] { 1_000, 100_000 })
+        {
+            var sparse = new SparseChangeBenchmarks { Count = count };
+            sparse.Setup();
+            try
+            {
+                Measure("sparse-write-then-changed", count, sparse.SparseWriteThenChanged, () => sparse.NativeBytes);
+                sparse.RequireScan();
+            }
+            finally { sparse.Cleanup(); }
+        }
         var lifecycle = new LifecycleBenchmarks();
         lifecycle.Setup();
         try

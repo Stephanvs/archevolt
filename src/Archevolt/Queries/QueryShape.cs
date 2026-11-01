@@ -81,4 +81,6 @@ public readonly struct TickWindow
     public ulong Now { get; }
     internal TickWindow(ulong last, ulong now) { _last = last; Now = now; }
     public bool Contains(ulong stamp) => stamp > _last && stamp <= Now;
+    // A summary at or before the last run rules out every stamp it covers, whatever Now is.
+    internal bool Precedes(ulong summary) => summary <= _last;
 }
