@@ -188,6 +188,54 @@ public sealed class QueryRuntimeTests
         Assert.Equal(1, changedCount);
     }
 
+    [Fact]
+    public void Change_filters_skip_tables_without_a_stamp_since_the_last_run()
+    {
+        using var world = CreateWorld();
+        Entity plain = world.Spawn(new Particle(new Position(1), new Velocity(1)));
+        Entity extra = world.Spawn(new Particle(new Position(2), new Velocity(1)));
+        world.Insert(extra, new Extra(0));
+        int changedBlocks = 0, addedBlocks = 0;
+        QueryAction countChanged = (run, query) => { changedBlocks = Blocks(query.Begin(run)); };
+        QueryAction countAdded = (run, query) => { addedBlocks = Blocks(query.Begin(run)); };
+        QueryAction touchExtra = (run, query) =>
+        {
+            var cursor = query.Begin(run);
+            while (cursor.Next(out var block))
+                _ = block.Tracked<Position>(0).At(0).Value;
+        };
+        using var changes = BoundSchedule.Bind(world, SystemDescriptor.Create("changed", b => new QueryBody(b, countChanged))
+            .Query(QueryShape.Create("changed").Read<Position>(0).Changed<Position>(0).Build()).Build());
+        using var additions = BoundSchedule.Bind(world, SystemDescriptor.Create("added", b => new QueryBody(b, countAdded))
+            .Query(QueryShape.Create("added").Read<Position>(0).Added<Position>(0).Build()).Build());
+        using var writer = BoundSchedule.Bind(world, SystemDescriptor.Create("write", b => new QueryBody(b, touchExtra))
+            .Query(QueryShape.Create("write").Write<Position>(0).With<Extra>().Build()).Build());
+        changes.Run(TestContext.Current.CancellationToken);
+        additions.Run(TestContext.Current.CancellationToken);
+        Assert.Equal(2, changedBlocks);
+        Assert.Equal(2, addedBlocks);
+        changes.Run(TestContext.Current.CancellationToken);
+        additions.Run(TestContext.Current.CancellationToken);
+        Assert.Equal(0, changedBlocks);
+        Assert.Equal(0, addedBlocks);
+        world.Insert(plain, new Position(3));
+        changes.Run(TestContext.Current.CancellationToken);
+        additions.Run(TestContext.Current.CancellationToken);
+        Assert.Equal(1, changedBlocks);
+        Assert.Equal(0, addedBlocks);
+        writer.Run(TestContext.Current.CancellationToken);
+        changes.Run(TestContext.Current.CancellationToken);
+        Assert.Equal(1, changedBlocks);
+    }
+
+    private static int Blocks(QueryCursor cursor)
+    {
+        int count = 0;
+        while (cursor.NextChanged(out _))
+            count++;
+        return count;
+    }
+
     private static int Count(QueryCursor cursor)
     {
         int count = 0;

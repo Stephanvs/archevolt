@@ -49,7 +49,8 @@ public static partial class MotionKernel
 
 - Use `scoped Span<T>` for writes and `scoped ReadOnlySpan<T>` for reads. Every span in one call has the same length.
 - An optional `scoped EntityColumn` parameter supplies identity. `entities[i]` returns the `Entity` for row `i`.
-- `With<T>` and `Without<T>` apply to the method. `Added<T>` and `Changed<T>` are rejected ([`AV011`](/reference/diagnostics)), because the method receives whole blocks. Use `[Each]` for change-filtered traversal.
+- `With<T>` and `Without<T>` apply to the method.
+- `Added<T>` and `Changed<T>` select whole blocks, not rows. The method receives a block when its archetype has an addition or change since the system last ran, and every row of that block comes with it, including rows that did not change. Use `[Each]` or a named query when the body must see only the changed rows.
 - A writable span of a [tracked component](/guides/change-tracking) stamps every row in the block as changed.
 
 ## Partitioning

@@ -29,6 +29,10 @@ public static partial class MatrixSystems
             position.Y + velocity.Y * delta, position.Z + velocity.Z * delta);
     }
 
+    // Writes the one archetype of sixteen that carries every tag, so a change scan has one table to read.
+    [Each, With<MatrixTag0>, With<MatrixTag1>, With<MatrixTag2>, With<MatrixTag3>]
+    public static void MarkSparse(scoped ref TrackedPosition position, scoped in Velocity velocity) => Mark(ref position, in velocity);
+
     [EcsSystem]
     public static void Changed(scoped ChangedPositions query, scoped ResMut<ScanTotal> total)
     {
@@ -83,6 +87,8 @@ public static partial class MatrixModule;
 
 [Schedule, Run(typeof(MatrixSystems), nameof(MatrixSystems.Mark), Order = 0)]
 public sealed partial class TrackedMovement;
+[Schedule, Run(typeof(MatrixSystems), nameof(MatrixSystems.MarkSparse), Order = 0)]
+public sealed partial class SparseTrackedMovement;
 [Schedule, Run(typeof(MatrixSystems), nameof(MatrixSystems.Changed), Order = 0)]
 public sealed partial class ChangedScan;
 [Schedule, Run(typeof(MatrixSystems), nameof(MatrixSystems.Optional), Order = 0)]

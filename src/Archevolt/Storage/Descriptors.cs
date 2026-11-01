@@ -126,10 +126,7 @@ public ref struct BundleWriter
             if (!component.IsTag)
                 _table.Values<T>(column)[_row] = value;
             if (component.Tracked)
-            {
-                _table.Added(column)[_row] = _tick;
-                _table.Changed(column)[_row] = _tick;
-            }
+                _table.Stamp(column, _row, _tick, added: true);
         }
         _member++;
     }

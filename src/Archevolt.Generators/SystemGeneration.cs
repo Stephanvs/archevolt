@@ -135,8 +135,6 @@ public sealed partial class ArchevoltGenerator
             components.AddRange(terms.Select(static term => term.Component));
             if (form == SystemForm.EachBlock)
             {
-                foreach (var term in terms.Where(static term => term.Mode is "Added" or "Changed"))
-                    Error(problems, method, "AV011", $"EachBlock receives whole blocks and cannot filter rows by {term.Mode}<{term.Component.Name}>; use [Each] until block change summaries land.");
                 if (!parameters.Any(static parameter => parameter.Kind == "Column")) Error(problems, method, "AV005", "EachBlock requires at least one component span.");
             }
             else if (!parameters.Any(static parameter => parameter.Kind == "Component")) Error(problems, method, "AV005", "Each requires at least one component ref.");
@@ -204,13 +202,21 @@ public sealed partial class ArchevoltGenerator
             text.Append("var ").Append(parameter.Name).Append(" = _message").Append(parameter.Index).Append(parameter.Kind == "MessageWriter" ? ".Write(run);" : ".Read(run);").AppendLine();
         if (model.Form == SystemForm.Each)
         {
-            text.AppendLine("var cursor = _query0.Begin(run);\nwhile (cursor.Next(out var block))\n{");
-            BindColumns(text, model.Queries[0], declarations: true);
+            // Every visited row stamps each tracked writable column, so the column summary is raised once per block, or
+            // once per passing row when a change filter may skip every row. TrackedColumn.Write would raise it per row.
+            var stamped = model.Queries[0].Where(Stamped).ToArray();
+            text.AppendLine("var cursor = _query0.Begin(run);");
+            if (stamped.Length != 0) text.AppendLine("ulong __now = run.Window.Now;");
             var filters = model.Queries[0].Where(static term => term.Mode is "Added" or "Changed").ToArray();
+            text.Append("while (cursor.").Append(NextBlock(filters)).AppendLine("(out var block))\n{");
+            BindColumns(text, model.Queries[0], declarations: true);
             for (int index = 0; index < filters.Length; index++) text.Append("var ticks").Append(index).Append(" = block.").Append(filters[index].Mode).Append('(').Append(filters[index].Index).AppendLine(");");
             if (model.Parameters.Any(static parameter => parameter.Kind == "Entity")) text.AppendLine("var entities = block.Entities;");
+            var raise = string.Concat(stamped.Select(static term => $"if ({ColumnName(term)}.Summary < __now) {ColumnName(term)}.Summary = __now;\n"));
+            if (filters.Length == 0) text.Append(raise);
             text.AppendLine("int count = block.Count;\nfor (int row = 0; row < count; row++)\n{");
-            if (filters.Length != 0) text.Append("if (!(").Append(string.Join(" && ", filters.Select((_, index) => $"cursor.Window.Contains(ticks{index}[row])"))).AppendLine(")) continue;");
+            if (filters.Length != 0) text.Append("if (!(").Append(string.Join(" && ", filters.Select((_, index) => $"cursor.Window.Contains(ticks{index}[row])"))).AppendLine(")) continue;").Append(raise);
+            foreach (var term in stamped) text.Append(ColumnName(term)).AppendLine(".Changed[row] = __now;");
             text.Append(Escape(method.Name)).Append('(').Append(string.Join(", ", model.Parameters.Select(parameter => parameter.Kind switch
             {
                 "Component" => parameter.RefKind + " " + Element(model.Queries[0].First(term => term.Index == parameter.Index), "row"),
@@ -219,7 +225,7 @@ public sealed partial class ArchevoltGenerator
         }
         else if (model.Form == SystemForm.EachBlock)
         {
-            text.AppendLine("var cursor = _query0.Begin(run);\nwhile (cursor.Next(out var block))\n{");
+            text.Append("var cursor = _query0.Begin(run);\nwhile (cursor.").Append(NextBlock(model.Queries[0])).AppendLine("(out var block))\n{");
             text.Append(TypeName(method.ContainingType)).Append('.').Append(Escape(method.Name)).Append('(').Append(string.Join(", ", model.Parameters.Select(parameter => parameter.Kind switch
             {
                 "Column" => BlockColumn(model.Queries[0].First(term => term.Index == parameter.Index)),

@@ -682,6 +682,55 @@ public sealed class GeneratorTests
     }
 
     [Fact]
+    public void EachBlock_change_filters_skip_blocks_whose_table_has_no_change_since_the_last_run()
+    {
+        var assembly = CompileAndLoad("""
+            using Archevolt;
+            using System;
+            [Component, TrackChanges] public readonly record struct Position(int Value);
+            [Component] public readonly struct Marked { }
+            [Bundle] public readonly partial record struct Particle(Position Position);
+            [Query, Write<Position>] public readonly ref partial struct Positions { }
+            public static partial class Systems
+            {
+                public static int Blocks, Rows, Target;
+                [Each, With<Marked>] public static void Nudge(scoped ref Position position) => position = new(position.Value + 1);
+                [EcsSystem] public static void Poke(scoped Positions positions) { foreach (var row in positions) if (row.Entity.Index == Target) row.Position = new(-1); }
+                [EachBlock, Changed<Position>] public static void Observe(scoped ReadOnlySpan<Position> positions) { Blocks++; Rows += positions.Length; }
+            }
+            [EcsModule, IncludeSystems(typeof(Systems)), IncludeBundle<Particle>, IncludeComponent<Marked>] public static partial class Game { }
+            [Schedule, Run(typeof(Systems), nameof(Systems.Nudge))] public partial class Nudger { }
+            [Schedule, Run(typeof(Systems), nameof(Systems.Poke))] public partial class Poker { }
+            [Schedule, Run(typeof(Systems), nameof(Systems.Observe))] public partial class Observer { }
+            public static class Acceptance
+            {
+                static int Observed(BoundSchedule observer) { Systems.Blocks = Systems.Rows = 0; observer.Run(); return Systems.Blocks * 1000 + Systems.Rows; }
+                public static int Run()
+                {
+                    using var world = new WorldBuilder().AddModule(Game.Module).Build();
+                    var entities = new Entity[100];
+                    for (int i = 0; i < entities.Length; i++) entities[i] = world.Spawn(new Particle(new(i)));
+                    for (int i = 0; i < 10; i++) world.Insert(entities[i], default(Marked));
+                    using var nudger = Nudger.Create(world); using var poker = Poker.Create(world); using var observer = Observer.Create(world);
+                    if (Observed(observer) != 2100) return -1;
+                    if (Observed(observer) != 0) return -2;
+                    nudger.Run();
+                    if (Observed(observer) != 1010) return -3;
+                    Systems.Target = entities[50].Index;
+                    poker.Run();
+                    if (Observed(observer) != 1090) return -4;
+                    // The moved row carries its change into a table whose summary predates the observer's last run.
+                    nudger.Run();
+                    world.Remove<Marked>(entities[0]);
+                    if (Observed(observer) != 2100) return -5;
+                    return Observed(observer);
+                }
+            }
+            """);
+        Execute(assembly).Should().Be(0);
+    }
+
+    [Fact]
     public void EachBlock_failure_preserves_partial_writes_and_marks_untouched_rows_changed()
     {
         var assembly = CompileAndLoad("""
@@ -1005,8 +1054,6 @@ public sealed class GeneratorTests
     [InlineData("public static partial class S { [EcsSystem] public static void A() {} } [Schedule, Stage(\"update\"), Run(typeof(S), \"A\")] public partial class Simulation { }", "AV007")]
     [InlineData("public static partial class S { [EcsSystem] public static void A() {} } [Schedule, Run(typeof(S), \"A\", Set = \"missing\")] public partial class Simulation { }", "AV007")]
     [InlineData("[Schedule, Stage(\"same\", Order = 0), Stage(\"same\", Order = 1)] public partial class Simulation { }", "AV007")]
-    [InlineData("[Component, TrackChanges] public readonly record struct P(int Value); public static partial class S { [EachBlock, Changed<P>] public static void Run(scoped System.Span<P> values) {} }", "AV011")]
-    [InlineData("[Component, TrackChanges] public readonly record struct P(int Value); public static partial class S { [EachBlock, Added<P>] public static void Run(scoped System.Span<P> values) {} }", "AV011")]
     [InlineData("[Component] public readonly record struct P(int Value); [Component] public readonly record struct Q(int Value); public static partial class S { [EachBlock] public static void Run(scoped System.Span<P> values, scoped ref Q other) {} }", "AV005")]
     [InlineData("[Component] public readonly record struct P(int Value); public static partial class S { [EachBlock] public static void Run(System.Span<P> values) {} }", "AV005")]
     [InlineData("[Component] public readonly record struct P(int Value); public static partial class S { [EachBlock] public static void Run(scoped System.Span<P> values, EntityColumn entities) {} }", "AV005")]

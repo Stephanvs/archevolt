@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+
 namespace Archevolt;
 
 public sealed class QueryState
@@ -7,6 +9,8 @@ public sealed class QueryState
     internal readonly int[] ComponentIds;
     private readonly int[] _required;
     private readonly int[] _excluded;
+    // Terms with an Added or Changed filter. QueryCursor.NextChanged skips a table whose summary rules out every row.
+    internal readonly QueryFilter[] Filters;
     internal readonly List<QueryMatch> Matches = [];
     private int _seen;
 
@@ -17,6 +21,7 @@ public sealed class QueryState
         ComponentIds = shape.Terms.Select(t => owner.World.Registry.Id(t.TypeKey)).ToArray();
         _required = shape.RequiredTypes.Select(owner.World.Registry.Id).ToArray();
         _excluded = shape.ExcludedTypes.Select(owner.World.Registry.Id).ToArray();
+        var filters = new List<QueryFilter>();
         for (int i = 0; i < shape.Terms.Length; i++)
         {
             var component = owner.World.Registry.Components[ComponentIds[i]];
@@ -25,7 +30,12 @@ public sealed class QueryState
                 throw new ArgumentException("Tags support membership and tick filters, not value access.");
             if (!component.Tracked && (access & (QueryAccess.Added | QueryAccess.Changed)) != 0)
                 throw new ArgumentException($"Change filter on untracked component {component.Name}.");
+            if ((access & QueryAccess.Added) != 0)
+                filters.Add(new QueryFilter(i, Added: true));
+            if ((access & QueryAccess.Changed) != 0)
+                filters.Add(new QueryFilter(i, Added: false));
         }
+        Filters = filters.ToArray();
     }
 
     internal void Refresh()
@@ -83,7 +93,22 @@ public sealed class QueryState
     }
 }
 
-internal sealed record QueryMatch(Archetype Archetype, int[] Columns);
+internal readonly record struct QueryFilter(int Term, bool Added);
+
+internal sealed record QueryMatch(Archetype Archetype, int[] Columns)
+{
+    internal bool RulesOut(QueryFilter[] filters, TickWindow window)
+    {
+        var table = Archetype.Table;
+        foreach (var filter in filters)
+        {
+            int column = Columns[filter.Term];
+            if (window.Precedes(filter.Added ? table.AddedSummary[column] : table.ChangedSummary[column]))
+                return true;
+        }
+        return false;
+    }
+}
 
 public ref struct QueryCursor
 {
@@ -132,6 +157,18 @@ public ref struct QueryCursor
             block = new BlockView(_state, match, (int)(start - tableStart), (int)(stop - start), _run);
             return true;
         }
+        return false;
+    }
+
+    // Like Next, but skips a block when a change-filtered term's summary rules out every row of its table. Generated
+    // code calls it only for queries with Added or Changed terms. It stays out of line, because the extra code inlined
+    // through Next exhausted the JIT's inlining budget in generated systems and left their row loops on the stack.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public bool NextChanged(out BlockView block)
+    {
+        while (Next(out block))
+            if (!block.RulesOut())
+                return true;
         return false;
     }
 }
@@ -186,7 +223,7 @@ public readonly ref struct BlockView
         if (!_table!.Components[column].Tracked)
             throw new InvalidOperationException("The component is not tracked.");
         return new TrackedColumn<T>(_table.Values<T>(column).Slice(_start, _count),
-            _table.Changed(column).Slice(_start, _count), _run.Window.Now);
+            _table.Changed(column).Slice(_start, _count), ref _table.ChangedSummary[column], _run.Window.Now);
     }
 
     public ReadOnlySpan<ulong> Added(int term) => Ticks(term, QueryAccess.Added);
@@ -230,6 +267,8 @@ public readonly ref struct BlockView
         return (kind == QueryAccess.Added ? _table!.Added(column) : _table!.Changed(column)).Slice(_start, _count);
     }
 
+    internal bool RulesOut() => _match!.RulesOut(_state!.Filters, _run.Window);
+
     private void Validate()
     {
         if (_state is null)
@@ -251,32 +290,64 @@ public readonly ref struct TrackedColumn<T> where T : unmanaged
 {
     private readonly Span<T> _values;
     private readonly Span<ulong> _changed;
+    private readonly ref ulong _summary;
     private readonly ulong _now;
-    internal TrackedColumn(Span<T> values, Span<ulong> changed, ulong now)
+    internal TrackedColumn(Span<T> values, Span<ulong> changed, ref ulong summary, ulong now)
     {
         _values = values;
         _changed = changed;
+        _summary = ref summary;
         _now = now;
     }
     public int Length => _values.Length;
     // Generated named-query rows stamp one row per access, so they take both spans and bounds-check once per block.
+    // A row stamped through Changed must also raise Summary to the stamp, or change filters can skip the row.
     public Span<T> Values => _values;
     public Span<ulong> Changed => _changed;
-    public ref T Write(int row) { _changed[row] = _now; return ref _values[row]; }
-    public Span<T> WriteAll() { _changed.Fill(_now); return _values; }
-    public StampedRef<T> At(int row) => new(ref _values[row], ref _changed[row], _now);
+    public ref ulong Summary => ref _summary;
+    public ref T Write(int row)
+    {
+        _changed[row] = _now;
+        Raise(ref _summary, _now);
+        return ref _values[row];
+    }
+    public Span<T> WriteAll()
+    {
+        _changed.Fill(_now);
+        Raise(ref _summary, _now);
+        return _values;
+    }
+    public StampedRef<T> At(int row) => new(ref _values[row], ref _changed[row], ref _summary, _now);
+
+    // Partitioned workers stamp one column of one table, so the summary is written only when it is behind. After the
+    // first row every worker only reads it, and its cache line is not passed between cores.
+    internal static void Raise(ref ulong summary, ulong now)
+    {
+        if (summary < now)
+            summary = now;
+    }
 }
 
 public readonly ref struct StampedRef<T> where T : unmanaged
 {
     private readonly ref T _value;
     private readonly ref ulong _changed;
+    private readonly ref ulong _summary;
     private readonly ulong _now;
-    internal StampedRef(ref T value, ref ulong changed, ulong now)
+    internal StampedRef(ref T value, ref ulong changed, ref ulong summary, ulong now)
     {
         _value = ref value;
         _changed = ref changed;
+        _summary = ref summary;
         _now = now;
     }
-    public ref T Value { get { _changed = _now; return ref _value; } }
+    public ref T Value
+    {
+        get
+        {
+            _changed = _now;
+            TrackedColumn<T>.Raise(ref _summary, _now);
+            return ref _value;
+        }
+    }
 }

@@ -30,6 +30,7 @@ Measured on an AMD Ryzen 9 5950X, Windows 11, .NET 11.0.0-rc.2, Release, Benchma
 - Structural churn allocates.
 - Small workloads can cost more to dispatch in parallel than to run serially.
 - Writable access stamps a change on [tracked components](/guides/change-tracking) even when the value is equal.
+- `Added<T>` and `Changed<T>` filters [skip archetypes](/guides/change-tracking#skipping-unchanged-archetypes) with no stamp since the system last ran, but read every row of an archetype that has one. Changes spread thinly across many archetypes cost more to scan than the same changes kept in a few.
 
 ## Reproduce
 

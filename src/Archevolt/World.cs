@@ -318,11 +318,8 @@ public sealed partial class World : IDisposable
 
     private static void Stamp(Table table, int column, int row, ulong tick, bool added)
     {
-        if (!table.Components[column].Tracked)
-            return;
-        if (added)
-            table.Added(column)[row] = tick;
-        table.Changed(column)[row] = tick;
+        if (table.Components[column].Tracked)
+            table.Stamp(column, row, tick, added);
     }
 
     public void Dispose()

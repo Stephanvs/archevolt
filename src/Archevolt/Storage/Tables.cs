@@ -11,6 +11,10 @@ internal sealed unsafe class Table : IDisposable
     private nint _slab;
     private nint _entities;
     internal readonly ComponentDescriptor[] Components;
+    // Per tracked column, a tick no older than any added or changed stamp in the column. A change-filtered query
+    // skips the table when the summary predates the system's last run. Rows leaving the table do not lower it.
+    internal readonly ulong[] AddedSummary;
+    internal readonly ulong[] ChangedSummary;
     internal int Count;
     internal int Capacity { get; private set; }
     internal long Bytes { get; private set; }
@@ -21,6 +25,8 @@ internal sealed unsafe class Table : IDisposable
         _values = new nint[components.Length];
         _added = new nint[components.Length];
         _changed = new nint[components.Length];
+        AddedSummary = new ulong[components.Length];
+        ChangedSummary = new ulong[components.Length];
     }
 
     internal Span<EntityKey> Entities => new((void*)_entities, Count);
@@ -79,10 +85,24 @@ internal sealed unsafe class Table : IDisposable
                 ValueBytes(i, source).CopyTo(target.ValueBytes(targetColumn, destination));
             if (Components[i].Tracked)
             {
-                target.Added(targetColumn)[destination] = Added(i)[source];
-                target.Changed(targetColumn)[destination] = Changed(i)[source];
+                ulong added = target.Added(targetColumn)[destination] = Added(i)[source];
+                ulong changed = target.Changed(targetColumn)[destination] = Changed(i)[source];
+                target.AddedSummary[targetColumn] = Math.Max(target.AddedSummary[targetColumn], added);
+                target.ChangedSummary[targetColumn] = Math.Max(target.ChangedSummary[targetColumn], changed);
             }
         }
+    }
+
+    // Stamps one row of a tracked column. tick is the newest tick in the world, so it raises both summaries.
+    internal void Stamp(int column, int row, ulong tick, bool added)
+    {
+        if (added)
+        {
+            Added(column)[row] = tick;
+            AddedSummary[column] = tick;
+        }
+        Changed(column)[row] = tick;
+        ChangedSummary[column] = tick;
     }
 
     internal void Trim()
@@ -139,6 +159,8 @@ internal sealed unsafe class Table : IDisposable
         Array.Clear(_values);
         Array.Clear(_added);
         Array.Clear(_changed);
+        Array.Clear(AddedSummary);
+        Array.Clear(ChangedSummary);
         Count = 0;
         Capacity = 0;
         Bytes = 0;
