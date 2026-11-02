@@ -127,14 +127,6 @@ public ref struct QueryCursor
 
     public TickWindow Window => _run.Window;
 
-    public QueryCursor Enumerate()
-    {
-        if (_state is null)
-            throw new InvalidOperationException("A default query has no active execution.");
-        _run.Require(_state.Owner);
-        return new QueryCursor(_state, _run);
-    }
-
     public bool Next(out BlockView block)
     {
         block = default;
