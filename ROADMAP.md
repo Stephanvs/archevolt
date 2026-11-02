@@ -202,7 +202,6 @@ Stale references outside this file:
 
 - `docs/concepts/architecture.mdx` links `.audit/design.md` as the runtime and generated-code contract. That file still describes chunks.
 - `benchmarks/benchmark.md` says Archevolt stores components in chunks. The file records a run at `414eb10`, when that was true.
-- `QueryCursor.Enumerate()` is public and has no callers.
 
 ## Amendments after step 2
 
