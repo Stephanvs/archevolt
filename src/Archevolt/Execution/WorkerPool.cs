@@ -81,7 +81,8 @@ internal sealed class WorkerPool : IDisposable
             if (count == 0 && ownerWork is null)
                 return;
 
-            var epoch = checked(_epoch + 1);
+            bool runParallel = _workers.Length != 0 && count != 0 && (count > 1 || ownerWork is not null);
+            var epoch = runParallel ? checked(_epoch + 1) : _epoch;
             if (_errors.Length < count)
                 Array.Resize(ref _errors, count);
             Array.Clear(_errors, 0, count);
@@ -90,10 +91,13 @@ internal sealed class WorkerPool : IDisposable
             _count = count;
             _next = -1;
             _failed = 0;
-            _pending = _workers.Length;
+            _pending = runParallel ? _workers.Length : 0;
             _state = PoolState.Running;
-            _epoch = epoch;
-            Monitor.PulseAll(_gate);
+            if (runParallel)
+            {
+                _epoch = epoch;
+                Monitor.PulseAll(_gate);
+            }
         }
 
         Exception? ownerFailure = null;
