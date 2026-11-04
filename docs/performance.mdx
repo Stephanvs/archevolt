@@ -1,47 +1,94 @@
 ---
 title: Performance
-description: Allocation behavior, benchmark results, and the limits of what they show.
+description: Allocation behavior, measured costs, and the limits of what the numbers show.
 sidebar:
   order: 6
 ---
 
-The measured fixed-capacity traversal paths allocate zero managed bytes, including the four-worker paths. At 100,000 entities, `[EachBlock]` with a plain indexed loop matches a handwritten baseline, and `[Each]` is about 16% slower. A named query runs at about the speed of `[Each]`.
+The measured warmed, fixed-capacity updates allocate zero managed bytes, with one worker or four. This page lists measured times for common operations on one machine. The [2 November benchmark checkpoint](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/results.md) contains every case available at that commit, the Bevy 0.20.0 counterparts, the per-class BenchmarkDotNet tables, and the reruns of noisy cases.
 
 :::note
-This is an initial baseline with visible timing variation. It is not a numeric regression policy or a claim of general superiority over another ECS.
+The numbers come from one machine and one run of the suite. They are not a regression limit, and they do not rank Archevolt against another ECS.
 :::
+
+Every table was measured on 2 November 2026, at commit `8029e7f`, on an AMD Ryzen 9 5950X with Windows 11 Pro, .NET 11.0.0-rc.3, a Release build, and BenchmarkDotNet 0.16.0-preview.2 with its default job. The machine was otherwise idle. Each value is the median of three process runs in microseconds, with the fastest and slowest run in brackets.
+
+That source tree matches release `v0.5.5`. Later code runs single-work-item batches on the owner thread without waking idle workers. The [4 November dispatch and partitioning study](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/query-partition-threshold.md) measures that change separately. The tables here retain the earlier checkpoint and do not measure the updated dispatch path.
 
 ## Dense movement at 100,000 entities
 
-All cases use the same `Position` and `Velocity` structs, initial values, and per-row arithmetic, with untracked components. The `Vector256` case writes that arithmetic with explicit SIMD. The handwritten baseline has no scheduler. Archevolt's numbers include schedule dispatch, resource access, lease checks, and query traversal.
+All cases use the same `Position` and `Velocity` structs, initial values, and per-row arithmetic, with untracked components. The `Vector256` case writes that arithmetic with explicit SIMD. The handwritten loop has no scheduler. Archevolt's numbers include schedule dispatch, resource access, lease checks, and query traversal.
 
-| Case | Median (µs) | Median (ns/entity) |
+| Case | Median µs [range] | ns per entity |
 | --- | ---: | ---: |
-| Handwritten | 84.51 | 0.845 |
-| Generated `[Each]` | 98.12 | 0.981 |
-| Generated `[EachBlock]`, indexed loop | 84.46 | 0.845 |
-| Generated `[EachBlock]`, `Vector256` | 20.62 | 0.206 |
-| Named query, `foreach` over rows | 84.59 | 0.846 |
+| Handwritten loop | 83.06 [82.94, 83.41] | 0.831 |
+| Generated `[Each]` | 94.63 [93.96, 94.65] | 0.946 |
+| Generated `[EachBlock]`, indexed loop | 83.06 [82.99, 83.17] | 0.831 |
+| Generated `[EachBlock]`, `Vector256` | 20.96 [20.91, 21.07] | 0.210 |
+| Named query, `foreach` over rows | 83.16 [82.48, 84.21] | 0.832 |
 
-Measured on an AMD Ryzen 9 5950X, Windows 11, .NET 11.0.0-rc.2, Release, BenchmarkDotNet 0.16.0-preview.2. Each value is the median of three separate process runs. The named-query row comes from a later run on .NET 11.0.0-rc.3, in which `[Each]` measured 98.44 µs.
+A named query's time depends on how the JIT lays out its loop in each process. Over the [traversal matrix](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/results.md#traversal-matrix), the same 100,000-entity named query measured about 82 µs in some processes and about 94 µs in others.
+
+## Parallel execution
+
+Partitioned `[Each]` and `[EachBlock]` systems split each table into row ranges across workers. Named queries run on one thread.
+
+| Entities | Workers | `[Each]` µs | `[EachBlock]`, indexed loop µs | `[EachBlock]`, `Vector256` µs |
+| ---: | ---: | ---: | ---: | ---: |
+| 1,000 | 1 | 1.062 [1.061, 1.067] | 0.946 [0.936, 0.950] | 0.227 [0.224, 0.236] |
+| 1,000 | 4 | 15.12 [15.03, 15.16] | 14.83 [14.75, 15.12] | 14.15 [13.91, 14.38] |
+| 100,000 | 1 | 94.69 [94.19, 94.92] | 82.82 [82.38, 84.48] | 20.94 [20.93, 21.74] |
+| 100,000 | 4 | 51.35 [47.38, 51.44] | 44.86 [44.42, 46.31] | 22.62 [22.53, 22.97] |
+
+In this checkpoint, at 1,000 entities, a four-worker update spent 14 to 16 µs, almost all of it dispatching work to the worker pool. The later dispatch change avoids waking workers for a single work item; it adds no row-count threshold for partitioned systems. Measure small worlds with one worker before enabling parallel execution. At 1,000,000 entities, four-worker times varied between processes by more than 100 µs. The [results](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/results.md#movement-by-size-and-worker-count) list them.
+
+## Entity operations
+
+Each case performs the operation once for every entity. For spawn and despawn, every measurement starts from a new world.
+
+| Operation | 1,000 entities µs | 100,000 entities µs |
+| --- | ---: | ---: |
+| `Spawn` of a two-component bundle | 27.25 [26.99, 28.15] | 3,804 [3,693, 3,999] |
+| `SpawnBatch` of the same bundles | 15.25 [15.15, 15.30] | 2,150 [2,133, 2,151] |
+| `Despawn`, in shuffled order | 24.70 [24.56, 24.77] | 5,798 [5,607, 6,009] |
+| `Get<T>`, in shuffled order | 5.731 [5.728, 5.825] | 1,669 [1,437, 2,967] |
+| Insert, then remove a tag | 87.00 [86.32, 89.90] | 8,776 [8,635, 8,811] |
+| Insert, then remove a 256-byte component | 95.93 [93.02, 96.03] | 9,571 [9,438, 9,609] |
+
+At 100,000 entities, `Despawn` and `Get<T>` vary by process. A process of a slow kind took 4.4 to 6.0 ms to despawn, and a fast one about 3.5 ms. `Get<T>` took 1.44 to 1.67 ms in most processes and about 3 ms in a few. Spawning grows the entity directory and table storage, so it allocates. `SpawnBatch` reserves storage for the whole batch first.
+
+## Change filters
+
+| Case | 1,000 entities µs | 100,000 entities µs |
+| --- | ---: | ---: |
+| Write a tracked component on every entity | 1.116 [1.109, 1.127] | 103.3 [97.62, 103.3] |
+| `Changed<T>` scan with nothing changed | 0.164 [0.161, 0.164] | 0.169 [0.163, 0.195] |
+| Write everything, then a `Changed<T>` scan | 2.010 [2.009, 2.017] | 187.1 [171.6, 204.2] |
+| Write one of 16 archetypes, then a `Changed<T>` scan | 0.616 [0.615, 0.634] | 10.88 [10.87, 11.02] |
+
+A `Changed<T>` scan with nothing changed takes about 0.16 µs at both sizes, because it [skips every archetype](/guides/change-tracking#skipping-unchanged-archetypes) without reading a row. A five-process rerun measured the tracked write at 95.84 µs and the write-then-scan case at 166.4 µs at 100,000 entities.
 
 ## Things that cost
 
-- Structural churn allocates.
-- Small workloads can cost more to dispatch in parallel than to run serially.
+- Structural churn moves rows between archetypes. An idle tag insert and remove costs about 87 ns per entity at 1,000 entities.
+- Small workloads can cost more to dispatch in parallel than to run serially, as the parallel table shows.
 - Writable access stamps a change on [tracked components](/guides/change-tracking) even when the value is equal.
-- `Added<T>` and `Changed<T>` filters [skip archetypes](/guides/change-tracking#skipping-unchanged-archetypes) with no stamp since the system last ran, but read every row of an archetype that has one. Changes spread thinly across many archetypes cost more to scan than the same changes kept in a few.
+- `Added<T>` and `Changed<T>` filters skip archetypes with no stamp since the system last ran, but read every row of an archetype that has one. Changes spread thinly across many archetypes cost more to scan than the same changes kept in a few.
+- The first command playback without preallocated command capacity allocated 160.12 KB for 1,000 tag round trips. With 65,536 initial command bytes, it allocated 232 B.
 
 ## Reproduce
 
 ```powershell
 dotnet run --project benchmarks/Archevolt.Benchmarks -c Release -- --quick
-dotnet run --project benchmarks/Archevolt.Benchmarks -c Release -- --filter "*MovementBenchmarks*" --job short
+./scripts/baseline.ps1
+./scripts/baseline.ps1 -IncludeBevy
 ./scripts/measure.ps1 -Mode All
 ```
+
+`--quick` runs a short movement measurement in one process. `baseline.ps1` runs the BenchmarkDotNet baseline cases with three process runs and writes their medians and ranges to `artifacts/baseline/`. `-IncludeBevy` also runs the Bevy counterparts, and `-Classes` selects other benchmark classes.
 
 `measure.ps1 -Mode All` runs the workload matrix, partition comparison, BenchmarkDotNet comparison, and JIT disassembly. Use `-Mode Matrix`, `Partition`, `Bdn`, or `Disassembly` to run one measurement. The script fails if any command fails or BenchmarkDotNet does not execute all comparison cases.
 
 `-Mode Partition -Runs 3` compares direct and partitioned queries across row counts and checks warmed managed allocations. Add `-BaselineAssembly <path>` to compare against a preserved benchmark assembly with the same benchmark code. `-RuntimeDefaults` uses default runtime compilation settings for the partition comparison. `-Output <directory>` selects where the script saves its evidence.
 
-The [v1 performance report](https://github.com/Stephanvs/archevolt/blob/main/.audit/performance-final.md) records the workload matrix, handwritten and Arch comparisons, allocations, native storage, generated code sizes, and JIT and AOT inspection. It predates table storage and .NET 11, so its numbers are not comparable with the table above.
+The [v1 performance report](https://github.com/Stephanvs/archevolt/blob/main/.audit/performance-final.md) records the workload matrix, generated code sizes, and JIT and AOT inspection from before table storage and .NET 11. Its numbers are not comparable with the tables above.

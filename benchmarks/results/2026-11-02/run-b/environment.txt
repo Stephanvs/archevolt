@@ -1,0 +1,10 @@
+UTC=20261102-225121
+Runs=3
+Quick=False
+IncludeBevy=False
+CPU=AMD Ryzen 9 5950X 16-Core Processor
+OS=Microsoft Windows 11 Pro 10.0.26300
+Head=8029e7f915e54261d6b66f63a0b3882d2a293017
+WorkingTree=## HEAD (no branch)
+DotnetSdk=11.0.100-rc.3.26522.148
+Configuration=Release

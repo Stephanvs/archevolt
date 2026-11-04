@@ -97,11 +97,13 @@ Keep a completed full run's result directory, including `summary.csv` and `envir
 
 The report compares the .NET measurements and retains the old Bevy medians and ranges as `Bevy reference; not rerun`. It leaves their after values and ratios empty. Those rows keep the original run's date and environment; the new run's summary contains only measurements made in that run. The script matches cases within each harness; use the case mapping above to compare .NET with the corresponding Bevy operation. It does not compute cross-language ratios.
 
-Reuse the reference while the Bevy version, workload, Rust toolchain, hardware, and relevant machine settings remain unchanged. Refresh it when those conditions change or when a controlled comparison needs to measure machine drift. A saved reference cannot establish today's machine drift. The tracked results below and the newer [step 3 results](step3-table-storage.md#against-bevy-after-step-3) also retain Bevy 0.20.0 timings if the raw artifacts are unavailable.
+Reuse the reference while the Bevy version, workload, Rust toolchain, hardware, and relevant machine settings remain unchanged. Refresh it when those conditions change or when a controlled comparison needs to measure machine drift. A saved reference cannot establish today's machine drift. [results.md](results.md) retains the latest Bevy 0.20.0 timings if the raw artifacts are unavailable. The results below and the [step 3 results](step3-table-storage.md#against-bevy-after-step-3) retain older ones, built with rustc 1.98.0.
 
 BenchmarkDotNet finds the project to build by searching the directory that holds `Archevolt.slnx`. It stops when two files named `Archevolt.Benchmarks.csproj` exist below that directory, for example in a copy of the repository under `artifacts/`. Run the script from a clean clone in that case.
 
 ## Results
+
+These are the step 0 numbers, recorded before steps 1 to 8. The full-suite checkpoint measured on 2 November 2026 at `8029e7f` with rustc 1.99.1 is in [results.md](results.md). The [4 November study](query-partition-threshold.md) measures the later dispatch change.
 
 Recorded 2026-10-22 by `./scripts/baseline.ps1` with three runs, from a clean clone at `d289549` plus the step 0 changes.
 

@@ -50,7 +50,7 @@ BenchmarkDotNet switches Windows to the High performance power plan while it run
 
 `cargo bench` compiles for baseline x86-64, which includes SSE2 but not AVX2. BenchmarkDotNet reports RyuJIT generating x86-64-v3 code, which includes AVX2. `-C target-cpu=native` gives the Rust build the host's instruction set. On the test machine, `-C target-cpu=x86-64-v3` matched the `native` results within run-to-run variation.
 
-The target changes the code LLVM generates for `handwritten` and `bevy_for_each`, as the assembly from `cargo rustc --release --lib -- --emit asm` shows. With the baseline target, both loops handle four entities per iteration and assemble them from scalar loads and SSE2 shuffles; both took longer than `bevy_for_loop`. With `native`, both loops handle eight entities per iteration with contiguous 256-bit loads and stores, and `bevy_for_each` writes the eight change ticks with one store; both ran 4.0 to 4.7 times faster than with the baseline target.
+The target changes the code LLVM generates for `handwritten` and `bevy_for_each`, as the assembly from `cargo rustc --release --lib -- --emit asm` shows. With the baseline target, both loops handle four entities per iteration and assemble them from scalar loads and SSE2 shuffles; both took longer than `bevy_for_loop`. With `native`, both loops handle eight entities per iteration with contiguous 256-bit loads and stores, and `bevy_for_each` writes the eight change ticks with one store. `handwritten` took 99.4 to 99.8 µs with the baseline target and 21.2 to 21.9 µs with `native`. `bevy_for_each` took 105.6 to 115.1 µs and 25.3 to 26.5 µs.
 
 `bevy_for_loop` compiles to per-entity code with both the baseline and `native` targets, and measured 73.646 to 81.938 µs across all three targets.
 
@@ -64,6 +64,8 @@ The .NET JIT always compiles for the host CPU, so the .NET side has no equivalen
 - BenchmarkDotNet reports the arithmetic mean of its iterations. Criterion reports the slope of a linear regression of time against iteration count, with a 95% confidence interval. In the second x86-64 run, criterion's slope and mean differed by up to 7%.
 
 ## Results
+
+The results below are from 21 October 2026, before steps 1 to 8. [results.md](results.md#movement-100000-entities-one-thread) has the 2 November checkpoint for these cases and for `GeneratedBlock` and `GeneratedBlockVector`. It also records that `bevy_for_loop` takes 70.13 µs with rustc 1.98.0 and 115.0 to 117.7 µs with rustc 1.99.1. The [4 November study](query-partition-threshold.md) measures the later dispatch change.
 
 The runs took place on 21 October 2026 at commit `414eb10`, with the `bevy-reference` crate added:
 
