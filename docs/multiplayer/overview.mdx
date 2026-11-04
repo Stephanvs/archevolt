@@ -1,0 +1,55 @@
+---
+title: Plan a multiplayer game
+description: Choose a synchronization model and see how a network transport connects to Archevolt worlds.
+sidebar:
+  order: 1
+---
+
+Archevolt runs on both sides of a multiplayer game. A dedicated server and its clients can share one simulation assembly: the same components, systems, and schedules. Each side adds its own systems and its own host loop.
+
+This section builds a small server-authoritative game in five steps. Every step is one page, and the code on each page builds on the previous one.
+
+1. [Share the simulation](/multiplayer/shared-simulation): declare the components, inputs, and systems both sides use.
+2. [Run the server](/multiplayer/server): host one world per room and feed player input into it.
+3. [Replicate state](/multiplayer/replication): turn changes into packets with change tracking and removal records.
+4. [Apply state on the client](/multiplayer/client): mirror server entities into a client world.
+5. [Prediction and limits](/multiplayer/prediction-and-limits): hide latency for the local player, and know what Archevolt does not provide.
+
+## Choose server authority
+
+The server owns the true game state. Clients send inputs, and the server sends back what changed.
+
+| Model | Fit with Archevolt |
+| --- | --- |
+| Server-authoritative replication | Recommended. Change tracking finds what to send, and removal records find what to delete. |
+| Client prediction with rollback | Partial. Archevolt has no world snapshot or restore. Predict the local player's entity instead. See [Prediction and limits](/multiplayer/prediction-and-limits). |
+| Deterministic lockstep | Not recommended. Parallel spawns and floating-point math are not guaranteed to match across machines. |
+
+Do your performance work on the server. It simulates every player in every room, so its tick cost grows with rooms and entities. A client simulates one view and is usually limited by rendering.
+
+## Where the network connects
+
+The network stays outside the world. Your transport runs with ordinary async code and touches the world only between runs, on the thread that owns the world. This is the pattern from [Async work and I/O](/guides/async-and-io), applied to sockets.
+
+```text
+socket (async) ──► inbound queue
+                       │ drained on the owner thread, between ticks
+                       ▼
+        world.SendMessage(in PlayerInput), world.Spawn, world.Insert
+                       ▼
+               simulation.Run()
+                       ▼
+        replication systems write changes into a managed resource
+                       ▼
+        host sends the packet after Run() returns ──► socket (async)
+```
+
+| Archevolt feature | Role in networking |
+| --- | --- |
+| [Messages](/guides/messages) | Deliver player input to systems. |
+| [Change tracking](/guides/change-tracking) | Select only the components that changed since the last packet. |
+| [Removal records](/guides/messages#removal-records) | Report despawned entities. |
+| [Managed resources](/guides/resources) | Hold packet buffers that replication systems write into. |
+| Unmanaged components | Copy to and from packet bytes without a serializer. |
+
+Archevolt does not include a transport, a wire protocol, or connection management. Bring your own, such as UDP with a reliability layer, WebSockets, or a networking library.

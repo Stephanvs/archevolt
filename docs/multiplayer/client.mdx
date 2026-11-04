@@ -1,0 +1,93 @@
+---
+title: Apply state on the client
+description: Mirror server entities into a client world and keep a lookup from network identity to local entity.
+sidebar:
+  order: 5
+---
+
+The client keeps its own world. It applies each packet between frames, then runs its own schedules, such as rendering and interpolation.
+
+## The client world
+
+```csharp
+using Archevolt;
+using Game.Shared;
+
+namespace Game.Client;
+
+[EcsModule, IncludeModule(typeof(SharedEcs))]
+public static partial class ClientEcs;
+
+public sealed class ClientWorld : IDisposable
+{
+    private readonly World _world = new WorldBuilder().AddModule(ClientEcs.Module).Build();
+    private readonly Dictionary<NetId, Entity> _entities = [];
+
+    public World World => _world;
+
+    public void Apply(ReadOnlySpan<byte> packet)
+    {
+        var reader = new PacketReader(packet);
+        while (reader.TryReadHeader(out var kind, out var id))
+        {
+            switch (kind)
+            {
+                case RecordKind.Transform:
+                    Insert(id, reader.Read<Transform>());
+                    break;
+                case RecordKind.Shape:
+                    Insert(id, reader.Read<Shape>());
+                    break;
+                case RecordKind.Despawn:
+                    if (_entities.Remove(id, out var entity))
+                        _world.Despawn(entity);
+                    break;
+                default:
+                    throw new InvalidDataException($"Unknown record kind {kind}.");
+            }
+        }
+    }
+
+    private void Insert<T>(NetId id, in T value) where T : unmanaged
+    {
+        if (!_entities.TryGetValue(id, out var entity))
+        {
+            entity = _world.Spawn();
+            _world.Insert(entity, id);
+            _entities.Add(id, entity);
+        }
+        _world.Insert(entity, value);
+    }
+
+    public void Dispose() => _world.Dispose();
+}
+```
+
+- The first record for an unknown `NetId` spawns a local entity and stores the `NetId` on it. Client systems can read `NetId` to tell which server entity a row mirrors.
+- A despawn for an unknown `NetId` is ignored. It refers to an entity that was created and destroyed before the client heard about it.
+- `world.Insert` stamps tracked components as changed, so client systems can react with `Changed<Transform>`, for example to start an effect when a ship appears.
+
+## The frame loop
+
+Packets arrive on your transport's threads. Queue them, and apply them on the thread that built the client world:
+
+```csharp
+// Filled by the transport: Channel<byte[]> inbound = Channel.CreateUnbounded<byte[]>();
+while (inbound.Reader.TryRead(out byte[]? packet))
+    client.Apply(packet);
+presentation.Run();
+```
+
+The same rules as [Async work and I/O](/guides/async-and-io) apply. Never block on the socket in the frame loop, and never touch the world after an `await`.
+
+## Render between updates
+
+The server sends state at its tick rate, which is usually slower than the display. Movement looks smooth when the client draws entities between the last two states it received.
+
+Keep a client-only component, such as `PreviousTransform`, and store the old value in it before applying a new `Transform`. A presentation system then blends the two by the time since the last packet. The server never sends client-only components, so add them in `ClientEcs` and leave them out of the shared assembly.
+
+## Sending input
+
+The client reads its local controls each frame and sends them to the server as `PlayerInput`. The server decides the result. Without [prediction](/multiplayer/prediction-and-limits), the player's own ship responds one round trip later.
+
+Next, [prediction and limits](/multiplayer/prediction-and-limits).

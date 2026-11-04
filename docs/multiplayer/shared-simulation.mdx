@@ -1,0 +1,125 @@
+---
+title: Share the simulation
+description: Put the components, inputs, and systems that the server and client both use into one assembly.
+sidebar:
+  order: 2
+---
+
+Put game rules in a shared class library that the server and client both reference. Each side then includes the shared module and adds its own systems. This page declares that library.
+
+## Components
+
+```csharp
+using System.Numerics;
+using Archevolt;
+
+namespace Game.Shared;
+
+[Component, TrackChanges]
+public readonly record struct Transform(Vector2 Position, float Rotation);
+
+[Component, TrackChanges]
+public readonly record struct Shape(ShapeKind Kind, float Radius);
+
+public enum ShapeKind : byte { Ship, Rock, Bullet }
+
+[Component]
+public readonly record struct ShipControls(float Turn, bool Thrust);
+
+[Component]
+public readonly record struct Pilot(int Player);
+
+[Component]
+public readonly struct Replicated;
+
+[Bundle]
+public readonly partial record struct ShipBundle(Transform Transform, Shape Shape,
+    ShipControls Controls, Pilot Pilot, Replicated Replicated);
+```
+
+- `[TrackChanges]` marks the components the server sends. [Replication](/multiplayer/replication) uses their change stamps to send only what changed.
+- `Replicated` is a tag that marks the entities clients should see. Server-only entities, such as spawn points, leave it off.
+- `Pilot` links a ship to the player who controls it.
+
+## Network identity
+
+An `Entity` handle is local to its world. It holds the world's identity, and you cannot create one for a chosen slot. Send a `NetId` instead, built from the server entity's index and generation:
+
+```csharp
+[Component]
+public readonly record struct NetId(int Index, uint Generation)
+{
+    public static NetId Of(Entity entity) => new(entity.Index, entity.Generation);
+}
+```
+
+The generation changes when the server reuses a slot, so a `NetId` never refers to two different entities. The client stores it as a component on its own entity and keeps a lookup from `NetId` to client entity.
+
+## Player input
+
+Input arrives as a [message](/guides/messages). A system matches each message to the player's ship:
+
+```csharp
+[Message]
+public readonly record struct PlayerInput(int Player, float Turn, bool Thrust);
+
+[Resource]
+public readonly record struct FrameTime(float DeltaSeconds);
+
+[Query, Read<Pilot>, Write<ShipControls>]
+public readonly ref partial struct Pilots;
+
+public static partial class Steering
+{
+    [EcsSystem]
+    public static void ApplyInput(scoped MessageReader<PlayerInput> inputs, scoped Pilots pilots)
+    {
+        foreach (ref readonly var input in inputs)
+            foreach (var row in pilots)
+                if (row.Pilot.Player == input.Player)
+                    row.ShipControls = new ShipControls(Math.Clamp(input.Turn, -1, 1), input.Thrust);
+    }
+
+    [Each]
+    public static void Fly(scoped ref Transform transform, scoped in ShipControls controls, scoped Res<FrameTime> time) =>
+        transform = ShipPhysics.Step(transform, controls, time.Value.DeltaSeconds);
+}
+```
+
+`ApplyInput` clamps `Turn` because client input is untrusted. Validate every value that arrives from the network before a system acts on it.
+
+## Keep rules in plain functions
+
+`Fly` delegates to a static function that takes and returns values:
+
+```csharp
+public static class ShipPhysics
+{
+    public static Transform Step(Transform transform, ShipControls controls, float dt)
+    {
+        float rotation = transform.Rotation + controls.Turn * 4f * dt;
+        var heading = new Vector2(MathF.Cos(rotation), MathF.Sin(rotation));
+        var position = transform.Position + (controls.Thrust ? heading * 200f * dt : Vector2.Zero);
+        return new Transform(position, rotation);
+    }
+}
+```
+
+The server's system and the client's [prediction](/multiplayer/prediction-and-limits) then run the same rule.
+
+## Module and schedule
+
+```csharp
+[EcsModule, IncludeSystems(typeof(Steering)), IncludeBundle<ShipBundle>,
+    IncludeComponent<NetId>, IncludeComponent<Replicated>]
+public static partial class SharedEcs;
+
+[Schedule]
+[Run(typeof(Steering), nameof(Steering.ApplyInput), Order = 0)]
+[Run(typeof(Steering), nameof(Steering.Fly), Order = 1, After = nameof(Steering.ApplyInput))]
+public sealed partial class Simulation;
+```
+
+`IncludeComponent<NetId>` registers `NetId` even though no shared system reads it. The server and client modules include `SharedEcs` with `IncludeModule`. See [Cross-assembly modules](/guides/modules#cross-assembly-modules).
+
+Next, [run the server](/multiplayer/server).

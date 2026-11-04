@@ -1,0 +1,61 @@
+---
+title: Prediction and limits
+description: Predict the local player's movement, and see which multiplayer models Archevolt does not support.
+sidebar:
+  order: 6
+---
+
+Server authority adds one round trip of delay to the player's own actions. Prediction hides that delay by applying input locally right away and correcting when the server answers.
+
+## Predict the local player
+
+Archevolt has no world snapshot or restore, so the client cannot rewind the whole world and replay it. Predict only what the player controls, using the same rule the server runs:
+
+```csharp
+public sealed class LocalPrediction(float tickSeconds)
+{
+    private readonly Queue<(uint Sequence, ShipControls Controls)> _pending = new();
+
+    public Transform Predict(Transform current, uint sequence, ShipControls controls)
+    {
+        _pending.Enqueue((sequence, controls));
+        return ShipPhysics.Step(current, controls, tickSeconds);
+    }
+
+    public Transform Reconcile(Transform confirmed, uint lastProcessed)
+    {
+        while (_pending.TryPeek(out var input) && input.Sequence <= lastProcessed)
+            _pending.Dequeue();
+        foreach (var (_, controls) in _pending)
+            confirmed = ShipPhysics.Step(confirmed, controls, tickSeconds);
+        return confirmed;
+    }
+}
+```
+
+1. Number each input you send. Call `Predict` with it, and insert the result into the local ship's `Transform`.
+2. Have the server include the last input sequence it processed for each player. Add it to `PlayerInput` and to a replicated component or a separate record.
+3. When the server's `Transform` for the local ship arrives, call `Reconcile` with it and insert the result instead of the server's value.
+
+This works because `ShipPhysics.Step` is a plain function that both the server's `Fly` system and the client call. See [Keep rules in plain functions](/multiplayer/shared-simulation#keep-rules-in-plain-functions).
+
+Other players' entities are not predicted. Draw them between received states, as described in [Render between updates](/multiplayer/client#render-between-updates).
+
+## What Archevolt does not provide
+
+| Need | Status | What to do instead |
+| --- | --- | --- |
+| World snapshot and restore | Not available | Predict individual entities, or copy the components you need into your own history buffers. |
+| Network transport and protocol | Not included | Use your own socket layer or a networking library. |
+| Per-client acknowledged deltas | Not tracked | `Changed<T>` reports changes since the system last ran. Keep per-client baselines yourself on unreliable transports. |
+| Shared entity handles | Not possible | Map a `NetId` to a local `Entity` on each side. |
+| Reading messages from host code | Not available | Systems write outgoing data into a managed resource, and the host reads it after `Run()`. |
+
+## Deterministic lockstep
+
+Lockstep sends only inputs and expects every machine to compute identical state. Archevolt does not guarantee identical results across machines:
+
+- With parallel execution, systems in the same batch that spawn through `Commands` claim entity slots in whatever order they reach the allocator. Entity indices can differ between runs.
+- `MathF.Sin`, `MathF.Cos`, and similar functions can return slightly different results on different platforms. Hardware vector widths also vary, which changes how hand-vectorized loops round their results. Desktop and WebAssembly builds can therefore drift apart.
+
+Serial execution of an identical build on identical hardware may stay in step, but do not design a game around it. Prefer server authority.

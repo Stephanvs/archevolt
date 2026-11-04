@@ -1,0 +1,160 @@
+---
+title: Replicate state
+description: Turn component changes and despawns into packets with change filters and removal records.
+sidebar:
+  order: 4
+---
+
+Replication systems run after the simulation and write what changed into a packet buffer. The room sends that buffer once the schedule returns.
+
+## The packet format
+
+Components are unmanaged structs, so a record can carry a component's bytes as they are. Each record holds a kind, a `NetId`, and an optional payload.
+
+```csharp
+using System.Buffers;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+
+namespace Game.Shared;
+
+public enum RecordKind : byte { Transform = 1, Shape = 2, Despawn = 3 }
+
+public class PacketWriter
+{
+    private readonly ArrayBufferWriter<byte> _buffer = new();
+
+    public ReadOnlyMemory<byte> Written => _buffer.WrittenMemory;
+
+    public void Clear() => _buffer.ResetWrittenCount();
+
+    public void Write<T>(RecordKind kind, NetId id, in T value) where T : unmanaged
+    {
+        WriteHeader(kind, id);
+        _buffer.Write(MemoryMarshal.AsBytes(new ReadOnlySpan<T>(in value)));
+    }
+
+    public void WriteDespawn(NetId id) => WriteHeader(RecordKind.Despawn, id);
+
+    private void WriteHeader(RecordKind kind, NetId id)
+    {
+        _buffer.Write([(byte)kind]);
+        _buffer.Write(MemoryMarshal.AsBytes(new ReadOnlySpan<NetId>(in id)));
+    }
+}
+
+public ref struct PacketReader(ReadOnlySpan<byte> packet)
+{
+    private ReadOnlySpan<byte> _packet = packet;
+
+    public bool TryReadHeader(out RecordKind kind, out NetId id)
+    {
+        if (_packet.IsEmpty) { kind = default; id = default; return false; }
+        kind = (RecordKind)_packet[0];
+        _packet = _packet[1..];
+        id = Read<NetId>();
+        return true;
+    }
+
+    public T Read<T>() where T : unmanaged
+    {
+        T value = MemoryMarshal.Read<T>(_packet);
+        _packet = _packet[Unsafe.SizeOf<T>()..];
+        return value;
+    }
+}
+```
+
+Put these types in the shared assembly so both sides agree on the layout.
+
+- Copying raw bytes works when both sides use the same component types and byte order. x64, Arm64, and WebAssembly are all little-endian.
+- A struct's padding bytes are sent too. `Shape` has three after its `byte` field. Order fields from largest to smallest to reduce padding.
+- Changing a replicated component changes the protocol. Ship the server and client together, or add a version number to each packet.
+
+## Send what changed
+
+```csharp
+using Archevolt;
+using Game.Shared;
+
+namespace Game.Server;
+
+[Resource]
+public sealed class Outbox : PacketWriter;
+
+public static partial class Replication
+{
+    [Each, With<Replicated>, Changed<Shape>]
+    public static void SendShape(Entity entity, scoped in Shape shape, scoped ManagedRes<Outbox> outbox) =>
+        outbox.Value.Write(RecordKind.Shape, NetId.Of(entity), shape);
+
+    [Each, With<Replicated>, Changed<Transform>]
+    public static void SendTransform(Entity entity, scoped in Transform transform, scoped ManagedRes<Outbox> outbox) =>
+        outbox.Value.Write(RecordKind.Transform, NetId.Of(entity), transform);
+
+    [EcsSystem]
+    public static void SendDespawns(scoped RemovedComponents<Replicated> removed, scoped ManagedRes<Outbox> outbox)
+    {
+        foreach (ref readonly var removal in removed)
+            outbox.Value.WriteDespawn(NetId.Of(removal.Entity));
+    }
+}
+```
+
+- A `Changed<T>` filter selects rows whose stamp is newer than this system's last successful run. A spawn or insert stamps the component as changed, so new entities are sent without a separate step. See [Change tracking](/guides/change-tracking).
+- Archetypes with no recent change are skipped without reading their rows. A tick where little moved costs little to replicate.
+- Despawning an entity records a removal for each of its components, including the `Replicated` tag. Removing only the tag also reports it, so the client deletes its copy.
+- Removal recording for a component starts when its reader is bound. Create the replication schedule before spawning replicated entities, as the room's constructor does.
+- `ManagedRes<Outbox>` gives each system exclusive access on the owner thread, so `PacketWriter` needs no locks.
+
+## Order the systems
+
+All three systems write the same resource, so they conflict. Order them explicitly, and send despawns last:
+
+```csharp
+[Schedule]
+[Run(typeof(Replication), nameof(Replication.SendShape), Order = 0)]
+[Run(typeof(Replication), nameof(Replication.SendTransform), Order = 1, After = nameof(Replication.SendShape))]
+[Run(typeof(Replication), nameof(Replication.SendDespawns), Order = 2, After = nameof(Replication.SendTransform))]
+public sealed partial class ReplicationSchedule;
+```
+
+Without `After`, the planner still picks an order but reports [`AV008`](/reference/diagnostics).
+
+The `Shape` record is sent first, so the client learns what an entity is before it learns where it is.
+
+## Snapshots for joining players
+
+A player who joins mid-game missed earlier changes. A second schedule writes every replicated entity, without a change filter, into its own buffer:
+
+```csharp
+[Resource]
+public sealed class SnapshotOutbox : PacketWriter;
+
+public static partial class Snapshot
+{
+    [Each, With<Replicated>]
+    public static void Write(Entity entity, scoped in Shape shape, scoped in Transform transform,
+        scoped ManagedRes<SnapshotOutbox> outbox)
+    {
+        outbox.Value.Write(RecordKind.Shape, NetId.Of(entity), shape);
+        outbox.Value.Write(RecordKind.Transform, NetId.Of(entity), transform);
+    }
+}
+
+[EcsModule, IncludeModule(typeof(SharedEcs)), IncludeSystems(typeof(Replication)), IncludeSystems(typeof(Snapshot))]
+public static partial class ServerEcs;
+
+[Schedule, Run(typeof(Snapshot), nameof(Snapshot.Write), Order = 0)]
+public sealed partial class SnapshotSchedule;
+```
+
+The room runs this schedule after that tick's broadcast and sends the result only to new players. They receive the state as of this tick, then the next tick's changes. Each schedule keeps its own change cursors, so a snapshot does not hide changes from the replication schedule.
+
+## Delivery
+
+Every change is sent once, in the tick it happened. The client must receive replication packets reliably and in order. If your transport is unreliable, add acknowledgements and keep a per-client baseline of what each client has confirmed. `Changed<T>` reports changes since the system last ran, not since a particular client last confirmed.
+
+A failed replication run does not advance its change cursor. The next successful run resends those changes.
+
+Next, [apply state on the client](/multiplayer/client).

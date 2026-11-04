@@ -1,0 +1,146 @@
+---
+title: Run the server
+description: Host one world per room on its own thread and feed player input into it at a fixed tick.
+sidebar:
+  order: 3
+---
+
+A room is one match: one world, its schedules, and the players connected to it. The server runs each room's world on the thread that built it.
+
+## The room
+
+The room drains the transport before each tick, runs the simulation, and sends the result. The `ReplicationSchedule`, `SnapshotSchedule`, `Outbox`, and `SnapshotOutbox` types are declared in [Replicate state](/multiplayer/replication).
+
+```csharp
+using System.Threading.Channels;
+using Archevolt;
+using Game.Shared;
+
+namespace Game.Server;
+
+public interface IRoomTransport
+{
+    ChannelReader<PlayerInput> Inputs { get; }
+    ChannelReader<int> Joins { get; }
+    void Broadcast(ReadOnlySpan<byte> packet);
+    void Send(int player, ReadOnlySpan<byte> packet);
+}
+
+public sealed class Room : IDisposable
+{
+    public const float TickSeconds = 1f / 30;
+    private readonly IRoomTransport _transport;
+    private readonly World _world;
+    private readonly BoundSchedule _simulation;
+    private readonly BoundSchedule _replication;
+    private readonly BoundSchedule _snapshot;
+    private readonly Outbox _outbox = new();
+    private readonly SnapshotOutbox _snapshotOutbox = new();
+    private readonly Dictionary<int, Entity> _ships = [];
+    private readonly List<int> _joined = [];
+
+    public Room(IRoomTransport transport)
+    {
+        _transport = transport;
+        _world = new WorldBuilder().AddModule(ServerEcs.Module).Build();
+        _world.InsertResource(new FrameTime(TickSeconds));
+        _world.InsertResource(_outbox);
+        _world.InsertResource(_snapshotOutbox);
+        _simulation = Simulation.Create(_world);
+        _replication = ReplicationSchedule.Create(_world);
+        _snapshot = SnapshotSchedule.Create(_world);
+    }
+
+    public void Tick()
+    {
+        _world.AdvanceMessages();
+        while (_transport.Joins.TryRead(out int player))
+        {
+            _ships[player] = _world.Spawn(new ShipBundle(new Transform(default, 0),
+                new Shape(ShapeKind.Ship, 12), default, new Pilot(player), default));
+            _joined.Add(player);
+        }
+        while (_transport.Inputs.TryRead(out var input))
+            _world.SendMessage(input);
+
+        _simulation.Run();
+        _replication.Run();
+        _transport.Broadcast(_outbox.Written.Span);
+        _outbox.Clear();
+
+        if (_joined.Count > 0)
+        {
+            _snapshot.Run();
+            foreach (int player in _joined)
+                _transport.Send(player, _snapshotOutbox.Written.Span);
+            _snapshotOutbox.Clear();
+            _joined.Clear();
+        }
+    }
+
+    public void Leave(int player)
+    {
+        if (_ships.Remove(player, out var ship))
+            _world.Despawn(ship);
+    }
+
+    public void Dispose()
+    {
+        _snapshot.Dispose();
+        _replication.Dispose();
+        _simulation.Dispose();
+        _world.Dispose();
+    }
+}
+```
+
+`IRoomTransport` is your code, not an Archevolt type. Your network layer decodes packets, validates them, and writes `PlayerInput` values into a channel. It also reports joins and sends the bytes the room hands back. `Broadcast` goes to every player who has already received a snapshot.
+
+Call `world.AdvanceMessages()` once per tick. Message retention depends on it. See [Retention](/guides/messages#retention).
+
+## One thread per room
+
+Build the room on the thread that will run it. The world belongs to the thread that built it, and every later call must come from that thread. Add this method to `Room`:
+
+```csharp
+using System.Diagnostics;
+
+public static Thread Start(IRoomTransport transport, CancellationToken stop)
+{
+    var thread = new Thread(() =>
+    {
+        using var room = new Room(transport);
+        long tick = (long)(TickSeconds * Stopwatch.Frequency);
+        long next = Stopwatch.GetTimestamp();
+        while (!stop.IsCancellationRequested)
+        {
+            room.Tick();
+            next += tick;
+            var wait = Stopwatch.GetElapsedTime(Stopwatch.GetTimestamp(), next);
+            if (wait > TimeSpan.Zero)
+                Thread.Sleep(wait);
+        }
+    })
+    { IsBackground = true, Name = "Room" };
+    thread.Start();
+    return thread;
+}
+```
+
+The loop runs a fixed tick. It does not `await`, so the room never moves to another thread. One thread can also own several rooms and tick each in turn, which suits servers with many small rooms.
+
+## Parallelism across rooms
+
+Leave room worlds serial, which is the default. A world built with `UseParallelExecution(maxConcurrency)` keeps `maxConcurrency - 1` worker threads of its own, so 200 rooms at a limit of 4 would hold 600 worker threads. Running rooms on separate threads uses the machine's cores without that cost. Enable [parallel execution](/guides/execution) for a room only when one room's simulation is large enough to need it, and measure first.
+
+## Deploy
+
+Archevolt has no package dependencies and supports NativeAOT. A headless server can publish as one native executable with fast startup:
+
+```powershell
+dotnet publish -c Release -p:PublishAot=true
+```
+
+NativeAOT compiles for the operating system you publish on. Build Linux servers on Linux, for example in a container or CI job.
+
+Next, [replicate state](/multiplayer/replication).
