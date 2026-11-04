@@ -1,0 +1,55 @@
+---
+const nodes = [
+  { id: "input", label: "Input", x: 12, y: 92 },
+  { id: "motion", label: "Motion", x: 112, y: 48 },
+  { id: "steer", label: "Steer", x: 112, y: 136 },
+  { id: "collide", label: "Collide", x: 212, y: 92 },
+  { id: "cleanup", label: "Cleanup", x: 324, y: 92 },
+];
+const width = 64;
+const height = 28;
+const edge = (from: string, to: string) => {
+  const a = nodes.find((node) => node.id === from)!;
+  const b = nodes.find((node) => node.id === to)!;
+  const x1 = a.x + width;
+  const y1 = a.y + height / 2;
+  const x2 = b.x;
+  const y2 = b.y + height / 2;
+  const mid = (x1 + x2) / 2;
+  return { id: `${from}-${to}`, d: `M${x1} ${y1} C${mid} ${y1} ${mid} ${y2} ${x2} ${y2}` };
+};
+const edges = [
+  edge("input", "motion"),
+  edge("input", "steer"),
+  edge("motion", "collide"),
+  edge("steer", "collide"),
+  edge("collide", "cleanup"),
+];
+const batches = [44, 144, 244, 356];
+---
+
+<div class="viz viz-schedule" data-story="schedule" aria-hidden="true">
+  <svg viewBox="0 0 400 200" class="vsch-svg">
+    <line class="vsch-barrier" data-barrier x1="300" y1="22" x2="300" y2="178" />
+    <text class="vsch-barrier-label" x="300" y="14" text-anchor="middle">barrier</text>
+    {edges.map((e) => <path class="vsch-edge" d={e.d} data-edge={e.id} />)}
+    {edges.map((e) => <circle class="vsch-pulse" r="3.5" data-pulse={e.id} />)}
+    {
+      nodes.map((node) => (
+        <g class="vsch-node" data-node={node.id}>
+          <rect x={node.x} y={node.y} width={width} height={height} rx="8" />
+          <text x={node.x + width / 2} y={node.y + height / 2 + 4} text-anchor="middle">
+            {node.label}
+          </text>
+        </g>
+      ))
+    }
+    {
+      batches.map((x, index) => (
+        <text class="vsch-batch" x={x} y="196" text-anchor="middle" data-batch={index}>
+          batch {index + 1}
+        </text>
+      ))
+    }
+  </svg>
+</div>

@@ -1,0 +1,21 @@
+---
+import Icon from "./Icon.astro";
+
+interface Props {
+  command: string;
+  /** Types the command glyph by glyph when it scrolls into view. */
+  typed?: boolean;
+}
+
+const { command, typed = false } = Astro.props;
+---
+
+<div class="install" data-install>
+  <span class="install-prompt" aria-hidden="true">$</span>
+  <code class="install-command" data-type-target={typed ? command : undefined}>{command}</code>
+  <button type="button" class="install-copy" data-copy={command} aria-label={`Copy "${command}"`}>
+    <span class="install-copy-icon" data-copy-icon><Icon name="copy" /></span>
+    <span class="install-copy-done" aria-hidden="true"><Icon name="check" /></span>
+  </button>
+  <span class="sr-only" role="status" aria-live="polite" data-copy-status></span>
+</div>
