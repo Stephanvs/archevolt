@@ -12,7 +12,7 @@ From the repository root:
 dotnet run --project samples/Archeoids -c Release
 ```
 
-Use the .NET SDK pinned in `global.json`. The desktop game needs a graphical session and an OpenGL 3.3 driver. NuGet restores Silk.NET's windowing, input, OpenGL bindings, and native GLFW dependencies. This project opts out of the other samples' NativeAOT publishing default.
+Use the latest .NET 11 SDK. The desktop game needs a graphical session and an OpenGL 3.3 driver. NuGet restores Silk.NET's windowing, input, OpenGL bindings, and native GLFW dependencies. This project opts out of the other samples' NativeAOT publishing default.
 
 | Key | Action |
 | --- | --- |
@@ -27,7 +27,7 @@ The HUD shows score, sector, remaining lives, visible entity count, and smoothed
 
 ## Run in a browser
 
-From the repository root, using the SDK selected by `global.json`:
+From the repository root:
 
 ```powershell
 dotnet run --project samples/Archeoids.Browser -c Release
