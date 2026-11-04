@@ -1,0 +1,165 @@
+---
+title: Async work and I/O
+description: Load assets, call services, and write files with async code while the world stays synchronous.
+sidebar:
+  order: 12
+---
+
+## Systems are synchronous
+
+Systems, run conditions, and `schedule.Run(CancellationToken)` complete synchronously. An `async` system or condition is rejected with diagnostic [`AV005`](/reference/diagnostics).
+
+System parameters are `scoped ref`, `scoped in`, `scoped Span<T>`, and ref-struct capabilities such as queries and `Res<T>`. None of them can live across an `await`.
+
+## Stay on the owner thread
+
+The thread that builds a world owns it. World and schedule calls from any other thread throw. Code after an `await` can resume on a different thread, so keep the frame loop that touches the world free of `await`.
+
+Async work runs beside the world, not inside it:
+
+1. Start I/O with ordinary async code. It never touches the world.
+2. Before `Run()`, on the owner thread, drain finished results into the world.
+3. Systems read what has arrived.
+4. After `Run()`, read what systems asked for and start the next async work.
+
+## Declare the inbox and outbox
+
+A [message](/guides/messages) announces an arrival. [Managed resources](/guides/resources) hold the loaded data and the outgoing requests.
+
+```csharp
+[Message]
+public readonly record struct LevelLoaded(int LevelId);
+
+[Resource]
+public sealed class LevelLibrary
+{
+    public Dictionary<int, string> Text { get; } = [];
+}
+
+[Resource]
+public sealed class SaveQueue
+{
+    public List<int> LevelIds { get; } = [];
+}
+
+public static partial class Levels
+{
+    [EcsSystem]
+    public static void Apply(
+        scoped MessageReader<LevelLoaded> loaded,
+        scoped ManagedRes<LevelLibrary> library,
+        scoped ManagedRes<SaveQueue> saves)
+    {
+        foreach (ref readonly var message in loaded)
+        {
+            string text = library.Value.Text[message.LevelId];
+            // Build entities from the level text with Commands, then:
+            saves.Value.LevelIds.Add(message.LevelId);
+        }
+    }
+}
+
+[EcsModule, IncludeSystems(typeof(Levels))]
+public static partial class GameEcs;
+
+[Schedule, Run(typeof(Levels), nameof(Levels.Apply), Order = 0)]
+public sealed partial class Simulation;
+```
+
+`ManagedRes<T>` gives its system exclusive access on the owner thread, so `Apply` can use ordinary collections without locks.
+
+## Drain results between runs
+
+The loader writes to a `Channel<T>`. The frame loop drains it with `TryRead` before each run.
+
+```csharp
+using System.Threading.Channels;
+using Archevolt;
+
+public readonly record struct LoadedLevel(int LevelId, string Text);
+
+public sealed class Game : IDisposable
+{
+    private readonly Channel<LoadedLevel> _loaded = Channel.CreateUnbounded<LoadedLevel>();
+    private readonly CancellationTokenSource _shutdown = new();
+    private readonly List<Task> _io = [];
+    private readonly World _world;
+    private readonly BoundSchedule _simulation;
+
+    public Game()
+    {
+        _world = new WorldBuilder().AddModule(GameEcs.Module).Build();
+        _world.InsertResource(new LevelLibrary());
+        _world.InsertResource(new SaveQueue());
+        _simulation = Simulation.Create(_world);
+    }
+
+    public void BeginLoad(int levelId, string path) =>
+        _io.Add(LoadAsync(levelId, path, _loaded.Writer, _shutdown.Token));
+
+    public void Frame()
+    {
+        foreach (var task in _io)
+            if (task.IsFaulted) throw task.Exception!;
+        _io.RemoveAll(static task => task.IsCompleted);
+
+        _world.AdvanceMessages();
+
+        while (_loaded.Reader.TryRead(out var level))
+        {
+            _world.GetResource<LevelLibrary>().Text[level.LevelId] = level.Text;
+            _world.SendMessage(new LevelLoaded(level.LevelId));
+        }
+
+        _simulation.Run();
+
+        var saves = _world.GetResource<SaveQueue>();
+        foreach (int levelId in saves.LevelIds)
+            _io.Add(SaveAsync(levelId, _shutdown.Token));
+        saves.LevelIds.Clear();
+    }
+
+    public void Dispose()
+    {
+        _shutdown.Cancel();
+        _simulation.Dispose();
+        _world.Dispose();
+        _shutdown.Dispose();
+    }
+
+    private static async Task LoadAsync(int levelId, string path,
+        ChannelWriter<LoadedLevel> loaded, CancellationToken cancellation)
+    {
+        string text = await File.ReadAllTextAsync(path, cancellation);
+        loaded.TryWrite(new LoadedLevel(levelId, text));
+    }
+
+    private static Task SaveAsync(int levelId, CancellationToken cancellation) =>
+        File.WriteAllTextAsync($"progress-{levelId}.txt", "complete", cancellation);
+}
+```
+
+Call `BeginLoad` and `Frame` from the thread that constructed `Game`. A `ConcurrentQueue<T>` with `TryDequeue` works the same way.
+
+:::note
+Never block on async work in the frame loop. `.Result`, `.Wait()`, and `GetAwaiter().GetResult()` stall every system and can deadlock under a synchronization context. Poll for finished work instead.
+:::
+
+The world does not observe the tasks you start. Keep them, as `_io` does. `Frame` rethrows a failed task and drops finished ones.
+
+## Other ways in
+
+Between runs, the owner thread has the full world API:
+
+| Arrival | Call |
+| --- | --- |
+| Unmanaged value, such as input or a server tick | `world.InsertResource(value)` |
+| Managed object, such as a decoded asset | `world.InsertResource(value)`, or `world.InsertOwnedResource(value)` to hand an `IDisposable` to the world |
+| An event for systems to react to | `world.SendMessage(in value)` |
+| New or changed entities | `world.Spawn(bundle)`, `world.Insert(entity, value)` |
+
+Systems cannot reach outside the world while running. They record requests in a resource, as `SaveQueue` does, and the host acts on them after `Run()` returns.
+
+## Cancellation
+
+The token passed to `schedule.Run` stops new work between systems or row ranges. See [Running and cancelling](/guides/execution#running-and-cancelling). It does not cancel your I/O, and cancelling your I/O does not stop a run. Use a separate token for each.
