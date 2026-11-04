@@ -97,14 +97,14 @@ Parallel design exploration compared a `BoundSchedule` bypass with a `WorkerPool
 
 ```powershell
 dotnet build benchmarks/Archevolt.Benchmarks -c Release
-./scripts/measure-partition.ps1 -Runs 3
-./scripts/measure-partition.ps1 -Runs 3 -RuntimeDefaults -Output artifacts/partition-study/default
+./scripts/measure.ps1 -Mode Partition -Runs 3
+./scripts/measure.ps1 -Mode Partition -Runs 3 -RuntimeDefaults -Output artifacts/partition-study/default
 ```
 
 To compare a change, preserve a complete benchmark output directory built against the baseline library. Pass its `Archevolt.Benchmarks.dll` with `-BaselineAssembly`. Use identical benchmark code in both output directories. The script alternates process order, records binary and source hashes, saves raw CSV files, and produces `samples.csv` and `summary.csv`. It fails on incorrect results, missing cases, or any observed managed allocation. `-NoBuild` reuses the current candidate binary.
 
 ## Verification
 
-`scripts/verify.ps1` passed all nine stages, including 172 tests, headless Archeoids, package checks, JIT and NativeAOT consumers, the NativeAOT particle sample, and allocation smoke checks. The later benchmark-only warmup change rebuilt without warnings and was exercised by the repeated comparison.
+`scripts/verify.ps1` passed all nine stages, including 172 tests, headless Archeoids, package checks, JIT and NativeAOT consumers, the NativeAOT particle sample, and allocation smoke checks. The later benchmark-only warmup change rebuilt without warnings and was exercised by the repeated comparison. After script consolidation, `measure.ps1 -Mode Partition -Runs 1` completed the preserved-baseline comparison with 240 allocation-free cases and the same summary schema. The existing `-Mode Matrix` also completed successfully.
 
 The added behavioral cases protect cancellation during ordinary and owner-thread bodies, failure precedence, exception metadata, fault/reset, and reuse. Existing tests still verify mixed owner/worker overlap and thousands of alternating batch sizes. No partition-count expectations or consumer contracts were changed.

@@ -1,15 +1,19 @@
 #Requires -Version 7.2
 [CmdletBinding()]
 param(
-    [ValidateSet('Matrix', 'Bdn', 'Disassembly', 'All')]
+    [ValidateSet('Matrix', 'Partition', 'Bdn', 'Disassembly', 'All')]
     [string] $Mode = 'Matrix',
-    [switch] $NoBuild
+    [ValidateRange(1, 20)] [int] $Runs = 3,
+    [string] $BaselineAssembly,
+    [string] $Output = 'artifacts/performance',
+    [switch] $NoBuild,
+    [switch] $RuntimeDefaults
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $Root = (Resolve-Path -LiteralPath (Split-Path -Parent $PSScriptRoot)).ProviderPath
-$Output = Join-Path $Root 'artifacts/performance'
+$Output = [IO.Path]::GetFullPath($Output, $Root)
 $Project = Join-Path $Root 'benchmarks/Archevolt.Benchmarks/Archevolt.Benchmarks.csproj'
 $Assembly = Join-Path $Root 'artifacts/bin/Archevolt.Benchmarks/release/Archevolt.Benchmarks.dll'
 $null = New-Item -ItemType Directory -Force -Path $Output
@@ -29,6 +33,7 @@ Push-Location $Root
 try {
     & dotnet --info | Set-Content -LiteralPath (Join-Path $Output 'dotnet-info.txt')
     @("UTC=$([DateTime]::UtcNow.ToString('O'))", "Mode=$Mode", "Configuration=Release", "NoBuild=$NoBuild",
+        "Runs=$Runs", "BaselineAssembly=$BaselineAssembly", "RuntimeDefaults=$RuntimeDefaults",
         "DOTNET_TieredCompilation=$env:DOTNET_TieredCompilation", "DOTNET_TieredPGO=$env:DOTNET_TieredPGO",
         "DOTNET_ReadyToRun=$env:DOTNET_ReadyToRun", "COMPlus_GCServer=$env:COMPlus_GCServer") |
         Set-Content -LiteralPath (Join-Path $Output "environment-$Mode.txt")
@@ -39,6 +44,7 @@ try {
             Format-List | Out-String | Set-Content -LiteralPath (Join-Path $Output 'os.txt')
     }
     & git rev-parse HEAD | Set-Content -LiteralPath (Join-Path $Output 'head.txt')
+    & git diff | Set-Content -LiteralPath (Join-Path $Output 'working-tree.patch')
     & git status --short | Set-Content -LiteralPath (Join-Path $Output "working-tree-$Mode.txt")
     $sourceFiles = @(& rg --files src shared benchmarks -g '*.cs' -g '*.csproj') +
         @('Directory.Build.props', 'Directory.Packages.props', 'global.json', 'scripts/measure.ps1')
@@ -57,6 +63,78 @@ try {
             $env:DOTNET_TieredCompilation = '0'
             $env:DOTNET_ReadyToRun = '0'
             Invoke-Recorded 'matrix.csv' @($Assembly, '--matrix')
+        }
+        finally {
+            $env:DOTNET_TieredCompilation = $tiered
+            $env:DOTNET_ReadyToRun = $ready
+        }
+    }
+    if ($Mode -in @('Partition', 'All')) {
+        $tiered = $env:DOTNET_TieredCompilation
+        $ready = $env:DOTNET_ReadyToRun
+        try {
+            $assemblies = [ordered]@{}
+            if ($BaselineAssembly) {
+                $assemblies['baseline'] = (Resolve-Path -LiteralPath $BaselineAssembly).ProviderPath
+            }
+            $assemblies['candidate'] = (Resolve-Path -LiteralPath $Assembly).ProviderPath
+            if ($RuntimeDefaults) {
+                $env:DOTNET_TieredCompilation = $null
+                $env:DOTNET_ReadyToRun = $null
+            }
+            else {
+                $env:DOTNET_TieredCompilation = '0'
+                $env:DOTNET_ReadyToRun = '0'
+            }
+            foreach ($variant in $assemblies.Keys) {
+                Get-FileHash -Algorithm SHA256 -LiteralPath $assemblies[$variant],
+                    (Join-Path (Split-Path -Parent $assemblies[$variant]) 'Archevolt.dll') |
+                    Export-Csv -NoTypeInformation -LiteralPath (Join-Path $Output "$variant-hashes.csv")
+            }
+            $results = [Collections.Generic.List[object]]::new()
+            for ($run = 1; $run -le $Runs; $run++) {
+                $order = @($assemblies.Keys)
+                if ($run % 2 -eq 0) { [Array]::Reverse($order) }
+                foreach ($variant in $order) {
+                    Write-Host "Measuring $variant launch $run of $Runs"
+                    $name = "$variant-$run.csv"
+                    $log = Join-Path $Output $name
+                    Invoke-Recorded $name @($assemblies[$variant], '--partition-matrix')
+                    $lines = Get-Content -LiteralPath $log
+                    if ($lines -notcontains '# zero_process_allocations=true; matrix=ok') {
+                        throw "Missing correctness and allocation success marker in $log"
+                    }
+                    $rows = @($lines | Where-Object { $_ -and -not $_.StartsWith('#') } | ConvertFrom-Csv)
+                    if ($rows.Count -ne 120) { throw "Expected 120 cases in $log, found $($rows.Count)." }
+                    foreach ($row in $rows) {
+                        if ([long]$row.owner_bytes_total -ne 0 -or [long]$row.all_thread_bytes_total -ne 0) {
+                            throw "Steady-state allocation in $log for $($row.case)."
+                        }
+                        $row | Add-Member -NotePropertyName variant -NotePropertyValue $variant
+                        $row | Add-Member -NotePropertyName launch -NotePropertyValue $run
+                        $results.Add($row)
+                    }
+                }
+            }
+            $results | Export-Csv -NoTypeInformation -LiteralPath (Join-Path $Output 'samples.csv')
+            $summary = foreach ($group in $results | Group-Object variant,case,rows,concurrency) {
+                $first = $group.Group[0]
+                $values = @($group.Group | ForEach-Object { [double]::Parse($_.median_us, [Globalization.CultureInfo]::InvariantCulture) } | Sort-Object)
+                $middle = [int][Math]::Floor($values.Count / 2)
+                $median = if ($values.Count % 2) { $values[$middle] } else { ($values[$middle - 1] + $values[$middle]) / 2 }
+                [pscustomobject]@{
+                    variant = $first.variant
+                    case = $first.case
+                    rows = [int]$first.rows
+                    concurrency = [int]$first.concurrency
+                    launches = $values.Count
+                    median_us = $median.ToString([Globalization.CultureInfo]::InvariantCulture)
+                    min_us = $values[0].ToString([Globalization.CultureInfo]::InvariantCulture)
+                    max_us = $values[-1].ToString([Globalization.CultureInfo]::InvariantCulture)
+                }
+            }
+            $summary | Export-Csv -NoTypeInformation -LiteralPath (Join-Path $Output 'summary.csv')
+            Write-Host "Measurements saved to $Output"
         }
         finally {
             $env:DOTNET_TieredCompilation = $tiered
