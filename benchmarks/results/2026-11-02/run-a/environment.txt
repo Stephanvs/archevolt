@@ -1,0 +1,13 @@
+UTC=20261102-214706
+Runs=3
+Quick=False
+IncludeBevy=True
+CPU=AMD Ryzen 9 5950X 16-Core Processor
+OS=Microsoft Windows 11 Pro 10.0.26300
+Head=8029e7f915e54261d6b66f63a0b3882d2a293017
+WorkingTree=## HEAD (no branch)
+DotnetSdk=11.0.100-rc.3.26522.148
+Configuration=Release
+BevyEcs=0.20.0
+Rustc=rustc 1.99.1 (58cf8f9c3 2026-10-13); binary: rustc; commit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67; commit-date: 2026-10-13; host: x86_64-pc-windows-msvc; release: 1.99.1; LLVM version: 23.1.1
+RUSTFLAGS=-C target-cpu=native

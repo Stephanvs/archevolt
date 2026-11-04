@@ -1,0 +1,42 @@
+Bevy benchmarks: not run; use a saved Bevy baseline for reference.
+
+| Harness | Case | Runs | Median µs | Min µs | Max µs |
+| --- | --- | ---: | ---: | ---: | ---: |
+| BenchmarkDotNet | `EntityStorageBenchmarks.Get(Count=1000)` | 5 | 5.759 | 5.752 | 5.769 |
+| BenchmarkDotNet | `EntityStorageBenchmarks.Get(Count=100000)` | 5 | 1470.001 | 1440.016 | 3391.966 |
+| BenchmarkDotNet | `FilterBenchmarks.TrackedWrite(Count=1000)` | 5 | 1.125 | 1.102 | 1.129 |
+| BenchmarkDotNet | `FilterBenchmarks.ChangedNone(Count=1000)` | 5 | 0.163 | 0.162 | 0.165 |
+| BenchmarkDotNet | `FilterBenchmarks.WriteThenChangedAll(Count=1000)` | 5 | 2.020 | 2.017 | 2.025 |
+| BenchmarkDotNet | `FilterBenchmarks.TrackedWrite(Count=100000)` | 5 | 95.841 | 95.333 | 96.566 |
+| BenchmarkDotNet | `FilterBenchmarks.ChangedNone(Count=100000)` | 5 | 0.158 | 0.158 | 0.159 |
+| BenchmarkDotNet | `FilterBenchmarks.WriteThenChangedAll(Count=100000)` | 5 | 166.439 | 165.391 | 187.389 |
+| BenchmarkDotNet | `MovementBenchmarks.GeneratedEach(Count=1000&Concurrency=1)` | 5 | 1.065 | 1.063 | 1.067 |
+| BenchmarkDotNet | `MovementBenchmarks.GeneratedBlock(Count=1000&Concurrency=1)` | 5 | 0.948 | 0.939 | 0.962 |
+| BenchmarkDotNet | `MovementBenchmarks.GeneratedBlockVector(Count=1000&Concurrency=1)` | 5 | 0.226 | 0.224 | 0.238 |
+| BenchmarkDotNet | `MovementBenchmarks.GeneratedEach(Count=1000&Concurrency=4)` | 5 | 14.920 | 14.774 | 15.147 |
+| BenchmarkDotNet | `MovementBenchmarks.GeneratedBlock(Count=1000&Concurrency=4)` | 5 | 14.817 | 14.437 | 15.001 |
+| BenchmarkDotNet | `MovementBenchmarks.GeneratedBlockVector(Count=1000&Concurrency=4)` | 5 | 13.881 | 13.635 | 14.282 |
+| BenchmarkDotNet | `MovementBenchmarks.GeneratedEach(Count=100000&Concurrency=1)` | 5 | 95.319 | 94.286 | 96.611 |
+| BenchmarkDotNet | `MovementBenchmarks.GeneratedBlock(Count=100000&Concurrency=1)` | 5 | 83.135 | 82.769 | 83.285 |
+| BenchmarkDotNet | `MovementBenchmarks.GeneratedBlockVector(Count=100000&Concurrency=1)` | 5 | 21.037 | 20.924 | 21.104 |
+| BenchmarkDotNet | `MovementBenchmarks.GeneratedEach(Count=100000&Concurrency=4)` | 5 | 50.329 | 48.534 | 51.494 |
+| BenchmarkDotNet | `MovementBenchmarks.GeneratedBlock(Count=100000&Concurrency=4)` | 5 | 44.620 | 44.508 | 45.057 |
+| BenchmarkDotNet | `MovementBenchmarks.GeneratedBlockVector(Count=100000&Concurrency=4)` | 5 | 22.928 | 22.892 | 25.329 |
+| BenchmarkDotNet | `MovementBenchmarks.GeneratedEach(Count=1000000&Concurrency=1)` | 5 | 1176.591 | 1132.939 | 1182.301 |
+| BenchmarkDotNet | `MovementBenchmarks.GeneratedBlock(Count=1000000&Concurrency=1)` | 5 | 1087.603 | 1055.005 | 1105.540 |
+| BenchmarkDotNet | `MovementBenchmarks.GeneratedBlockVector(Count=1000000&Concurrency=1)` | 5 | 487.231 | 439.852 | 521.578 |
+| BenchmarkDotNet | `MovementBenchmarks.GeneratedEach(Count=1000000&Concurrency=4)` | 5 | 437.362 | 371.519 | 488.707 |
+| BenchmarkDotNet | `MovementBenchmarks.GeneratedBlock(Count=1000000&Concurrency=4)` | 5 | 302.179 | 294.315 | 415.425 |
+| BenchmarkDotNet | `MovementBenchmarks.GeneratedBlockVector(Count=1000000&Concurrency=4)` | 5 | 102.311 | 90.451 | 118.017 |
+| BenchmarkDotNet | `TraversalMatrixBenchmarks.GeneratedQuery(Count=1000&Archetypes=1&Wide=False)` | 5 | 0.970 | 0.968 | 1.089 |
+| BenchmarkDotNet | `TraversalMatrixBenchmarks.GeneratedQuery(Count=1000&Archetypes=1&Wide=True)` | 5 | 0.954 | 0.944 | 0.974 |
+| BenchmarkDotNet | `TraversalMatrixBenchmarks.GeneratedQuery(Count=1000&Archetypes=16&Wide=False)` | 5 | 1.202 | 1.197 | 1.207 |
+| BenchmarkDotNet | `TraversalMatrixBenchmarks.GeneratedQuery(Count=1000&Archetypes=16&Wide=True)` | 5 | 1.213 | 1.197 | 1.320 |
+| BenchmarkDotNet | `TraversalMatrixBenchmarks.GeneratedQuery(Count=100000&Archetypes=1&Wide=False)` | 5 | 82.261 | 80.932 | 92.861 |
+| BenchmarkDotNet | `TraversalMatrixBenchmarks.GeneratedQuery(Count=100000&Archetypes=1&Wide=True)` | 5 | 81.621 | 81.320 | 85.107 |
+| BenchmarkDotNet | `TraversalMatrixBenchmarks.GeneratedQuery(Count=100000&Archetypes=16&Wide=False)` | 5 | 93.716 | 82.399 | 93.807 |
+| BenchmarkDotNet | `TraversalMatrixBenchmarks.GeneratedQuery(Count=100000&Archetypes=16&Wide=True)` | 5 | 93.729 | 82.805 | 93.855 |
+| BenchmarkDotNet | `TraversalMatrixBenchmarks.GeneratedQuery(Count=1000000&Archetypes=1&Wide=False)` | 5 | 888.491 | 877.799 | 895.804 |
+| BenchmarkDotNet | `TraversalMatrixBenchmarks.GeneratedQuery(Count=1000000&Archetypes=1&Wide=True)` | 5 | 882.484 | 868.940 | 916.923 |
+| BenchmarkDotNet | `TraversalMatrixBenchmarks.GeneratedQuery(Count=1000000&Archetypes=16&Wide=False)` | 5 | 887.622 | 878.985 | 891.412 |
+| BenchmarkDotNet | `TraversalMatrixBenchmarks.GeneratedQuery(Count=1000000&Archetypes=16&Wide=True)` | 5 | 890.139 | 886.742 | 896.675 |
