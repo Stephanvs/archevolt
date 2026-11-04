@@ -1,6 +1,8 @@
-﻿using BenchmarkDotNet.Running;
+using BenchmarkDotNet.Running;
 
-if (args.Contains("--quick", StringComparer.Ordinal))
+if (args.Contains("--partition-matrix", StringComparer.Ordinal))
+    Archevolt.Benchmarks.PartitionMeasurement.Run();
+else if (args.Contains("--quick", StringComparer.Ordinal))
     Archevolt.Benchmarks.QuickMeasurement.Run();
 else if (args.Contains("--matrix", StringComparer.Ordinal))
     Archevolt.Benchmarks.PerformanceMeasurement.Run();

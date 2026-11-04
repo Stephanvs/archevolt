@@ -355,6 +355,53 @@ public sealed class ScheduleExecutionTests
         }
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Cancellation_during_a_single_body_preserves_failures_and_allows_reset(bool ownerThread, bool fail)
+    {
+        using var world = new WorldBuilder().AddResource<OwnerMarker>(ownerThread: ownerThread).UseParallelExecution(4).Build();
+        world.InsertResource(new OwnerMarker(Environment.CurrentManagedThreadId));
+        using var cancellation = new CancellationTokenSource();
+        bool cancel = true;
+        int completed = 0;
+        var descriptor = SystemDescriptor.Create("canceling body", _ => new ActionBody(_ =>
+        {
+            completed++;
+            if (!cancel) return;
+            cancellation.Cancel();
+            if (fail) throw new MarkerException();
+        })).Res<OwnerMarker>().Build();
+        using var schedule = BoundSchedule.Bind(world, [descriptor], [], ["canceling instance"]);
+
+        if (fail)
+        {
+            var failure = Assert.Throws<AggregateException>(() => schedule.Run(cancellation.Token));
+            var systemFailure = Assert.IsType<SystemExecutionException>(Assert.Single(failure.InnerExceptions));
+            Assert.Equal("canceling instance", systemFailure.InstanceKey);
+            Assert.Equal("canceling body", systemFailure.SystemName);
+            Assert.Equal(0, systemFailure.FirstRow);
+            Assert.Equal(int.MaxValue, systemFailure.RowCount);
+            Assert.IsType<MarkerException>(systemFailure.InnerException);
+        }
+        else
+        {
+            var failure = Assert.Throws<OperationCanceledException>(() => schedule.Run(cancellation.Token));
+            Assert.Equal(cancellation.Token, failure.CancellationToken);
+        }
+        Assert.Equal(1, completed);
+        Assert.True(schedule.IsFaulted);
+        Assert.Throws<InvalidOperationException>(() => schedule.Run(TestContext.Current.CancellationToken));
+
+        cancel = false;
+        schedule.Reset();
+        schedule.Run(TestContext.Current.CancellationToken);
+        Assert.Equal(2, completed);
+        Assert.False(schedule.IsFaulted);
+    }
+
     [Fact]
     public void Failed_bodies_keep_their_previous_change_window_until_a_successful_run()
     {
@@ -403,17 +450,21 @@ public sealed class ScheduleExecutionTests
         Assert.Equal(1, calls);
     }
 
-    [Fact]
-    public void Schedule_control_rejects_wrong_threads_reentrancy_and_running_disposal()
+    [Theory]
+    [InlineData(1)]
+    [InlineData(4)]
+    public void Schedule_control_rejects_wrong_threads_reentrancy_and_running_disposal(int budget)
     {
-        using var world = new WorldBuilder().Build();
+        using var world = new WorldBuilder().UseParallelExecution(budget).Build();
         BoundSchedule? schedule = null;
+        int completed = 0;
         using var bound = BoundSchedule.Bind(world, ActionSystem("A", _ =>
         {
             Assert.Throws<InvalidOperationException>(() => schedule!.Run(TestContext.Current.CancellationToken));
             Assert.Throws<InvalidOperationException>(() => schedule!.Reset());
             Assert.Throws<InvalidOperationException>(() => schedule!.Dispose());
             Assert.Throws<InvalidOperationException>(world.Dispose);
+            completed++;
         }));
         schedule = bound;
         Exception? wrongThread = null;
@@ -426,6 +477,7 @@ public sealed class ScheduleExecutionTests
         Assert.True(thread.Join(Timeout));
         Assert.IsType<InvalidOperationException>(wrongThread);
         bound.Run(TestContext.Current.CancellationToken);
+        Assert.Equal(1, completed);
         bound.Dispose();
         bound.Dispose();
         Assert.Throws<ObjectDisposedException>(() => bound.Run(TestContext.Current.CancellationToken));
