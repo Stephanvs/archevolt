@@ -125,13 +125,13 @@ After an execution fault or cancellation, all active workers join before the cal
 
 Package publication and changelog updates run from `main`. See [release setup and recovery](.github/RELEASING.md) for details.
 
-The SDK is pinned in `global.json`. Run verification with PowerShell 7.2 or newer:
+Install the latest .NET 11 SDK, including release candidates while .NET 11 is in preview. The CLI uses the latest installed SDK. CI installs the latest SDK from the .NET 11 channel. Run verification with PowerShell 7.2 or newer:
 
 ```powershell
 ./scripts/verify.ps1
 ```
 
-The script builds and tests, runs the headless Archeoids checks, packs the library, checks package contents, runs a clean consumer with a separate library module, publishes NativeAOT consumers, and measures warmed serial and parallel allocations. Windows NativeAOT publishing requires the Visual Studio C++ build tools.
+The script selects Microsoft.Testing.Platform, builds and tests, runs the headless Archeoids checks, packs the library, checks package contents, runs a clean consumer with a separate library module, publishes NativeAOT consumers, and measures warmed serial and parallel allocations. Windows NativeAOT publishing requires the Visual Studio C++ build tools.
 
 Run the short movement measurement or the BenchmarkDotNet suite:
 

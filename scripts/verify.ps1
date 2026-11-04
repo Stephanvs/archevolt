@@ -208,6 +208,7 @@ if ($unknown) {
 $null = New-Item -ItemType Directory -Force -Path $Logs
 $failures = 0
 $originalPath = $env:Path
+$originalTestRunner = $env:DOTNET_TEST_RUNNER
 
 # VsDevCmd.bat runs vswhere.exe by bare name from its own folder. With NoDefaultCurrentDirectoryInExePath set,
 # that lookup fails and NativeAOT captures the error text as the linker path.
@@ -218,7 +219,7 @@ if ($IsWindows -and $env:NoDefaultCurrentDirectoryInExePath) {
     }
 }
 
-# global.json (SDK pin and test runner) is resolved from the working directory, not from the project path.
+$env:DOTNET_TEST_RUNNER = 'Microsoft.Testing.Platform'
 Push-Location $Root
 try {
     foreach ($name in $Steps.Keys) {
@@ -242,6 +243,7 @@ try {
 finally {
     Pop-Location
     $env:Path = $originalPath
+    $env:DOTNET_TEST_RUNNER = $originalTestRunner
 }
 
 if ($failures -eq 0 -and $skipped -notcontains 'package-contents') {

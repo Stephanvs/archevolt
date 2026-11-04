@@ -47,7 +47,7 @@ try {
     & git diff | Set-Content -LiteralPath (Join-Path $Output 'working-tree.patch')
     & git status --short | Set-Content -LiteralPath (Join-Path $Output "working-tree-$Mode.txt")
     $sourceFiles = @(& rg --files src shared benchmarks -g '*.cs' -g '*.csproj') +
-        @('Directory.Build.props', 'Directory.Packages.props', 'global.json', 'scripts/measure.ps1')
+        @('Directory.Build.props', 'Directory.Packages.props', 'scripts/measure.ps1')
     $sourceFiles | ForEach-Object { Get-FileHash -LiteralPath $_ -Algorithm SHA256 } |
         Export-Csv -LiteralPath (Join-Path $Output "source-hashes-$Mode.csv") -NoTypeInformation
     if (-not $NoBuild) {

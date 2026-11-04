@@ -27,7 +27,7 @@ Logs are written to `artifacts/logs`. For a Linux check, build, test, and pack i
 
 ```bash
 dotnet build Archevolt.slnx -c Release -warnaserror
-dotnet test --solution Archevolt.slnx -c Release
+DOTNET_TEST_RUNNER=Microsoft.Testing.Platform dotnet test --solution Archevolt.slnx -c Release
 dotnet pack src/Archevolt/Archevolt.csproj -c Release -o artifacts/packages
 dotnet run --project tests/PackageConsumer -c Release
 ```
