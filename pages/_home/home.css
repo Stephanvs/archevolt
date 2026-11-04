@@ -51,6 +51,11 @@
   overflow-x: clip;
 }
 
+.home :where(p) {
+  font-family: var(--blume-font-body);
+  font-feature-settings: normal;
+}
+
 :root[data-theme="dark"] .home {
   --h-surface: #181818;
   --h-brand: #3fc1cd;
