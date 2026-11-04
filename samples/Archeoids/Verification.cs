@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Numerics;
 using Archevolt;
 using Silk.NET.OpenGL;
@@ -13,7 +14,8 @@ internal static class Verification
         WrappingAndSeamCollision();
         ShieldsAndGameOver();
         WavesAndRestart();
-        Console.WriteLine("archeoids=ok checks=5");
+        FrameRateSampling();
+        Console.WriteLine("archeoids=ok checks=6");
         return 0;
     }
 
@@ -124,6 +126,22 @@ internal static class Verification
 
     private static BulletBundle BulletAt(Vector2 position) => new(new(position), new(Vector2.Zero), new(0),
         new(3), new(), new(1, 1), new(Shape.Bullet, 5, 0, Factory.Cyan));
+
+    private static void FrameRateSampling()
+    {
+        var frameRate = new FrameRate();
+        long second = Stopwatch.Frequency;
+        frameRate.RecordFrame(0);
+        frameRate.RecordFrame(second / 4);
+        Require(frameRate.FramesPerSecond == 0, "FPS must wait for a complete sample window.");
+        frameRate.RecordFrame(second / 2);
+        Require(frameRate.FramesPerSecond == 4, "Two frame intervals in half a second must report 4 FPS.");
+        frameRate.RecordFrame(second * 3 / 4);
+        Require(frameRate.FramesPerSecond == 4, "FPS must remain stable between sample windows.");
+        frameRate.RecordFrame(second * 3 / 2);
+        Require(frameRate.FramesPerSecond == 2, "FPS must use actual elapsed time, including a slow frame.");
+        Console.WriteLine("ok: elapsed frame timing and stable FPS samples");
+    }
 
     private static int Count(RenderFrame frame, Shape shape) => frame.Sprites.Count(sprite => sprite.Appearance.Shape == shape);
     private static void Require(bool condition, string message)

@@ -10,6 +10,7 @@ internal sealed class Game : IDisposable
     private World _world;
     private BoundSchedule _simulation;
     private BoundSchedule _presentation;
+    private FrameRate _frameRate;
 
     public RenderFrame Frame { get; private set; }
     public Session State => _world.GetResource<Session>();
@@ -23,7 +24,7 @@ internal sealed class Game : IDisposable
         _presentation = Presentation.Create(_world);
         Frame = _world.GetResource<RenderFrame>();
         _world.Spawn(Factory.Ship());
-        Capture();
+        _presentation.Run();
     }
 
     public static World CreateWorld(uint seed)
@@ -47,7 +48,12 @@ internal sealed class Game : IDisposable
         UpdateMilliseconds = UpdateMilliseconds * 0.9 + Stopwatch.GetElapsedTime(start).TotalMilliseconds * 0.1;
     }
 
-    public void Capture() => _presentation.Run();
+    public void Capture()
+    {
+        _frameRate.RecordFrame(Stopwatch.GetTimestamp());
+        _presentation.Run();
+        Frame.FramesPerSecond = _frameRate.FramesPerSecond;
+    }
 
     public void Restart()
     {
@@ -58,7 +64,8 @@ internal sealed class Game : IDisposable
         Frame = _world.GetResource<RenderFrame>();
         _world.Spawn(Factory.Ship());
         UpdateMilliseconds = 0;
-        Capture();
+        _frameRate = default;
+        _presentation.Run();
     }
 
     public void Dispose()
@@ -66,5 +73,29 @@ internal sealed class Game : IDisposable
         _presentation.Dispose();
         _simulation.Dispose();
         _world.Dispose();
+    }
+}
+
+internal struct FrameRate
+{
+    private long? _sampleStart;
+    private int _frames;
+
+    public double FramesPerSecond { get; private set; }
+
+    public void RecordFrame(long timestamp)
+    {
+        if (_sampleStart is not long start)
+        {
+            _sampleStart = timestamp;
+            return;
+        }
+
+        _frames++;
+        double seconds = Stopwatch.GetElapsedTime(start, timestamp).TotalSeconds;
+        if (seconds < 0.5) return;
+        FramesPerSecond = _frames / seconds;
+        _sampleStart = timestamp;
+        _frames = 0;
     }
 }

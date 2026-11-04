@@ -74,7 +74,7 @@ export async function createRenderer(canvas, overlay, fail) {
         text.fillText(value, x - (align === "center" ? measured / 2 : align === "right" ? measured : 0), y);
     }
 
-    return function render(vertices, score, wave, lives, entities, milliseconds, paused) {
+    return function render(vertices, score, wave, lives, entities, milliseconds, framesPerSecond, paused) {
         // The MemoryView expires when this synchronous import returns. Copy only the active
         // bytes into reusable storage; never retain a view into a movable WASM heap.
         const byteLength = vertices.length;
@@ -128,7 +128,7 @@ export async function createRenderer(canvas, overlay, fail) {
         label(String(Math.max(wave, 1)).padStart(2, "0"), 830, 46, 32, white, 600);
         label("HULL", 1070, 25, 14, dim);
         label("A/D  TURN    W  THRUST    SPACE  FIRE    P  PAUSE    R  RESTART", 36, 764, 15, dim);
-        label(`${entities} ENTITIES / ${milliseconds.toFixed(2)} MS`, 1246, 764, 15, cyan, 400, "right");
+        label(`${framesPerSecond.toFixed(0)} FPS / ${entities} ENTITIES / ${milliseconds.toFixed(2)} MS`, 1246, 764, 15, cyan, 400, "right");
         if (paused || lives === 0) {
             label(paused ? "PAUSED" : "SIGNAL LOST", 640, 343, 64, paused ? white : amber, 600, "center");
             label(paused ? "PRESS P TO RESUME" : "PRESS R TO LAUNCH AGAIN", 640, 430, 21, dim, 400, "center");

@@ -32,7 +32,7 @@ The desktop game needs a graphical session and an OpenGL 3.3 driver. NuGet resto
 | R | Restart |
 | Escape | Quit |
 
-The HUD shows score, sector, remaining lives, visible entity count, and smoothed simulation time per tick. A new ship flashes during its temporary invulnerability. Clear every rock to start the next sector.
+The HUD shows score, sector, remaining lives, FPS, visible entity count, and smoothed simulation time per tick. FPS measures rendered frames over at least half a second and continues updating while gameplay is paused. A new ship flashes during its temporary invulnerability. Clear every rock to start the next sector.
 
 ## Read the code
 
@@ -62,7 +62,7 @@ Run deterministic gameplay checks without a window:
 dotnet run --project samples/Archeoids -c Release -- --verify
 ```
 
-The checks cover one-hit rock splitting, independent message readers, command visibility, expiration before collision, wrapping, seam collisions, invulnerability, game over, waves, and restart. Success prints `archeoids=ok checks=5`.
+The checks cover one-hit rock splitting, independent message readers, command visibility, expiration before collision, wrapping, seam collisions, invulnerability, game over, waves, restart, and FPS sampling. Success prints `archeoids=ok checks=6`.
 
 Run six seconds of scripted play through the real window and renderer:
 

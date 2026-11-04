@@ -72,7 +72,7 @@ internal sealed class VectorRenderer : IDisposable
         Text(Math.Max(state.Wave, 1).ToString("D2"), 830, 49, 3.4f, White);
         Text("HULL", 1070, 27, 1.4f, Dim);
         Text("A/D  TURN    W  THRUST    SPACE  FIRE    P  PAUSE    R  RESTART", 36, 766, 1.3f, Dim);
-        string stats = $"{frame.Sprites.Count} ENTITIES / {milliseconds:F2} MS";
+        string stats = $"{frame.FramesPerSecond:F0} FPS / {frame.Sprites.Count} ENTITIES / {milliseconds:F2} MS";
         Text(stats, 1246 - TextWidth(stats, 1.3f), 766, 1.3f, Factory.Cyan * new Vector4(1, 1, 1, 0.8f));
 
         if (paused || state.GameOver)
