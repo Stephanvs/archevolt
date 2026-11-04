@@ -1,0 +1,24 @@
+---
+const columns = ["Position", "Velocity", "Health"];
+const slots = 8;
+const filled = 7;
+---
+
+<div class="viz viz-storage" data-story="storage" aria-hidden="true">
+  <div class="vs-caption">archetype table · Position, Velocity, Health</div>
+  <div class="vs-columns">
+    {
+      columns.map((name) => (
+        <div class={`vs-column key-${name.toLowerCase()}`}>
+          <span class="vs-name">{name}</span>
+          <div class="vs-cells">
+            {Array.from({ length: slots }, (_, index) => (
+              <span class:list={["vs-cell", { "is-empty": index >= filled }]} data-cell data-row-index={index} />
+            ))}
+          </div>
+        </div>
+      ))
+    }
+  </div>
+  <div class="vs-foot"><span data-storage-count>7</span> rows · contiguous columns</div>
+</div>

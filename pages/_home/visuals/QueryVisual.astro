@@ -1,0 +1,39 @@
+---
+const tables = [
+  { sig: ["Position", "Velocity"], rows: 5, match: true },
+  { sig: ["Position", "Velocity", "Health"], rows: 4, match: true },
+  { sig: ["Position", "Health"], rows: 4, match: false },
+];
+---
+
+<div class="viz viz-query" data-story="query" aria-hidden="true">
+  <div class="vq-decl" data-decl>
+    <span class="tok-attr">[Query, Write&lt;Position&gt;, Read&lt;Velocity&gt;]</span>
+    <span class="tok-type">Moving</span>
+  </div>
+  <div class="vq-tables">
+    {
+      tables.map((table) => (
+        <div class="vq-table" data-table data-match={String(table.match)}>
+          <div class="vq-head">
+            <span class="vq-sig">
+              {table.sig.map((name) => (
+                <span class={`vq-key key-${name.toLowerCase()}`}>{name}</span>
+              ))}
+            </span>
+            <span class="vq-verdict">{table.match ? "match" : "skip"}</span>
+          </div>
+          <div class="vq-rows">
+            {Array.from({ length: table.rows }, () => (
+              <div class="vq-row" data-row>
+                {table.sig.map((name) => (
+                  <span class={`vq-cell key-${name.toLowerCase()}`} />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))
+    }
+  </div>
+</div>

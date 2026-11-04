@@ -1,0 +1,31 @@
+---
+const lanes = ["owner", "worker 1", "worker 2", "worker 3"];
+const chunks = 8;
+---
+
+<div class="viz viz-exec" data-story="exec" aria-hidden="true">
+  <div class="vx-top">
+    <span class="vx-system">Motion.Move <span class="vx-dim">· 100,000 rows · partitioned</span></span>
+    <span class="vx-chip">UseParallelExecution(maxConcurrency: 4)</span>
+  </div>
+  <div class="vx-table">
+    {Array.from({ length: chunks }, (_, index) => <span class="vx-chunk" data-chunk={index} />)}
+  </div>
+  <div class="vx-lanes">
+    {
+      lanes.map((lane, laneIndex) => (
+        <div class="vx-lane">
+          <span class="vx-lane-name">{lane}</span>
+          <div class="vx-track">
+            {[0, 1].map((slot) => (
+              <span class="vx-slot">
+                <span class="vx-fill" data-fill={slot * lanes.length + laneIndex} />
+              </span>
+            ))}
+          </div>
+        </div>
+      ))
+    }
+    <span class="vx-barrier" data-barrier><span>barrier</span></span>
+  </div>
+</div>
