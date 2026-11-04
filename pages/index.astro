@@ -1,0 +1,605 @@
+---
+import "@fontsource-variable/geist";
+import "@fontsource-variable/geist-mono";
+import "./_home/home.css";
+import { Image } from "astro:assets";
+import { Code } from "astro:components";
+import PageLayout from "blume/components/layout/PageLayout.astro";
+import data from "blume:data";
+import archeoids from "../docs/samples/archeoids.png";
+import Icon from "./_home/Icon.astro";
+import InstallCommand from "./_home/InstallCommand.astro";
+import TaglineReveal from "./_home/TaglineReveal.astro";
+import AotVisual from "./_home/visuals/AotVisual.astro";
+import ExecutionVisual from "./_home/visuals/ExecutionVisual.astro";
+import MessagesVisual from "./_home/visuals/MessagesVisual.astro";
+import QueryVisual from "./_home/visuals/QueryVisual.astro";
+import ScheduleVisual from "./_home/visuals/ScheduleVisual.astro";
+import StorageVisual from "./_home/visuals/StorageVisual.astro";
+
+const { config } = data;
+const codeTheme = config.codeThemes.dark;
+
+const title = "Archevolt: the archetype ECS for high performance .NET";
+const description =
+  "Write components as structs and systems as C# methods. A source generator builds typed queries and schedules over native, archetype based component storage.";
+
+const quickstart = "/docs/getting-started/quickstart";
+const install = "dotnet add package Archevolt";
+
+const heroCode = `[Component]
+public readonly record struct Position(float X);
+
+[Component]
+public readonly record struct Velocity(float X);
+
+public static partial class Motion
+{
+    [Each]
+    public static void Move(scoped ref Position position, scoped in Velocity velocity)
+    {
+        position = position with { X = position.X + velocity.X };
+    }
+}`;
+
+const moduleCode = `[Bundle]
+public readonly partial record struct Particle(Position Position, Velocity Velocity);
+
+[EcsModule, IncludeSystems(typeof(Motion)), IncludeBundle<Particle>]
+public static partial class GameEcs;
+
+[Schedule, Run(typeof(Motion), nameof(Motion.Move), Order = 0)]
+public sealed partial class Simulation;`;
+
+const runCode = `using var world = new WorldBuilder().AddModule(GameEcs.Module).Build();
+var entity = world.Spawn(new Particle(new Position(0), new Velocity(1)));
+
+using var simulation = Simulation.Create(world);
+simulation.Run();
+
+Console.WriteLine(world.Get<Position>(entity).X); // 1`;
+
+const ticker = [
+  "Zero allocations per warmed update",
+  "Source generated queries",
+  "Structure of arrays storage",
+  "NativeAOT and trimming",
+  "Bounded parallel execution",
+  "Change tracking",
+  "No package dependencies",
+  "MIT licensed",
+];
+
+const features = [
+  {
+    key: "query",
+    wide: true,
+    label: "Queries",
+    title: "Typed rows, no lookups",
+    body: "Named queries produce concrete rows with `ref` and `ref readonly` access. Nothing is boxed or looked up by type at run time.",
+    href: "/docs/guides/queries",
+    cta: "Queries guide",
+  },
+  {
+    key: "storage",
+    label: "Storage",
+    title: "Dense native tables",
+    body: "Components live in aligned, structure of arrays tables, one per archetype, outside the managed heap.",
+    href: "/docs/concepts/architecture",
+    cta: "Architecture",
+  },
+  {
+    key: "schedule",
+    label: "Schedules",
+    title: "Ordering you declare once",
+    body: "Order systems with `Order`, `Before`, `After`, stages, and sets. The planner adds conservative ordering where access conflicts.",
+    href: "/docs/guides/schedules",
+    cta: "Schedules guide",
+  },
+  {
+    key: "exec",
+    wide: true,
+    label: "Execution",
+    title: "Parallel when you ask for it",
+    body: "Serial execution is the reference behavior. Enable a bounded worker pool and mark eligible systems as partitioned.",
+    href: "/docs/guides/execution",
+    cta: "Execution guide",
+  },
+  {
+    key: "messages",
+    label: "Data flow",
+    title: "Changes, resources, messages",
+    body: "Track added and changed components, share resources, and send messages that each reader consumes at its own pace.",
+    href: "/docs/guides/messages",
+    cta: "Messages guide",
+  },
+  {
+    key: "aot",
+    label: "Deployment",
+    title: "Ready for NativeAOT",
+    body: "The package runs under JIT, trimming, and NativeAOT. The runtime has no package dependencies.",
+    href: "/docs/getting-started/installation",
+    cta: "Installation",
+  },
+];
+
+const guides = data.routes
+  .filter((route) => route.path.includes("/guides/") && route.indexable && !route.hidden)
+  .map((route) => route.title);
+
+const steps = [
+  {
+    title: "Add the package",
+    body: "One package holds the runtime and its source generator. Generated declarations stay in your namespace and your partial types.",
+    command: install,
+  },
+  {
+    title: "Collect systems into a module",
+    body: "A module gathers systems and bundles. A schedule declares which systems run and in what order.",
+    code: moduleCode,
+  },
+  {
+    title: "Build a world and run it",
+    body: "Spawn entities from bundles, bind the schedule to the world, and run it once per update.",
+    code: runCode,
+  },
+];
+
+const movement = [
+  { name: "Handwritten loop", us: 83.06, ns: "0.831", baseline: true },
+  { name: "Generated `[Each]`", us: 94.63, ns: "0.946" },
+  { name: "Generated `[EachBlock]`, indexed loop", us: 83.06, ns: "0.831" },
+  { name: "Named query, `foreach` over rows", us: 83.16, ns: "0.832" },
+  { name: "Generated `[EachBlock]`, `Vector256`", us: 20.96, ns: "0.210" },
+];
+const maxUs = Math.max(...movement.map((row) => row.us));
+
+const callouts = [
+  { label: "ship", x: 52.9, y: 46.7 },
+  { label: "rock", x: 55.5, y: 24.1 },
+  { label: "rock", x: 35.9, y: 57.5 },
+  { label: "8 entities", x: 91.5, y: 91.1, align: "end" },
+];
+
+const faqs = [
+  {
+    q: "Is Archevolt a game engine?",
+    a: "No. It is a headless ECS with no window, input, rendering, or audio. Pair it with a library such as Silk.NET, the way the Archeoids sample does, or use it to drive simulations without any graphics.",
+  },
+  {
+    q: "What do I need to install?",
+    a: "One package, `Archevolt`, which contains the runtime and the Roslyn source generator. The runtime depends only on the .NET base library. The installation guide lists the SDK and language version it targets.",
+  },
+  {
+    q: "Does it allocate during an update?",
+    a: "Measured warmed, fixed capacity updates allocate zero managed bytes, with one worker or four. Spawning and other structural changes can grow storage and allocate.",
+  },
+  {
+    q: "Does it run systems in parallel?",
+    a: "Only when you opt in. Call `UseParallelExecution(maxConcurrency: 4)` on `WorldBuilder` and mark eligible systems with `[Each(Partitioned = true)]`. Small workloads can cost more to dispatch in parallel than to run serially, so measure first.",
+  },
+  {
+    q: "Does it work with NativeAOT and trimming?",
+    a: "Yes. The package is verified in clean consumers under JIT, trimming, and NativeAOT.",
+  },
+  {
+    q: "What does the generator change in my code?",
+    a: "It adds members to your declarations, so the types it touches must be `partial`. Generated code stays in the namespace and partial owner of the original declaration.",
+  },
+  {
+    q: "How do systems add or remove components?",
+    a: "Structural changes inside systems go through `Commands` and become visible at schedule barriers. Outside a schedule, mutate the world directly on its owner thread.",
+  },
+  {
+    q: "How does it compare to other ECS libraries?",
+    a: "The benchmark suite records Bevy reference measurements beside its own, but the numbers come from one machine and are not a ranking. The performance page lists every case and what it measures.",
+  },
+  {
+    q: "Is it free to use?",
+    a: "Yes. Archevolt is open source under the MIT license, and the source is on GitHub.",
+  },
+];
+
+const faqSchema = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: faqs.map((faq) => ({
+    "@type": "Question",
+    name: faq.q,
+    acceptedAnswer: { "@type": "Answer", text: faq.a.replaceAll("`", "") },
+  })),
+};
+
+/** Split text on backticks so inline code renders as <code>. */
+const segments = (text: string) => text.split("`").map((part, index) => ({ code: index % 2 === 1, part }));
+const two = (index: number) => String(index + 1).padStart(2, "0");
+---
+
+<PageLayout
+  site={{ title: config.title, description: config.description }}
+  logo={config.logo}
+  banner={config.banner}
+  analytics={config.analytics}
+  navigation={data.navigation}
+  favicon={config.favicon}
+  appleIcon={config.appleIcon}
+  fontCssVars={data.fontCssVars}
+  themeMode={config.theme.mode}
+  searchEnabled={config.search.enabled}
+  siteUrl={config.site}
+  ogEnabled={config.og.enabled}
+  structuredDataEnabled={config.structuredData}
+  lastModified="2026-11-04"
+  page={{ title, description }}
+>
+  <div class="home" data-home>
+    <!-- Hero: a live field of entities streaming through archetype tables -->
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="frame hero-inner">
+        <p class="hero-badge" data-rise style="--d:0">
+          <span class="pulse-dot"></span>
+          Headless archetype ECS · MIT
+        </p>
+        <h1 class="hero-title" id="hero-title" data-rise style="--d:90">
+          The archetype ECS{" "}<br />
+          for high performance .NET
+        </h1>
+        <div class="hero-grid">
+          <div class="hero-left">
+        <p class="hero-lede" data-rise style="--d:180">
+          Write components as structs and systems as plain C# methods. A source generator turns them into typed
+          queries and schedules, and the runtime keeps every component in dense native tables.
+        </p>
+        <div class="hero-actions" data-rise style="--d:270">
+          <a class="button" href={quickstart}>
+            Read the quickstart
+            <Icon name="arrow-right" />
+          </a>
+          <InstallCommand command={install} />
+        </div>
+        <dl class="hero-proof" data-rise style="--d:360">
+          <div><dt>Dependencies</dt><dd>0</dd></div>
+          <div><dt>Allocations<sup aria-hidden="true">*</sup></dt><dd>0 B</dd></div>
+          <div><dt>Optimized</dt><dd>AOT</dd></div>
+        </dl>
+        <p class="hero-footnote" data-rise style="--d:420"><span aria-hidden="true">* </span>Allocated per warmed update.</p>
+          </div>
+          <div class="hero-stage" data-rise style="--d:300" aria-hidden="true">
+            <canvas class="hero-field" data-field></canvas>
+            <div class="hero-hud">
+              <span>entities <b data-hud-entities>0</b></span>
+              <span>archetypes <b>4</b></span>
+              <span>tick <b data-hud-tick>000000</b></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="ticker" aria-label="Highlights">
+      <div class="ticker-track">
+        {
+          [0, 1].map((copy) => (
+            <ul class="ticker-list" aria-hidden={copy === 1 ? "true" : undefined}>
+              {ticker.map((item) => (
+                <li>
+                  <Icon name="lightning" class="ticker-bolt" />
+                  {item}
+                </li>
+              ))}
+            </ul>
+          ))
+        }
+      </div>
+    </div>
+
+    <!-- 01: the system -->
+    <section class="section" aria-labelledby="system-title">
+      <div class="frame">
+        <div class="sec-label" data-reveal><span>01</span>The system</div>
+        <div class="system">
+          <div class="system-copy" data-reveal>
+            <h2 class="sec-title" id="system-title">Two structs and a method. That is the whole system.</h2>
+            <p class="sec-lede">
+              Components are unmanaged structs. A system is a static method that asks for <code>ref</code> to write
+              and <code>in</code> to read. The generated loop calls <code>Motion.Move</code> directly for every
+              entity that has both components.
+            </p>
+            <ul class="system-facts">
+              <li><span>Typed access</span>concrete rows, nothing boxed or looked up by type</li>
+              <li><span>Compile time</span>queries, bundles, modules, and schedules are generated</li>
+              <li><span>Your code</span>generated declarations stay in your namespace and partial types</li>
+            </ul>
+          </div>
+          <figure class="window system-window" data-reveal data-story="system">
+            <div class="window-bar">
+              <span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+              <span class="window-file">Motion.cs</span>
+              <span class="window-tag">generated loop · per entity</span>
+            </div>
+            <div class="code">
+              <Code code={heroCode} lang="csharp" theme={codeTheme} />
+              <span class="code-hot" aria-hidden="true"><span>runs for every matching row</span></span>
+            </div>
+          </figure>
+        </div>
+        <div class="targets" data-reveal data-story="targets">
+          <p class="targets-label">Runs under</p>
+          <p class="targets-row">
+            <span data-target-word>JIT</span><span class="targets-sep">/</span><span data-target-word>Trimmed</span><span class="targets-sep">/</span><span data-target-word>NativeAOT</span>
+          </p>
+          <p class="targets-note">The same package, verified in clean consumers on each.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 02: features as a bento of live visuals -->
+    <section class="section" aria-labelledby="features-title">
+      <div class="frame">
+        <div class="sec-label" data-reveal><span>02</span>What you get</div>
+        <h2 class="sec-title sec-title-wide" id="features-title" data-reveal>
+          Everything a frame needs, generated at compile time
+        </h2>
+        <div class="bento" data-scene>
+          {
+            features.map((feature, index) => (
+              <a class:list={["bento-card", { "is-wide": feature.wide }]} href={feature.href} style={`--d:${index * 85}`}>
+                <div class="bento-visual">
+                  {feature.key === "query" && <QueryVisual />}
+                  {feature.key === "storage" && <StorageVisual />}
+                  {feature.key === "schedule" && <ScheduleVisual />}
+                  {feature.key === "exec" && <ExecutionVisual />}
+                  {feature.key === "messages" && <MessagesVisual />}
+                  {feature.key === "aot" && <AotVisual />}
+                </div>
+                <div class="bento-body">
+                  <span class="mono-label">{feature.label}</span>
+                  <h3>{feature.title}</h3>
+                  <p>{segments(feature.body).map(({ code, part }) => (code ? <code>{part}</code> : part))}</p>
+                  <span class="pill">
+                    {feature.cta}
+                    <Icon name="arrow-right" />
+                  </span>
+                </div>
+              </a>
+            ))
+          }
+          <a class="bento-card bento-guides" href="/docs/guides/components-and-bundles" style={`--d:${features.length * 85}`}>
+            <div class="bento-visual">
+              <div class="viz viz-guides" aria-hidden="true">
+                <div class="vg-list">
+                  {
+                    [0, 1].map(() => (
+                      <ul>
+                        {guides.map((guide, index) => (
+                          <li>
+                            <span>{two(index)}</span>
+                            {guide}
+                          </li>
+                        ))}
+                      </ul>
+                    ))
+                  }
+                </div>
+              </div>
+            </div>
+            <div class="bento-body">
+              <span class="mono-label">Guides</span>
+              <h3>{guides.length} guides, one per feature</h3>
+              <p>Components, modules, queries, schedules, resources, commands, and the rest, each with runnable code.</p>
+              <span class="pill">
+                Explore the docs
+                <Icon name="arrow-right" />
+              </span>
+            </div>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <TaglineReveal lines={["Your components stay structs.", "Your systems stay methods.", "The generator writes the rest."]} />
+
+    <!-- 03: how it works, as editorial rows -->
+    <section class="section" aria-labelledby="steps-title">
+      <div class="frame">
+        <div class="sec-label" data-reveal><span>03</span>How it works</div>
+        <h2 class="sec-title sec-title-wide" id="steps-title" data-reveal>From package to running world in three steps</h2>
+        <ol class="steps">
+          {
+            steps.map((step, index) => (
+              <li class="step" data-reveal>
+                <span class="step-number" aria-hidden="true">
+                  {two(index)}
+                </span>
+                <div class="step-copy">
+                  <h3>{step.title}</h3>
+                  <p>{step.body}</p>
+                </div>
+                <div class="step-visual">
+                  {step.command ? (
+                    <InstallCommand command={step.command} typed />
+                  ) : (
+                    <div class="window">
+                      <div class="code">
+                        <Code code={step.code!} lang="csharp" theme={codeTheme} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </li>
+            ))
+          }
+        </ol>
+        <p class="sec-foot" data-reveal>
+          The <a href={quickstart}>quickstart</a> puts these pieces together into one program that prints <code>1</code>.
+        </p>
+      </div>
+    </section>
+
+    <!-- 04: performance -->
+    <section class="section" aria-labelledby="perf-title">
+      <div class="frame">
+        <div class="sec-label" data-reveal><span>04</span>Performance</div>
+        <h2 class="sec-title sec-title-wide" id="perf-title" data-reveal>
+          Generated loops that keep pace with handwritten ones
+        </h2>
+        <div class="perf">
+          <div class="perf-hero" data-reveal>
+            <p class="perf-number">0 B</p>
+            <p class="perf-caption">managed allocations per warmed update, with one worker or four</p>
+            <dl class="perf-minis">
+              <div><dt>for a <code>Changed&lt;T&gt;</code> scan with nothing changed, at 1,000 or 100,000 entities</dt><dd>0.16 µs</dd></div>
+              <div><dt>package dependencies in the runtime</dt><dd>0</dd></div>
+            </dl>
+          </div>
+          <div class="perf-chart" data-reveal data-bars>
+            <p class="perf-chart-title">
+              Moving 100,000 entities, median µs per update
+              <span>Archevolt's times include schedule dispatch, resource access, lease checks, and query traversal.</span>
+            </p>
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Case</th>
+                  <th scope="col" class="num">Median µs</th>
+                  <th scope="col" class="num">ns per entity</th>
+                </tr>
+              </thead>
+              <tbody>
+                {
+                  movement.map((row) => (
+                    <tr class:list={{ "is-baseline": row.baseline }}>
+                      <th scope="row">
+                        <span class="bar-label">
+                          {segments(row.name).map(({ code, part }) => (code ? <code>{part}</code> : part))}
+                          {row.baseline && <span class="bar-tag">baseline, no scheduler</span>}
+                        </span>
+                        <span class="bar" style={`--w:${((row.us / maxUs) * 100).toFixed(2)}%`}>
+                          <span class="bar-fill" />
+                        </span>
+                      </th>
+                      <td class="num" data-count={row.us.toFixed(2)}>{row.us.toFixed(2)}</td>
+                      <td class="num">{row.ns}</td>
+                    </tr>
+                  ))
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <p class="sec-foot" data-reveal>
+          Medians of three process runs on an AMD Ryzen 9 5950X, Windows 11, Release build, 2 November 2026. The
+          numbers come from one machine. They are not a regression limit or a ranking.{" "}
+          <a href="/docs/performance">Read the full performance report</a>
+        </p>
+      </div>
+    </section>
+
+    <!-- 05: the sample -->
+    <section class="section" aria-labelledby="sample-title">
+      <div class="frame">
+        <div class="sec-label" data-reveal><span>05</span>Sample</div>
+        <div class="arcade" data-reveal>
+          <div class="arcade-copy">
+            <h2 class="sec-title" id="sample-title">Every ship, rock, bullet, and particle is an entity</h2>
+            <p>
+              Archeoids is a playable Asteroids style game. Archevolt runs the gameplay, and Silk.NET handles the
+              window, input, and rendering. Read it for spawn bundles, deferred commands, independent message
+              readers, and invulnerability tags working together.
+            </p>
+            <InstallCommand command="dotnet run --project samples/Archeoids -c Release" />
+            <a class="pill pill-light" href="/docs/samples/archeoids">
+              Explore the Archeoids sample
+              <Icon name="arrow-right" />
+            </a>
+          </div>
+          <div class="arcade-screen" data-story="arcade">
+            <Image
+              src={archeoids}
+              alt="Archeoids gameplay with a cyan ship, drifting asteroids, and a score and lives HUD."
+              widths={[640, 1100, 1600]}
+              sizes="(min-width: 1024px) 640px, 100vw"
+              loading="lazy"
+            />
+            {
+              callouts.map((callout, index) => (
+                <span
+                  class:list={["callout", { "is-end": callout.align === "end" }]}
+                  style={`left:${callout.x}%;top:${callout.y}%`}
+                  data-callout={index}
+                  aria-hidden="true"
+                >
+                  <span class="callout-ring" />
+                  <span class="callout-tag">entity · {callout.label}</span>
+                </span>
+              ))
+            }
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 06: FAQ -->
+    <section class="section" aria-labelledby="faq-title">
+      <div class="frame faq-layout">
+        <div>
+          <div class="sec-label" data-reveal><span>06</span>FAQ</div>
+          <h2 class="sec-title" id="faq-title" data-reveal>Questions before you start</h2>
+        </div>
+        <div class="faq" data-reveal>
+          {
+            faqs.map((faq, index) => (
+              <details class="faq-item">
+                <summary>
+                  <span class="faq-num">{two(index)}</span>
+                  <span class="faq-q">{faq.q}</span>
+                  <span class="faq-icon">
+                    <Icon name="plus" />
+                  </span>
+                </summary>
+                <p>{segments(faq.a).map(({ code, part }) => (code ? <code>{part}</code> : part))}</p>
+              </details>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    <!-- Final call to action -->
+    <section class="final" aria-labelledby="final-title">
+      <div class="frame">
+        <div class="final-panel" data-reveal>
+          <svg class="final-bolt" viewBox="0 0 120 220" aria-hidden="true">
+            <path d="M78 4 L18 128 H56 L40 216 L104 84 H64 Z" pathLength="1"></path>
+          </svg>
+          <p class="mono-label">Get started</p>
+          <h2 id="final-title">Run your first system</h2>
+          <p class="final-lede">Two structs, one method, and a schedule. The quickstart walks through the whole program.</p>
+          <div class="hero-actions">
+            <a class="button" href={quickstart}>
+              Read the quickstart
+              <Icon name="arrow-right" />
+            </a>
+            <InstallCommand command={install} />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <script type="application/ld+json" set:html={JSON.stringify(faqSchema)} />
+  </div>
+</PageLayout>
+
+<script>
+  import { mountHome } from "./_home/home";
+
+  let teardown: (() => void) | undefined;
+  document.addEventListener("astro:page-load", () => {
+    teardown?.();
+    teardown = mountHome();
+  });
+  document.addEventListener("astro:before-swap", () => {
+    teardown?.();
+    teardown = undefined;
+  });
+</script>

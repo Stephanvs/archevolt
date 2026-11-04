@@ -1,0 +1,27 @@
+---
+interface Props {
+  lines: string[];
+}
+
+const { lines } = Astro.props;
+---
+
+<section class="tagline" aria-label={lines.join(" ")}>
+  <div class="frame tagline-inner">
+    <p class="tagline-text" aria-hidden="true">
+      {
+        lines.map((line) => (
+          <span class="tagline-line">
+            {line.split(" ").map((word) => (
+              <>
+                <span class="tagline-word" data-word>
+                  {word}
+                </span>{" "}
+              </>
+            ))}
+          </span>
+        ))
+      }
+    </p>
+  </div>
+</section>

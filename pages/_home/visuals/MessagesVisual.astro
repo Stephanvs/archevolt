@@ -1,0 +1,25 @@
+---
+const messages = Array.from({ length: 8 }, (_, index) => `#${String(index + 1).padStart(2, "0")}`);
+---
+
+<div class="viz viz-messages" data-story="messages" aria-hidden="true">
+  <div class="vm-top">
+    <span class="vm-title">MessageWriter&lt;Collision&gt;</span>
+    <span class="vm-chip" data-rotate>world.AdvanceMessages()</span>
+  </div>
+  <div class="vm-track">
+    {
+      messages.map((name, index) => (
+        <span class="vm-slot">
+          <span class="vm-msg" data-msg={index}>
+            {name}
+          </span>
+        </span>
+      ))
+    }
+  </div>
+  <div class="vm-cursors">
+    <span class="vm-cursor is-a" data-cursor="a"><span>MessageReader A</span></span>
+    <span class="vm-cursor is-b" data-cursor="b"><span>MessageReader B</span></span>
+  </div>
+</div>

@@ -1,0 +1,29 @@
+---
+import Icon from "../Icon.astro";
+
+const command = "dotnet publish -c Release -p:PublishAot=true";
+const targets = ["JIT", "Trimmed", "NativeAOT"];
+---
+
+<div class="viz viz-aot" data-story="aot" aria-hidden="true">
+  <div class="va-term">
+    <span class="va-prompt">$</span>
+    <span class="va-command" data-command={command}>{command}</span><span class="va-caret" data-caret></span>
+  </div>
+  <div class="va-targets">
+    {
+      targets.map((target, index) => (
+        <div class="va-target" data-target={index}>
+          <span class="va-name">{target}</span>
+          <span class="va-bar">
+            <span class="va-fill" />
+          </span>
+          <span class="va-check">
+            <Icon name="check" />
+          </span>
+        </div>
+      ))
+    }
+  </div>
+  <div class="va-foot">verified in clean consumers · no package dependencies</div>
+</div>

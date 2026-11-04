@@ -15,6 +15,7 @@ export default defineConfig({
       }),
     ],
   },
+  basePath: "/docs",
   deployment: {
     site: "https://archevolt.dev",
   },
