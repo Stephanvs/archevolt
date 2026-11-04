@@ -8,10 +8,12 @@ public sealed class ScheduleExecutionTests
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
 
-    [Fact]
-    public void Timing_is_disabled_by_default_and_reports_only_the_latest_enabled_run()
+    [Theory]
+    [InlineData(1)]
+    [InlineData(4)]
+    public void Timing_is_disabled_by_default_and_reports_only_the_latest_enabled_run(int budget)
     {
-        using var world = new WorldBuilder().Build();
+        using var world = new WorldBuilder().UseParallelExecution(budget).Build();
         int calls = 0;
         using var schedule = BoundSchedule.Bind(world, ActionSystem("body", _ => calls++));
         schedule.Run(TestContext.Current.CancellationToken);
@@ -40,10 +42,12 @@ public sealed class ScheduleExecutionTests
         Assert.Equal(TimeSpan.Zero, schedule.Timings[0].ConditionElapsed);
     }
 
-    [Fact]
-    public void Timing_records_condition_skips_and_joined_body_or_condition_failures()
+    [Theory]
+    [InlineData(1)]
+    [InlineData(4)]
+    public void Timing_records_condition_skips_and_joined_body_or_condition_failures(int budget)
     {
-        using var world = new WorldBuilder().Build();
+        using var world = new WorldBuilder().UseParallelExecution(budget).Build();
         bool enabled = false;
         bool failBody = false;
         bool failCondition = false;

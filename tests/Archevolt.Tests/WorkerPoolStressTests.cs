@@ -9,6 +9,7 @@ public sealed class WorkerPoolStressTests
     [InlineData(4)]
     public void Reused_public_schedules_execute_thousands_of_varied_batches_exactly_once(int budget)
     {
+        int caller = Environment.CurrentManagedThreadId;
         using var world = new WorldBuilder().UseParallelExecution(budget).Build();
         int[] sizes = [0, 1, 2, 31, 257];
         var state = new ExecutionState();
@@ -34,6 +35,7 @@ public sealed class WorkerPoolStressTests
                 state.Iteration = iteration;
                 int pattern = iteration % sizes.Length;
                 schedules[pattern].Run(TestContext.Current.CancellationToken);
+                if (sizes[pattern] == 1) Assert.Equal(caller, state.FirstThread);
                 Assert.Equal(0, state.Active);
                 Assert.InRange(state.Maximum, 0, budget);
                 for (int item = 0; item < state.Hits.Length; item++)
@@ -52,12 +54,14 @@ public sealed class WorkerPoolStressTests
         internal int Active;
         internal int Maximum;
         internal int Iteration;
+        internal int FirstThread;
     }
 
     private sealed class WorkBody(int index, ExecutionState state) : SystemBody
     {
         protected override void Run(SystemRun run)
         {
+            if (index == 0) state.FirstThread = Environment.CurrentManagedThreadId;
             int active = Interlocked.Increment(ref state.Active);
             int observed = Volatile.Read(ref state.Maximum);
             while (active > observed)

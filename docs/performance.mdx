@@ -87,8 +87,14 @@ dotnet run --project benchmarks/Archevolt.Benchmarks -c Release -- --quick
 
 `--quick` runs a short movement measurement in one process. `baseline.ps1` runs the BenchmarkDotNet baseline cases with three process runs and writes their medians and ranges to `artifacts/baseline/`. `-IncludeBevy` also runs the Bevy counterparts, and `-Classes` selects other benchmark classes.
 
-`measure.ps1 -Mode All` runs the workload matrix, partition comparison, BenchmarkDotNet comparison, and JIT disassembly. Use `-Mode Matrix`, `Partition`, `Bdn`, or `Disassembly` to run one measurement. The script fails if any command fails or BenchmarkDotNet does not execute all comparison cases.
+`measure.ps1 -Mode All` runs the workload matrix, single-item cases, partition comparison, BenchmarkDotNet comparison, and JIT disassembly. Use `-Mode Matrix`, `SingleItem`, `Partition`, `Bdn`, or `Disassembly` to run one measurement. The script fails if any command fails or BenchmarkDotNet does not execute all comparison cases.
 
 `-Mode Partition -Runs 3` compares direct and partitioned queries across row counts and checks warmed managed allocations. Add `-BaselineAssembly <path>` to compare against a preserved benchmark assembly with the same benchmark code. `-RuntimeDefaults` uses default runtime compilation settings for the partition comparison. `-Output <directory>` selects where the script saves its evidence.
+
+`SingleItem` measures ten cases in the current build, including no-op and action singletons, generated queries, and partitioned controls. It launches three processes sequentially per case with tiered compilation and ReadyToRun disabled. Each process validates its workload before and after timing and records all pilot, warmup, and measured samples in raw JSON.
+
+Each run creates `artifacts/performance/single-item/<UTC timestamp>/` with the raw JSON, logs, source hashes, Git revision, and environment metadata. Its `summary.csv` uses the baseline-compatible columns `Harness,Case,Runs,MedianUs,MinUs,MaxUs`. The timings are the median, minimum, and maximum of the three process means in microseconds. Compare saved runs with `./scripts/compare-baselines.ps1 -Before <before-directory> -After <after-directory>`.
+
+This mode measures the current build. The [historical single-item report](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/single-item-batches.md) describes a separate experiment with frozen baseline and candidate builds, source swapping, and six launches per variant in ABBA order.
 
 The [v1 performance report](https://github.com/Stephanvs/archevolt/blob/main/.audit/performance-final.md) records the workload matrix, generated code sizes, and JIT and AOT inspection from before table storage and .NET 11. Its numbers are not comparable with the tables above.

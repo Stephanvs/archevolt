@@ -141,6 +141,55 @@ public sealed class CommandTests
         Assert.False(world.Contains(failed));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Cancelled_singleton_producer_discards_commands_preserves_failures_and_can_run_after_reset(bool throwAfterCancellation)
+    {
+        using var world = new WorldBuilder().AddBundle<Particle>().UseParallelExecution(4).Build();
+        using var cancellation = new CancellationTokenSource();
+        Entity reserved = default;
+        bool cancel = true;
+        var originalFailure = new ArithmeticException("producer failure");
+        ActionBody produce = (_, commands, _) =>
+        {
+            reserved = commands.Spawn(new Particle(new Position(8)));
+            if (!cancel) return;
+            cancellation.Cancel();
+            if (throwAfterCancellation) throw originalFailure;
+        };
+        var descriptor = SystemDescriptor.Create("producer", b => new CommandBody(b, produce)).Commands().Build();
+        using var schedule = BoundSchedule.Bind(world, [descriptor], [], ["producer instance"]);
+
+        if (throwAfterCancellation)
+        {
+            var error = Assert.Throws<AggregateException>(() => schedule.Run(cancellation.Token));
+            var failure = Assert.IsType<SystemExecutionException>(Assert.Single(error.InnerExceptions));
+            Assert.Equal("producer instance", failure.InstanceKey);
+            Assert.Equal("producer", failure.SystemName);
+            Assert.Equal(0, failure.FirstRow);
+            Assert.Equal(int.MaxValue, failure.RowCount);
+            Assert.Same(originalFailure, failure.InnerException);
+        }
+        else
+        {
+            var error = Assert.Throws<OperationCanceledException>(() => schedule.Run(cancellation.Token));
+            Assert.Equal(cancellation.Token, error.CancellationToken);
+        }
+        Entity discarded = reserved;
+        Assert.False(discarded.IsNull);
+        Assert.False(world.Contains(discarded));
+        Assert.True(schedule.IsFaulted);
+
+        cancel = false;
+        schedule.Reset();
+        schedule.Run(TestContext.Current.CancellationToken);
+        Assert.False(schedule.IsFaulted);
+        Assert.Equal(8, world.Get<Position>(reserved).Value);
+        Assert.NotEqual(discarded, reserved);
+        Assert.False(world.Contains(discarded));
+    }
+
     [Fact]
     public void Try_commands_allow_absent_targets_while_strict_duplicate_despawn_fails()
     {
