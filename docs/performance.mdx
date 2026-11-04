@@ -40,6 +40,8 @@ dotnet run --project benchmarks/Archevolt.Benchmarks -c Release -- --filter "*Mo
 ./scripts/measure.ps1 -Mode All
 ```
 
-`measure.ps1` runs the matrix, BenchmarkDotNet comparison, and JIT disassembly (`-Mode Matrix`, `Bdn`, or `Disassembly` run them separately). It fails if any command fails or BenchmarkDotNet does not execute all comparison cases.
+`measure.ps1 -Mode All` runs the workload matrix, partition comparison, BenchmarkDotNet comparison, and JIT disassembly. Use `-Mode Matrix`, `Partition`, `Bdn`, or `Disassembly` to run one measurement. The script fails if any command fails or BenchmarkDotNet does not execute all comparison cases.
+
+`-Mode Partition -Runs 3` compares direct and partitioned queries across row counts and checks warmed managed allocations. Add `-BaselineAssembly <path>` to compare against a preserved benchmark assembly with the same benchmark code. `-RuntimeDefaults` uses default runtime compilation settings for the partition comparison. `-Output <directory>` selects where the script saves its evidence.
 
 The [v1 performance report](https://github.com/Stephanvs/archevolt/blob/main/.audit/performance-final.md) records the workload matrix, handwritten and Arch comparisons, allocations, native storage, generated code sizes, and JIT and AOT inspection. It predates table storage and .NET 11, so its numbers are not comparable with the table above.
