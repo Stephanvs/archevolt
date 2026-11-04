@@ -93,6 +93,7 @@ internal sealed class RenderFrame
 {
     public List<Sprite> Sprites { get; } = new(2048);
     public int Particles { get; set; }
+    public double FramesPerSecond { get; set; }
 }
 
 internal static class Factory

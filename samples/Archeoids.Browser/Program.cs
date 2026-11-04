@@ -33,7 +33,7 @@ internal static partial class Program
         Session state = Game.State;
         Geometry.Build(Game.Frame, state, _seconds, _paused);
         Render(MemoryMarshal.AsBytes(Geometry.Vertices), state.Score, state.Wave, state.Lives,
-            Game.Frame.Sprites.Count, Game.UpdateMilliseconds, _paused);
+            Game.Frame.Sprites.Count, Game.UpdateMilliseconds, Game.Frame.FramesPerSecond, _paused);
     }
 
     [JSExport]
@@ -57,5 +57,5 @@ internal static partial class Program
 
     [JSImport("render", "archeoids")]
     private static partial void Render([JSMarshalAs<JSType.MemoryView>] Span<byte> vertices,
-        int score, int wave, int lives, int entities, double milliseconds, bool paused);
+        int score, int wave, int lives, int entities, double milliseconds, double framesPerSecond, bool paused);
 }
