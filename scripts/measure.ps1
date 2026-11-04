@@ -1,7 +1,7 @@
 #Requires -Version 7.2
 [CmdletBinding()]
 param(
-    [ValidateSet('Matrix', 'Partition', 'Bdn', 'Disassembly', 'All')]
+    [ValidateSet('Matrix', 'SingleItem', 'Partition', 'Bdn', 'Disassembly', 'All')]
     [string] $Mode = 'Matrix',
     [ValidateRange(1, 20)] [int] $Runs = 3,
     [string] $BaselineAssembly,
@@ -63,6 +63,54 @@ try {
             $env:DOTNET_TieredCompilation = '0'
             $env:DOTNET_ReadyToRun = '0'
             Invoke-Recorded 'matrix.csv' @($Assembly, '--matrix')
+        }
+        finally {
+            $env:DOTNET_TieredCompilation = $tiered
+            $env:DOTNET_ReadyToRun = $ready
+        }
+    }
+    if ($Mode -in @('SingleItem', 'All')) {
+        $runDirectory = "single-item/$([DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss-fffffff'))"
+        $singleItemOutput = Join-Path $Output $runDirectory
+        $null = New-Item -ItemType Directory -Path (Join-Path $singleItemOutput 'raw')
+        $metadata = @('dotnet-info.txt', 'head.txt', "environment-$Mode.txt",
+            "working-tree-$Mode.txt", "source-hashes-$Mode.csv")
+        if ($IsWindows) { $metadata += @('cpu.txt', 'os.txt') }
+        if (-not $NoBuild) { $metadata += @('build.txt', 'no-change-build.txt') }
+        foreach ($file in $metadata) {
+            Copy-Item -LiteralPath (Join-Path $Output $file) -Destination $singleItemOutput
+        }
+        @('SingleItemRuns=3', 'SingleItemDOTNET_TieredCompilation=0', 'SingleItemDOTNET_ReadyToRun=0') |
+            Add-Content -LiteralPath (Join-Path $singleItemOutput "environment-$Mode.txt")
+        $tiered = $env:DOTNET_TieredCompilation
+        $ready = $env:DOTNET_ReadyToRun
+        try {
+            $env:DOTNET_TieredCompilation = '0'
+            $env:DOTNET_ReadyToRun = '0'
+            $cases = @(Invoke-Recorded "$runDirectory/cases.txt" @($Assembly, '--single-item', '--list'))
+            if ($cases.Count -eq 0) { throw 'The single-item runner listed no cases.' }
+            $summary = foreach ($case in $cases) {
+                $means = @(foreach ($run in 1..3) {
+                    $name = "$case-$run"
+                    $resultPath = Join-Path $singleItemOutput "raw/$name.json"
+                    Invoke-Recorded "$runDirectory/raw/$name.txt" @($Assembly, '--single-item', $case, $resultPath) |
+                        Out-Host
+                    $result = Get-Content -LiteralPath $resultPath -Raw | ConvertFrom-Json
+                    ($result.Samples | Measure-Object -Property NanosecondsPerRun -Average).Average / 1000
+                })
+                $means = @($means | Sort-Object)
+                [pscustomobject]@{
+                    Harness = 'single-item'
+                    Case = $case
+                    Runs = $means.Count
+                    MedianUs = $means[1].ToString('R', [Globalization.CultureInfo]::InvariantCulture)
+                    MinUs = $means[0].ToString('R', [Globalization.CultureInfo]::InvariantCulture)
+                    MaxUs = $means[2].ToString('R', [Globalization.CultureInfo]::InvariantCulture)
+                }
+            }
+            $summary | Export-Csv -LiteralPath (Join-Path $singleItemOutput 'summary.csv') -NoTypeInformation
+            Copy-Item -LiteralPath (Join-Path $Output 'durations.csv') -Destination $singleItemOutput
+            Write-Host "Single-item results: $singleItemOutput"
         }
         finally {
             $env:DOTNET_TieredCompilation = $tiered

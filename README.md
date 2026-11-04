@@ -141,6 +141,10 @@ dotnet run --project benchmarks/Archevolt.Benchmarks -c Release -- --filter "*Mo
 ./scripts/measure.ps1 -Mode All
 ```
 
+`measure.ps1 -Mode SingleItem` measures the current build's ten single-item and partitioned-control cases with three sequential process launches per case. `-Mode All` includes these cases alongside Matrix, Partition, Bdn, and Disassembly. Add `-NoBuild` to reuse the existing Release build. Each SingleItem run saves raw JSON, logs, and source and environment metadata under `artifacts/performance/single-item/<UTC timestamp>/`.
+
+Its `summary.csv` records the median, minimum, and maximum of the three process means in microseconds. Compare two saved runs with `./scripts/compare-baselines.ps1 -Before <before-directory> -After <after-directory>`. See the [single-item report](benchmarks/single-item-batches.md) for the separate historical ABBA comparison.
+
 `./scripts/baseline.ps1` records the .NET [baseline cases](benchmarks/baseline.md) with the median of three process runs. Add `-IncludeBevy` to refresh the Bevy 0.20.0 reference measurements. Ordinary runs require no Rust toolchain; saved Bevy results remain available for comparison.
 
 Benchmark results are workload-specific. The [2 November checkpoint](benchmarks/results.md) records the full suite at the source tree released as v0.5.5. The [4 November dispatch and partitioning study](benchmarks/query-partition-threshold.md) measures the later single-work-item dispatch change. The v1 [performance report](.audit/performance-final.md) records the workload matrix, handwritten and Arch comparisons, allocations, native storage, generated code sizes, and JIT/AOT inspection. Structural changes can grow storage and allocate, and small workloads can cost more to dispatch in parallel.
