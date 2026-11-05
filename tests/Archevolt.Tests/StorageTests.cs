@@ -256,6 +256,41 @@ public sealed class StorageTests
     }
 
     [Fact]
+    public void Get_throws_and_TryGet_resets_the_value_when_the_entity_or_component_is_missing()
+    {
+        using var world = new WorldBuilder().AddComponent<Position>().AddComponent<Extra>().AddComponent<Frozen>(tag: true).Build();
+        Entity entity = world.Spawn();
+        world.Insert(entity, new Position(5));
+        world.Insert(entity, default(Frozen));
+        Entity stale = world.Spawn();
+        world.Insert(stale, new Position(9));
+        Assert.True(world.Despawn(stale));
+
+        Assert.Equal(new Position(5), world.Get<Position>(entity));
+        Assert.True(world.TryGet(entity, out Position found));
+        Assert.Equal(new Position(5), found);
+
+        var extra = new Extra(3);
+        Assert.False(world.TryGet(entity, out extra));
+        Assert.Equal(default, extra);
+        Assert.Equal("Entity or component does not exist.", Assert.Throws<InvalidOperationException>(() => world.Get<Extra>(entity)).Message);
+
+        var position = new Position(1);
+        Assert.False(world.TryGet(stale, out position));
+        Assert.Equal(default, position);
+        Assert.Equal("Entity or component does not exist.", Assert.Throws<InvalidOperationException>(() => world.Get<Position>(stale)).Message);
+
+        Assert.Equal("Tags have no stored value. Use Has<T>.", Assert.Throws<InvalidOperationException>(() => world.Get<Frozen>(entity)).Message);
+        Assert.Throws<InvalidOperationException>(() => world.TryGet<Frozen>(entity, out _));
+        Assert.False(world.TryGet<Frozen>(stale, out _));
+        Assert.Equal("Entity or component does not exist.", Assert.Throws<InvalidOperationException>(() => world.Get<Frozen>(stale)).Message);
+
+        Assert.Equal("The component type is not registered in this world.", Assert.Throws<InvalidOperationException>(() => world.Get<Velocity>(entity)).Message);
+        Assert.Throws<InvalidOperationException>(() => world.TryGet<Velocity>(entity, out _));
+        Assert.False(world.TryGet<Velocity>(stale, out _));
+    }
+
+    [Fact]
     public void Despawning_the_last_generation_retires_the_slot_instead_of_reusing_it()
     {
         using var world = new WorldBuilder().AddBundle<Particle>().Build();

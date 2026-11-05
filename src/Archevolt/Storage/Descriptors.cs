@@ -142,6 +142,7 @@ internal sealed class ComponentRegistry
 {
     internal readonly ComponentDescriptor[] Components;
     private readonly int[] _byType;
+    private readonly int[] _valueIdByType;
 
     internal ComponentRegistry(IEnumerable<ComponentDescriptor> descriptors)
     {
@@ -157,6 +158,10 @@ internal sealed class ComponentRegistry
         Array.Fill(_byType, -1);
         for (int i = 0; i < Components.Length; i++)
             _byType[Components[i].TypeKey] = i;
+        _valueIdByType = (int[])_byType.Clone();
+        foreach (var component in Components)
+            if (component.IsTag)
+                _valueIdByType[component.TypeKey] = -1;
     }
 
     internal int Id<T>() where T : unmanaged => Id(TypeKey<T>.Value);
@@ -165,5 +170,24 @@ internal sealed class ComponentRegistry
         if ((uint)typeKey >= (uint)_byType.Length || _byType[typeKey] < 0)
             throw new InvalidOperationException("The component type is not registered in this world.");
         return _byType[typeKey];
+    }
+
+    internal int ValueId<T>() where T : unmanaged
+    {
+        int typeKey = TypeKey<T>.Value;
+        if ((uint)typeKey < (uint)_valueIdByType.Length)
+        {
+            int id = _valueIdByType[typeKey];
+            if (id >= 0)
+                return id;
+        }
+        return ThrowNoValue(typeKey);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private int ThrowNoValue(int typeKey)
+    {
+        Id(typeKey);
+        throw new InvalidOperationException("Tags have no stored value. Use Has<T>.");
     }
 }

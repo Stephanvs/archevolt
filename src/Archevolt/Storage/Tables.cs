@@ -8,9 +8,11 @@ internal sealed unsafe class Table : IDisposable
     private readonly nint[] _values;
     private readonly nint[] _added;
     private readonly nint[] _changed;
+    private readonly int[] _ids;
     private nint _slab;
     private nint _entities;
     internal readonly ComponentDescriptor[] Components;
+    internal readonly nint[] ValuesById;
     // Per tracked column, a tick no older than any added or changed stamp in the column. A change-filtered query
     // skips the table when the summary predates the system's last run. Rows leaving the table do not lower it.
     internal readonly ulong[] AddedSummary;
@@ -19,9 +21,11 @@ internal sealed unsafe class Table : IDisposable
     internal int Capacity { get; private set; }
     internal long Bytes { get; private set; }
 
-    internal Table(ComponentDescriptor[] components)
+    internal Table(ComponentDescriptor[] components, int[] ids, int registeredComponents)
     {
         Components = components;
+        _ids = ids;
+        ValuesById = new nint[registeredComponents];
         _values = new nint[components.Length];
         _added = new nint[components.Length];
         _changed = new nint[components.Length];
@@ -35,6 +39,13 @@ internal sealed unsafe class Table : IDisposable
     internal Span<ulong> Changed(int column) => new((void*)_changed[column], Count);
     internal Span<byte> ValueBytes(int column, int row) =>
         new((byte*)_values[column] + (nint)row * Components[column].Size, Components[column].Size);
+
+    internal T Value<T>(nint values, int row) where T : unmanaged
+    {
+        if ((uint)row >= (uint)Count)
+            throw new IndexOutOfRangeException();
+        return ((T*)values)[row];
+    }
 
     internal int Append(EntityKey key)
     {
@@ -130,7 +141,10 @@ internal sealed unsafe class Table : IDisposable
         for (int i = 0; i < Components.Length; i++)
         {
             if (!Components[i].IsTag)
+            {
                 Column(ref _values[i], Components[i].Size);
+                ValuesById[_ids[i]] = _values[i];
+            }
             if (Components[i].Tracked)
             {
                 Column(ref _added[i], sizeof(ulong));
@@ -157,6 +171,7 @@ internal sealed unsafe class Table : IDisposable
         _slab = 0;
         _entities = 0;
         Array.Clear(_values);
+        Array.Clear(ValuesById);
         Array.Clear(_added);
         Array.Clear(_changed);
         Array.Clear(AddedSummary);
@@ -174,6 +189,7 @@ internal sealed class Archetype
     internal readonly ulong[] Mask;
     internal readonly ComponentDescriptor[] Components;
     internal readonly Table Table;
+    internal readonly nint[] ValuesById;
     internal readonly int[] Columns;
     internal readonly Dictionary<int, ArchetypeEdge> AddTransitions = [];
     internal readonly Dictionary<int, ArchetypeEdge> RemoveTransitions = [];
@@ -195,7 +211,8 @@ internal sealed class Archetype
             Components[i] = registry.Components[Ids[i]];
             Columns[Ids[i]] = i;
         }
-        Table = new Table(Components);
+        Table = new Table(Components, Ids, registry.Components.Length);
+        ValuesById = Table.ValuesById;
     }
 
     internal bool Has(int component) => (Mask[component / 64] & (1UL << (component % 64))) != 0;
