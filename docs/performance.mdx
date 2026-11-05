@@ -72,7 +72,7 @@ A `Changed<T>` scan with nothing changed takes about 0.16 µs at both sizes, bec
 
 - Structural churn moves rows between archetypes. An idle tag insert and remove costs about 87 ns per entity at 1,000 entities.
 - Small workloads can cost more to dispatch in parallel than to run serially, as the parallel table shows.
-- Workers spin for up to 50 µs after each parallel batch, so frequent small batches keep extra cores busy.
+- Workers spin for up to 50 µs after each parallel batch, so frequent small batches keep extra cores busy. A parallel batch that follows a single-item batch wakes blocked workers, which costs about as much as the dispatch in the parallel table.
 - Writable access stamps a change on [tracked components](/guides/change-tracking) even when the value is equal.
 - `Added<T>` and `Changed<T>` filters skip archetypes with no stamp since the system last ran, but read every row of an archetype that has one. Changes spread thinly across many archetypes cost more to scan than the same changes kept in a few.
 - The first command playback without preallocated command capacity allocated 160.12 KB for 1,000 tag round trips. With 65,536 initial command bytes, it allocated 232 B.
