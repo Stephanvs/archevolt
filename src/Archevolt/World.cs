@@ -183,14 +183,12 @@ public sealed partial class World : IDisposable
         value = default;
         if (!Entities.TryLocate(entity, Id, out int archetypeId, out int row))
             return false;
-        int id = Registry.Id<T>();
-        if (Registry.Components[id].IsTag)
-            throw new InvalidOperationException("Tags have no stored value. Use Has<T>.");
+        int id = Registry.ValueId<T>();
         var archetype = Archetypes[archetypeId];
-        int column = archetype.Columns[id];
-        if (column < 0)
+        nint values = archetype.ValuesById[id];
+        if (values == 0)
             return false;
-        value = archetype.Table.Values<T>(column)[row];
+        value = archetype.Table.Value<T>(values, row);
         return true;
     }
 
