@@ -17,18 +17,18 @@ public sealed partial class ArchevoltGenerator : IIncrementalGenerator
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        Register(context, "ComponentAttribute", static (symbol, ct) => GenerateComponent((INamedTypeSymbol)symbol, ct));
-        Register(context, "BundleAttribute", static (symbol, ct) => GenerateBundle((INamedTypeSymbol)symbol, ct));
-        Register(context, "QueryAttribute", static (symbol, ct) => GenerateQuery((INamedTypeSymbol)symbol, ct));
-        foreach (var form in Forms) Register(context, form.Attribute, static (symbol, ct) => GenerateSystem((IMethodSymbol)symbol, ct));
-        Register(context, "EcsModuleAttribute", static (symbol, ct) => GenerateModule((INamedTypeSymbol)symbol, ct));
-        Register(context, "ScheduleAttribute", static (symbol, ct) => GenerateSchedule((INamedTypeSymbol)symbol, ct));
+        Register(context, "ComponentAttribute", static (target, ct) => GenerateComponent((INamedTypeSymbol)target.TargetSymbol, ct));
+        Register(context, "BundleAttribute", static (target, ct) => GenerateBundle((INamedTypeSymbol)target.TargetSymbol, ct));
+        Register(context, "QueryAttribute", static (target, ct) => GenerateQuery((INamedTypeSymbol)target.TargetSymbol, ct));
+        foreach (var form in Forms) Register(context, form.Attribute, static (target, ct) => GenerateSystem((IMethodSymbol)target.TargetSymbol, target.SemanticModel, target.TargetNode, ct));
+        Register(context, "EcsModuleAttribute", static (target, ct) => GenerateModule((INamedTypeSymbol)target.TargetSymbol, ct));
+        Register(context, "ScheduleAttribute", static (target, ct) => GenerateSchedule((INamedTypeSymbol)target.TargetSymbol, ct));
     }
 
-    static void Register(IncrementalGeneratorInitializationContext context, string attribute, Func<ISymbol, CancellationToken, GeneratedUnit> transform)
+    static void Register(IncrementalGeneratorInitializationContext context, string attribute, Func<GeneratorAttributeSyntaxContext, CancellationToken, GeneratedUnit> transform)
     {
         var models = context.SyntaxProvider.ForAttributeWithMetadataName("Archevolt." + attribute,
-            static (_, _) => true, (syntax, cancellationToken) => transform(syntax.TargetSymbol, cancellationToken))
+            static (_, _) => true, transform)
             .WithTrackingName(attribute + "Model");
         context.RegisterSourceOutput(models, static (output, model) =>
         {

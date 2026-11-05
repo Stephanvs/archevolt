@@ -1134,6 +1134,163 @@ public sealed class GeneratorTests
             .Select(static item => item.Id).Should().Contain(diagnostic);
     }
 
+    public static TheoryData<string, string, string> LaneUniformCallbacks => new()
+    {
+        {
+            "[Component] public readonly record struct Position(float X, float Y, float Z); [Component] public readonly record struct Velocity(float X, float Y, float Z);",
+            "",
+            "var delta = time.Value.Delta; position = new Position(position.X + velocity.X * delta, position.Y + velocity.Y * delta, position.Z + velocity.Z * delta);"
+        },
+        {
+            "[Component] public readonly record struct Position(Vector3 Value); [Component] public readonly record struct Velocity(Vector3 Value);",
+            "",
+            "position = position with { Value = position.Value + velocity.Value * time.Value.Delta };"
+        },
+        {
+            "[Component, TrackChanges] public readonly record struct Position(float X, float Y, float Z); [Component] public readonly record struct Velocity(float X, float Y, float Z);",
+            "[Each, Changed<Position>] public static void Count(scoped in Position position) => ChangedRows++;",
+            "const float delta = 1f / 60; position = new Position(position.X + velocity.X * delta, position.Y + velocity.Y * delta, position.Z + velocity.Z * delta);"
+        },
+        {
+            "[Component] public struct Position { public float X; public float Y; public float Z; } [Component] public struct Velocity { public float X; public float Y; public float Z; }",
+            "",
+            "var scale = time.Value.Delta; position.X = -position.X / 3f; position.Y = -position.Y / 3f; position.Z = -position.Z / 3f; position.X += velocity.X * scale - 2f; position.Y += velocity.Y * scale - 2f; position.Z += velocity.Z * scale - 2f;"
+        },
+        {
+            "[Component] public readonly record struct Position(Vector2 Value); [Component] public readonly record struct Velocity(Vector2 Value);",
+            "",
+            "position = new(position.Value - 0.5f * velocity.Value * time.Value.Delta);"
+        }
+    };
+
+    [Theory]
+    [MemberData(nameof(LaneUniformCallbacks))]
+    public void Lane_uniform_Each_callbacks_run_as_kernels_that_match_the_callback_bit_for_bit(string components, string observer, string body)
+    {
+        var assembly = CompileAndLoad($$"""
+            using Archevolt;
+            using System;
+            using System.Numerics;
+            using System.Reflection;
+            using System.Runtime.CompilerServices;
+            using System.Runtime.InteropServices;
+            {{components}}
+            [Resource] public readonly record struct FrameTime(float Delta);
+            public readonly struct FrameTimeValue(FrameTime value) { public readonly FrameTime Value = value; }
+            [Component] public readonly struct Marker;
+            [Bundle] public readonly partial record struct Body(Position Position, Velocity Velocity);
+            [Bundle] public readonly partial record struct MarkedBody(Position Position, Velocity Velocity, Marker Marker);
+            public static partial class Systems
+            {
+                public static int ChangedRows;
+                [Each(Partitioned = true)]
+                public static void Move(scoped ref Position position, scoped in Velocity velocity, scoped Res<FrameTime> time) { {{body}} }
+                public static void Reference(ref Position position, in Velocity velocity, FrameTimeValue time) { {{body}} }
+                {{observer}}
+            }
+            [EcsModule, IncludeSystems(typeof(Systems)), IncludeBundle<Body>, IncludeBundle<MarkedBody>, IncludeResource<FrameTime>] public static partial class Game { }
+            [Schedule, Run(typeof(Systems), nameof(Systems.Move))] public partial class Simulation { }
+            {{(observer.Length == 0 ? "" : "[Schedule, Run(typeof(Systems), nameof(Systems.Count))] public partial class Observe { }")}}
+            public static class Acceptance
+            {
+                static readonly Random Random = new(17);
+                static float Next() => Random.Next(12) switch
+                {
+                    0 => float.NaN, 1 => float.PositiveInfinity, 2 => float.NegativeInfinity, 3 => -0f, 4 => float.Epsilon * Random.Next(1, 1000),
+                    5 => -float.Epsilon * Random.Next(1, 1000), 6 => float.MaxValue, _ => (float)(Random.NextDouble() * 2000 - 1000)
+                };
+                static T Fill<T>() where T : unmanaged
+                {
+                    T value = default;
+                    foreach (ref float lane in MemoryMarshal.CreateSpan(ref Unsafe.As<T, float>(ref value), Unsafe.SizeOf<T>() / sizeof(float))) lane = Next();
+                    return value;
+                }
+                static bool Same<T>(T left, T right) where T : unmanaged
+                {
+                    var a = MemoryMarshal.CreateSpan(ref Unsafe.As<T, float>(ref left), Unsafe.SizeOf<T>() / sizeof(float));
+                    var b = MemoryMarshal.CreateSpan(ref Unsafe.As<T, float>(ref right), Unsafe.SizeOf<T>() / sizeof(float));
+                    for (int lane = 0; lane < a.Length; lane++)
+                        if (BitConverter.SingleToInt32Bits(a[lane]) != BitConverter.SingleToInt32Bits(b[lane]) && !(float.IsNaN(a[lane]) && float.IsNaN(b[lane]))) return false;
+                    return true;
+                }
+                public static int Run()
+                {
+                    var kernel = typeof(Systems).GetNestedType("__Archevolt_MoveBody", BindingFlags.NonPublic)!.GetField("__kernel", BindingFlags.NonPublic | BindingFlags.Static)!;
+                    if (!(bool)kernel.GetValue(null)!) return -1;
+                    using var world = new WorldBuilder().UseParallelExecution(4).AddModule(Game.Module).Build();
+                    var entities = new Entity[2051];
+                    var expected = new Position[entities.Length];
+                    for (int index = 0; index < entities.Length; index++)
+                    {
+                        var position = Fill<Position>();
+                        var velocity = Fill<Velocity>();
+                        entities[index] = index % 3 == 0 ? world.Spawn(new MarkedBody(position, velocity, default)) : world.Spawn(new Body(position, velocity));
+                        expected[index] = position;
+                    }
+                    world.InsertResource(new FrameTime(1)); using var simulation = Simulation.Create(world);
+                    {{(observer.Length == 0 ? "" : "using var observe = Observe.Create(world); observe.Run();")}}
+                    for (int step = 0; step < 3; step++)
+                    {
+                        var time = new FrameTime(step == 2 ? float.NaN : Next());
+                        world.InsertResource(time);
+                        for (int index = 0; index < entities.Length; index++) Systems.Reference(ref expected[index], world.Get<Velocity>(entities[index]), new FrameTimeValue(time));
+                        simulation.Run();
+                        for (int index = 0; index < entities.Length; index++) if (!Same(world.Get<Position>(entities[index]), expected[index])) return -2 - index;
+                        {{(observer.Length == 0 ? "" : "Systems.ChangedRows = 0; observe.Run(); if (Systems.ChangedRows != entities.Length) return 1;")}}
+                    }
+                    return 0;
+                }
+            }
+            """);
+        Execute(assembly).Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData("position = new(Wrap(position.Value + velocity.Value * time.Value.Delta));")]
+    [InlineData("position = new(new Vector3(position.Value.Y, position.Value.Z, position.Value.X));")]
+    [InlineData("position = position with { Value = new Vector3(position.Value.X + velocity.Value.X, position.Value.Y, position.Value.Z) };")]
+    [InlineData("position = new(position.Value / time.Value.Delta);")]
+    [InlineData("position = new(position.Value + velocity.Value * (float)(time.Value.Delta * 0.5));")]
+    [InlineData("position = new(position.Value + velocity.Value * time.Value.Scaled);")]
+    public void Each_callbacks_that_are_not_lane_uniform_keep_the_scalar_loop(string body)
+    {
+        var result = Generate($$"""
+            using Archevolt;
+            using System.Numerics;
+            [Component] public readonly record struct Position(Vector3 Value);
+            [Component] public readonly record struct Velocity(Vector3 Value);
+            [Resource] public readonly record struct FrameTime(float Delta) { public float Scaled => Delta * 2; }
+            public static partial class Systems
+            {
+                static Vector3 Wrap(Vector3 value) => value;
+                [Each] public static void Move(scoped ref Position position, scoped in Velocity velocity, scoped Res<FrameTime> time) { {{body}} }
+            }
+            """);
+        result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+        GeneratedSource(result.Output, ".Each.g.cs").Should().NotContain("__Kernel(");
+    }
+
+    [Theory]
+    [InlineData(OptimizationLevel.Release, true)]
+    [InlineData(OptimizationLevel.Debug, false)]
+    public void Each_kernels_are_generated_only_for_optimized_builds(OptimizationLevel optimization, bool expected)
+    {
+        var result = GenerateCore(["""
+            using Archevolt;
+            using System.Numerics;
+            [Component] public readonly record struct Position(Vector3 Value);
+            [Component] public readonly record struct Velocity(Vector3 Value);
+            public static partial class Systems
+            {
+                [Each] public static void Move(scoped ref Position position, scoped in Velocity velocity) => position = new(position.Value + velocity.Value);
+            }
+            """], [], optimization);
+        result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+        GeneratedSource(result.Output, ".Each.g.cs").Contains("__Kernel(").Should().Be(expected);
+    }
+
+    static string GeneratedSource(Compilation output, string suffix) => output.SyntaxTrees.Single(tree => tree.FilePath.EndsWith(suffix, StringComparison.Ordinal)).ToString();
+
     static int Execute(Assembly assembly, string type = "Acceptance") => (int)assembly.GetType(type)!.GetMethod("Run")!.Invoke(null, null)!;
 
     static Assembly CompileAndLoad(params string[] sources)
@@ -1155,13 +1312,14 @@ public sealed class GeneratorTests
 
     static (Compilation Output, IReadOnlyList<Diagnostic> Diagnostics, GeneratorDriver Driver, Compilation Input) Generate(params string[] sources) => GenerateCore(sources, []);
 
-    static (Compilation Output, IReadOnlyList<Diagnostic> Diagnostics, GeneratorDriver Driver, Compilation Input) GenerateCore(string[] sources, MetadataReference[] additionalReferences)
+    static (Compilation Output, IReadOnlyList<Diagnostic> Diagnostics, GeneratorDriver Driver, Compilation Input) GenerateCore(string[] sources, MetadataReference[] additionalReferences,
+        OptimizationLevel optimization = OptimizationLevel.Release)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var parseOptions = new CSharpParseOptions(LanguageVersion.CSharp14);
         var compilation = CSharpCompilation.Create("Consumer_" + Guid.NewGuid().ToString("N"),
             sources.Select(source => CSharpSyntaxTree.ParseText(source, parseOptions, cancellationToken: cancellationToken)), References().Concat(additionalReferences),
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optimizationLevel: OptimizationLevel.Release));
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optimizationLevel: optimization));
         var driver = CSharpGeneratorDriver.Create([new ArchevoltGenerator().AsSourceGenerator()], parseOptions: parseOptions,
             driverOptions: new GeneratorDriverOptions(default, trackIncrementalGeneratorSteps: true))
             .RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics, cancellationToken);
