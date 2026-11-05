@@ -216,6 +216,8 @@ Follow-up outside the numbered steps: [step3-partition-granularity.md](benchmark
 
 On 4 November, single-work-item batches gained an owner-thread path that avoids waking idle workers. No row-count threshold was added. [The dispatch and partitioning study](benchmarks/query-partition-threshold.md) records the newer measurements and the inconclusive large-workload regression check.
 
+On 5 November, [a hill-climbing campaign](benchmarks/performance-hill-climb-report.md) measured a worker pool that spins for up to 50 µs before blocking. A four-worker update of 1,000 entities fell from about 19 to about 1.5 µs when updates run back to back. The report also records the CPU cost of spinning and slower short single-item batches, which need a decision before the change counts as accepted.
+
 ## Amendments after step 4
 
 - `EntityEntry` now contains only generation, state, archetype ID, and table row. On the measured x64 runtime it shrank from 24 to 16 bytes and no longer contains managed references. The public 16-byte `Entity` handle still includes the world ID.

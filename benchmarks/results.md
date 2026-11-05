@@ -2,7 +2,7 @@
 
 This file records a run of every BenchmarkDotNet class in [Archevolt.Benchmarks](Archevolt.Benchmarks) and every criterion target in [bevy-reference](bevy-reference) available at commit `8029e7f`. Its source tree matches [release v0.5.5](https://github.com/Stephanvs/archevolt/tree/v0.5.5), at `8e2b787`. [baseline.md](baseline.md) and the step files keep the numbers each step was measured with.
 
-This checkpoint predates the single-work-item dispatch change and the additional partition benchmarks. The [4 November dispatch and partitioning study](query-partition-threshold.md) records those later measurements. The numbers below remain evidence for the measured commit, not measurements of the updated dispatch path.
+This checkpoint predates the single-work-item dispatch change and the additional partition benchmarks. The [4 November dispatch and partitioning study](query-partition-threshold.md) records those later measurements. The [5 November hill climb](performance-hill-climb-report.md) measures a worker pool that spins briefly between batches. The numbers below remain evidence for the measured commit, not measurements of the updated dispatch path.
 
 The machine-written tables are in [results/2026-11-02](results/2026-11-02):
 

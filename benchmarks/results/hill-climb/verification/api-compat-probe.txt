@@ -1,0 +1,52 @@
+# Sensitivity probe: QueryCursor.ProbeAddition added to the runtime and a static ProbeGenerated property added to every generated query, then reverted. 2026-11-05T11:30:48Z
+diff --git a/src/Archevolt.Generators/QueryGeneration.cs b/src/Archevolt.Generators/QueryGeneration.cs
+index 5bb0a35..0cacb34 100644
+--- a/src/Archevolt.Generators/QueryGeneration.cs
++++ b/src/Archevolt.Generators/QueryGeneration.cs
+@@ -91,6 +91,7 @@ public sealed partial class ArchevoltGenerator
+         var filters = terms.Where(static term => term.Mode is "Added" or "Changed").ToArray();
+         var text = Open(symbol);
+         text.Append("public static global::Archevolt.QueryShape Shape { get; } = ").Append(Shape(symbol.ToDisplayString(), terms)).AppendLine(";");
++        text.AppendLine("public static int ProbeGenerated => 0;");
+         text.AppendLine("readonly global::Archevolt.QueryState? _state;\nreadonly global::Archevolt.SystemRun _run;");
+         text.Append("internal ").Append(Escape(symbol.Name)).AppendLine("(global::Archevolt.QueryState state, global::Archevolt.SystemRun run) { _state = state; _run = run; }");
+         text.AppendLine("public Enumerator GetEnumerator() => new((_state ?? throw new global::System.InvalidOperationException(\"A default query has no active execution lease.\")).Begin(_run));");
+diff --git a/src/Archevolt/Queries/QueryState.cs b/src/Archevolt/Queries/QueryState.cs
+index 280ef06..2b0f90e 100644
+--- a/src/Archevolt/Queries/QueryState.cs
++++ b/src/Archevolt/Queries/QueryState.cs
+@@ -126,6 +126,7 @@ public ref struct QueryCursor
+     }
+ 
+     public TickWindow Window => _run.Window;
++    public int ProbeAddition => 0;
+ 
+     public bool Next(out BlockView block)
+     {
+# api-compat.ps1 output with the probes built
+API compatibility errors between 'artifacts\campaign\baseline\bin\Archevolt\release\Archevolt.dll' (left) and 'artifacts\bin\Archevolt\release\Archevolt.dll' (right):
+CP0002: Member 'int Archevolt.QueryCursor.ProbeAddition.get' exists on artifacts\bin\Archevolt\release\Archevolt.dll but not on artifacts\campaign\baseline\bin\Archevolt\release\Archevolt.dll
+API breaking changes found. If those are intentional, the APICompat suppression file can be updated by specifying the '--generate-suppression-file' parameter.
+Archevolt: CHANGED
+API compatibility errors between 'artifacts\campaign\baseline\bin\Archevolt.Benchmarks\release\Archevolt.Benchmarks.dll' (left) and 'artifacts\bin\Archevolt.Benchmarks\release\Archevolt.Benchmarks.dll' (right):
+CP0002: Member 'int Archevolt.Benchmarks.ChangedPositions.ProbeGenerated.get' exists on artifacts\bin\Archevolt.Benchmarks\release\Archevolt.Benchmarks.dll but not on artifacts\campaign\baseline\bin\Archevolt.Benchmarks\release\Archevolt.Benchmarks.dll
+CP0002: Member 'int Archevolt.Benchmarks.OptionalAcceleration.ProbeGenerated.get' exists on artifacts\bin\Archevolt.Benchmarks\release\Archevolt.Benchmarks.dll but not on artifacts\campaign\baseline\bin\Archevolt.Benchmarks\release\Archevolt.Benchmarks.dll
+CP0002: Member 'int Archevolt.Benchmarks.Moving.ProbeGenerated.get' exists on artifacts\bin\Archevolt.Benchmarks\release\Archevolt.Benchmarks.dll but not on artifacts\campaign\baseline\bin\Archevolt.Benchmarks\release\Archevolt.Benchmarks.dll
+API breaking changes found. If those are intentional, the APICompat suppression file can be updated by specifying the '--generate-suppression-file' parameter.
+Archevolt.Benchmarks: CHANGED
+APICompat ran successfully without finding any breaking changes.
+Archevolt.Tests: unchanged
+APICompat ran successfully without finding any breaking changes.
+Archeoids: unchanged
+APICompat ran successfully without finding any breaking changes.
+Archeoids.Browser: unchanged
+API compatibility errors between 'artifacts\campaign\baseline\bin\Archevolt.Particles\release\Archevolt.Particles.dll' (left) and 'artifacts\bin\Archevolt.Particles\release\Archevolt.Particles.dll' (right):
+CP0002: Member 'int Archevolt.Particles.Moving.ProbeGenerated.get' exists on artifacts\bin\Archevolt.Particles\release\Archevolt.Particles.dll but not on artifacts\campaign\baseline\bin\Archevolt.Particles\release\Archevolt.Particles.dll
+API breaking changes found. If those are intentional, the APICompat suppression file can be updated by specifying the '--generate-suppression-file' parameter.
+Archevolt.Particles: CHANGED
+[31;1mException: [0mscripts\api-compat.ps1:43[0m
+[31;1m[0m[36;1mLine |[0m
+[31;1m[0m[36;1m[36;1m  43 | [0m if ($failed) { [36;1mthrow "Public API changed in: $($failed -join ', ')"[0m }[0m
+[31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m     | [31;1m                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m[31;1m[31;1m[36;1m     | [31;1mPublic API changed in: Archevolt, Archevolt.Benchmarks, Archevolt.Particles[0m
+api-compat.ps1 exit=1

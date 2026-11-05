@@ -1,0 +1,13 @@
+UTC=2026-11-05T09:26:43.6717707Z
+Launches=3
+Job=Default
+Iterations=--warmupCount 6 --iterationCount 15 --iterationTime 250
+Filter=*MovementBenchmarks.GeneratedEach* *MovementBenchmarks.GeneratedBlockVector*
+Sdk=11.0.100-rc.3.26522.148
+Head=b882d9034ba5e15cda3ea469e0946de45bf9a025
+baseline=artifacts\campaign\baseline\bench
+baseline Archevolt.dll=96133DC4CAD626964ECF391B7C5C72F2698824F78399883C18410AF5F77CF2F0
+baseline Archevolt.Benchmarks.dll=A1CAE7F6E203BF53A5881F8320D0A29564C09BA14FFC3CB5F338183055297817
+candidate=artifacts\campaign\E1a\bench
+candidate Archevolt.dll=6D2917CA96CEAC2C098470AAAA3859256F4E4C09F7364A452841E168F8FE6F5B
+candidate Archevolt.Benchmarks.dll=A1CAE7F6E203BF53A5881F8320D0A29564C09BA14FFC3CB5F338183055297817
