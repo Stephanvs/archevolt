@@ -170,12 +170,13 @@ public sealed partial class ArchevoltGenerator
         .Concat(model.Parameters.Where(static parameter => parameter.Kind is "Res" or "ResMut" or "ManagedRes" or "OptionalRes" or "Local" or "MessageReader" or "MessageWriter" or "RemovedComponents")
             .Select(static parameter => $"parameter|{parameter.Kind}|{parameter.Component!.Type}|{parameter.Component.Managed}|{parameter.Component.OwnerThread}")));
 
-    static GeneratedUnit GenerateSystem(IMethodSymbol method, CancellationToken cancellationToken)
+    static GeneratedUnit GenerateSystem(IMethodSymbol method, SemanticModel semantics, SyntaxNode syntax, CancellationToken cancellationToken)
     {
         var problems = new List<Problem>();
         var model = System(method, problems, cancellationToken);
         if (model.Form == SystemForm.EachBlock)
             model = model with { Parameters = model.Parameters.Select((parameter, index) => parameter with { Name = "__argument" + index }).ToList() };
+        var kernel = problems.Count == 0 ? Kernel(model, method, semantics, syntax, cancellationToken) : null;
         var text = Open(method.ContainingType);
         text.Append("public const string ").Append(Escape("__Archevolt_" + method.Name + "_Access")).Append(" = ").Append(Literal(SystemManifest(model))).AppendLine(";");
         var bodyName = "__Archevolt_" + method.Name + "Body";
@@ -186,6 +187,7 @@ public sealed partial class ArchevoltGenerator
         foreach (var parameter in model.Parameters.Where(static parameter => parameter.Kind == "Local")) text.Append("readonly global::Archevolt.LocalHandle<").Append(parameter.Component!.Type).Append("> _local").Append(parameter.Index).AppendLine(";");
         foreach (var parameter in model.Parameters.Where(static parameter => parameter.Kind is "MessageReader" or "MessageWriter" or "RemovedComponents"))
             text.Append(parameter.Kind == "RemovedComponents" ? "readonly global::Archevolt.RemovedHandle<" : "readonly global::Archevolt.MessageHandle<").Append(parameter.Component!.Type).Append("> _message").Append(parameter.Index).AppendLine(";");
+        if (kernel is not null) AppendKernelMembers(text, kernel);
         text.Append("internal ").Append(bodyName).AppendLine("(global::Archevolt.SystemBinder binder)\n{");
         for (int index = 0; index < model.Queries.Count; index++) text.Append("_query").Append(index).Append(" = binder.Query(").Append(index).AppendLine(");");
         if (model.Parameters.Any(static parameter => parameter.Kind == "Commands")) text.AppendLine("_commands = binder.Commands();");
@@ -214,7 +216,9 @@ public sealed partial class ArchevoltGenerator
             if (model.Parameters.Any(static parameter => parameter.Kind == "Entity")) text.AppendLine("var entities = block.Entities;");
             var raise = string.Concat(stamped.Select(static term => $"if ({ColumnName(term)}.Summary < __now) {ColumnName(term)}.Summary = __now;\n"));
             if (filters.Length == 0) text.Append(raise);
-            text.AppendLine("int count = block.Count;\nfor (int row = 0; row < count; row++)\n{");
+            text.AppendLine("int count = block.Count;");
+            if (kernel is not null) AppendKernelCall(text, kernel, model.Queries[0]);
+            text.AppendLine("for (int row = 0; row < count; row++)\n{");
             if (filters.Length != 0) text.Append("if (!(").Append(string.Join(" && ", filters.Select((_, index) => $"cursor.Window.Contains(ticks{index}[row])"))).AppendLine(")) continue;").Append(raise);
             foreach (var term in stamped) text.Append(ColumnName(term)).AppendLine(".Changed[row] = __now;");
             text.Append(Escape(method.Name)).Append('(').Append(string.Join(", ", model.Parameters.Select(parameter => parameter.Kind switch
