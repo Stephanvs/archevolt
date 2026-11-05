@@ -1,0 +1,11 @@
+UTC=2026-11-05T14:52:29.4379744Z
+Mode=Partition
+Configuration=Release
+NoBuild=True
+Runs=3
+BaselineAssembly=artifacts/campaign/baseline/bench/Archevolt.Benchmarks.dll
+RuntimeDefaults=True
+DOTNET_TieredCompilation=
+DOTNET_TieredPGO=
+DOTNET_ReadyToRun=
+COMPlus_GCServer=

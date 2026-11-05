@@ -1,0 +1,13 @@
+UTC=2026-11-05T15:07:46.9807966Z
+Launches=3
+Job=Default
+Iterations=--warmupCount 6 --iterationCount 15 --iterationTime 250
+Filter=*MovementBenchmarks.GeneratedEach* *MovementBenchmarks.Handwritten* *MovementBenchmarks.GeneratedBlockVector* *FilterBenchmarks.TrackedWrite* *FilterBenchmarks.WriteThenChangedAll*
+Sdk=11.0.100-rc.3.26522.148
+Head=72043e852a1c0ef0d6ad492b2d761bcd3c19528d
+baseline=C:\Users\stephanvs\scoop\persist\t3code\user\worktrees\archevolt\t3-eb9e405f\artifacts\campaign\E3b\bench
+baseline Archevolt.dll=3120A304A57B22DAF30FF9900BF71AEF73A9BE3EB42471421557A3A46EADA4BF
+baseline Archevolt.Benchmarks.dll=04051670B6CCE3AC1A119CEF8F16BF27A30EE2374F90E1C89277C91C3CBE512A
+candidate=C:\Users\stephanvs\scoop\persist\t3code\user\worktrees\archevolt\t3-eb9e405f\artifacts\campaign\S1\bench
+candidate Archevolt.dll=693B8D6D5F51123ED23E8EA55BCF71B882DE89F3D441459EB58EAC8C3AD247DA
+candidate Archevolt.Benchmarks.dll=D7A4D2B00CA51EDC3B3CA620FDBCE488985EF29076E8B66C2E3A50B6E299EA23
