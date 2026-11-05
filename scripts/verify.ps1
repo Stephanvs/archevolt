@@ -113,8 +113,8 @@ $Steps = [ordered]@{
     'archeoids-headless' = {
         param([string] $Log)
         $output = Invoke-Logged $Log 'dotnet' (@('run', '--project', 'samples/Archeoids', '-c', 'Release') + $BuildArguments + @('--', '--verify'))
-        if ($output -notcontains 'archeoids=ok checks=6') {
-            throw "stdout lacked 'archeoids=ok checks=6'"
+        if ($output -notcontains 'archeoids=ok checks=9') {
+            throw "stdout lacked 'archeoids=ok checks=9'"
         }
     }
     'pack' = {

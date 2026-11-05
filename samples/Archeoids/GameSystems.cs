@@ -17,6 +17,14 @@ internal readonly ref partial struct RockColliders;
 internal readonly ref partial struct VulnerableShips;
 [Query, With<Rock>]
 internal readonly ref partial struct AllRocks;
+[Query, With<Upgrade>, Read<Position>, Write<Velocity>, Read<Collider>]
+internal readonly ref partial struct Upgrades;
+[Query, With<Player>, Read<Position>, Read<Collider>]
+internal readonly ref partial struct Collectors;
+[Query, With<Player>, Read<Position>]
+internal readonly ref partial struct PlayerPositions;
+[Query, Read<Appearance>]
+internal readonly ref partial struct Effects;
 [Query, Read<Position>, Read<Rotation>, Read<Appearance>, Optional<Lifetime>, Optional<Shield>]
 internal readonly ref partial struct Visible;
 
@@ -36,7 +44,7 @@ internal static partial class GameSystems
 
     [EcsSystem]
     public static void Pilot(scoped Pilots pilots, scoped Res<Controls> input, scoped Res<FrameTime> time,
-        scoped ResMut<RandomSource> random, scoped Commands commands)
+        scoped Res<Session> session, scoped ResMut<RandomSource> random, scoped Commands commands)
     {
         float dt = time.Value.DeltaSeconds;
         foreach (var row in pilots)
@@ -48,14 +56,21 @@ internal static partial class GameSystems
             if (velocity.LengthSquared() > 380 * 380) velocity = Vector2.Normalize(velocity) * 380;
             row.Velocity = new(velocity);
 
-            float shot = row.Ship.ShotCooldown - dt;
+            float shot = Math.Max(0, row.Ship.ShotCooldown) - dt;
             float exhaust = row.Ship.ExhaustCooldown - dt;
             if (input.Value.Fire && shot <= 0)
             {
-                commands.Spawn(new BulletBundle(new(Arena.Wrap(row.Position.Value + forward * 20)),
-                    new(velocity + forward * 680), new(row.Rotation.Angle), new(3), new(), new(1.15f, 1.15f),
-                    new(Shape.Bullet, 5, 0, Factory.Cyan)));
-                shot = 0.15f;
+                WeaponSpec weapon = WeaponSpec.For(session.Value.Weapon);
+                Vector2 side = new(-forward.Y, forward.X);
+                for (int barrel = 0; barrel < weapon.Barrels; barrel++)
+                {
+                    float lane = barrel - (weapon.Barrels - 1) * 0.5f;
+                    float angle = row.Rotation.Angle + lane * 0.065f;
+                    commands.Spawn(new BulletBundle(new(Arena.Wrap(row.Position.Value + forward * 20 + side * (lane * 9))),
+                        new(velocity + Arena.Direction(angle) * 680), new(angle), new(3), new(), new(1.35f, 1.35f),
+                        new(Shape.Bullet, 5, 0, Factory.Cyan)));
+                }
+                shot += weapon.Interval;
             }
             if (input.Value.Thrust && exhaust <= 0)
             {
@@ -150,22 +165,74 @@ internal static partial class GameSystems
     }
 
     [EcsSystem]
-    public static void Explode(scoped MessageReader<RockDestroyed> rocks, scoped MessageReader<ShipDestroyed> ships,
-        scoped ResMut<RandomSource> random, scoped Commands commands)
+    public static void DropUpgrade(scoped MessageReader<RockDestroyed> destroyed, scoped Upgrades upgrades,
+        scoped Res<Session> session, scoped Commands commands)
     {
-        foreach (var hit in rocks) Burst(hit.Position, 16 + hit.Size * 6, Factory.Amber, ref random.Value, commands);
-        foreach (var hit in ships) Burst(hit.Position, 55, Factory.Cyan, ref random.Value, commands);
-    }
-
-    private static void Burst(Vector2 position, int count, Vector4 color, ref RandomSource random, scoped Commands commands)
-    {
-        for (int i = 0; i < count; i++)
-            commands.Spawn(Factory.Particle(position, random.Direction() * random.Range(30, 210),
-                random.Range(0.25f, 0.9f), color, random.Range(1, 2.8f)));
+        bool available = session.Value.Weapon < WeaponTier.Overdrive && !session.Value.GameOver;
+        foreach (var _ in upgrades) available = false;
+        foreach (var hit in destroyed)
+        {
+            if (!available || hit.Size != 3) continue;
+            commands.Spawn(Factory.Upgrade(hit.Position, hit.Velocity));
+            available = false;
+        }
     }
 
     [EcsSystem]
-    public static void Waves(scoped AllRocks rocks, scoped ResMut<Session> session, scoped Res<FrameTime> time,
+    public static void CollectUpgrade(scoped Collectors ships, scoped Upgrades upgrades,
+        scoped ResMut<Session> session, scoped Res<FrameTime> time, scoped Commands commands)
+    {
+        session.Value.UpgradeNotice = Math.Max(0, session.Value.UpgradeNotice - time.Value.DeltaSeconds);
+        foreach (var ship in ships)
+        {
+            foreach (var upgrade in upgrades)
+            {
+                Vector2 delta = Arena.Difference(ship.Position.Value, upgrade.Position.Value);
+                if (delta.LengthSquared() < 180 * 180) upgrade.Velocity = new(delta * 3);
+                if (!Overlaps(ship.Position, ship.Collider, upgrade.Position, upgrade.Collider)) continue;
+                session.Value.Weapon = session.Value.Weapon switch
+                {
+                    WeaponTier.Single => WeaponTier.Twin,
+                    WeaponTier.Twin => WeaponTier.RapidTwin,
+                    WeaponTier.RapidTwin => WeaponTier.Quad,
+                    _ => WeaponTier.Overdrive
+                };
+                session.Value.UpgradeNotice = 2.5f;
+                commands.Insert(ship.Entity, new Invulnerable());
+                commands.Insert(ship.Entity, new Shield(2.5f));
+                commands.Despawn(upgrade.Entity);
+                break;
+            }
+        }
+    }
+
+    [EcsSystem]
+    public static void Explode(scoped MessageReader<RockDestroyed> rocks, scoped MessageReader<ShipDestroyed> ships,
+        scoped Effects effects, scoped Res<Session> session, scoped ResMut<RandomSource> random, scoped Commands commands)
+    {
+        int budget = 1600;
+        foreach (var effect in effects)
+            if (effect.Appearance.Shape == Shape.Particle) budget--;
+        float intensity = 1 + Math.Clamp(session.Value.Wave - 1, 0, 9) * 0.32f;
+        foreach (var hit in ships)
+            Burst(hit.Position, 55, 1, Factory.Cyan, ref budget, ref random.Value, commands);
+        foreach (var hit in rocks)
+            Burst(hit.Position, (int)((16 + hit.Size * 6) * intensity), MathF.Sqrt(intensity),
+                Factory.Amber, ref budget, ref random.Value, commands);
+    }
+
+    private static void Burst(Vector2 position, int count, float duration, Vector4 color,
+        ref int budget, ref RandomSource random, scoped Commands commands)
+    {
+        count = Math.Clamp(budget, 0, count);
+        budget -= count;
+        for (int i = 0; i < count; i++)
+            commands.Spawn(Factory.Particle(position, random.Direction() * random.Range(30, 210),
+                random.Range(0.25f, 0.9f) * duration, color, random.Range(1, 2.8f)));
+    }
+
+    [EcsSystem]
+    public static void Waves(scoped AllRocks rocks, scoped PlayerPositions ships, scoped ResMut<Session> session, scoped Res<FrameTime> time,
         scoped ResMut<RandomSource> random, scoped Commands commands)
     {
         if (session.Value.GameOver) return;
@@ -173,13 +240,24 @@ internal static partial class GameSystems
         session.Value.WaveDelay -= time.Value.DeltaSeconds;
         if (session.Value.WaveDelay > 0) return;
         session.Value.Wave++;
-        session.Value.WaveDelay = 1.6f;
-        int count = 3 + Math.Min(session.Value.Wave, 10);
+        session.Value.WaveDelay = 2.2f;
+        int pressure = Math.Min(session.Value.Wave - 1, 9);
+        int count = 4 + pressure * 4;
+        float speed = 1 + pressure * 0.055f;
+        Vector2 player = Arena.Center;
+        foreach (var ship in ships) player = ship.Position.Value;
         for (int i = 0; i < count; i++)
         {
-            Vector2 direction = random.Value.Direction();
-            Vector2 position = Arena.Wrap(Arena.Center + direction * 440);
-            commands.Spawn(Factory.Rock(position, -direction * random.Value.Range(28, 55)
+            Vector2 position = Arena.Wrap(player + new Vector2(Arena.Width / 2, 0));
+            for (int attempt = 0; attempt < 32; attempt++)
+            {
+                Vector2 candidate = new(random.Value.Range(0, Arena.Width), random.Value.Range(0, Arena.Height));
+                if (Arena.Difference(candidate, player).LengthSquared() < 260 * 260) continue;
+                position = candidate;
+                break;
+            }
+            Vector2 direction = Vector2.Normalize(Arena.Difference(position, player));
+            commands.Spawn(Factory.Rock(position, -direction * random.Value.Range(28, 55) * speed
                 + random.Value.Direction() * 20, 3, ref random.Value));
         }
     }
@@ -203,7 +281,7 @@ internal static partial class GameSystems
 }
 
 [EcsModule, IncludeSystems(typeof(GameSystems)), IncludeBundle<ShipBundle>, IncludeBundle<RockBundle>,
- IncludeBundle<BulletBundle>, IncludeBundle<ParticleBundle>]
+ IncludeBundle<BulletBundle>, IncludeBundle<ParticleBundle>, IncludeBundle<UpgradeBundle>]
 internal static partial class GameEcs;
 
 [Schedule]
@@ -216,8 +294,10 @@ internal static partial class GameEcs;
 [Run(typeof(GameSystems), nameof(GameSystems.HitShip), Order = 6, After = nameof(GameSystems.HitRocks))]
 [Run(typeof(GameSystems), nameof(GameSystems.SplitRocks), Order = 7, After = nameof(GameSystems.HitShip))]
 [Run(typeof(GameSystems), nameof(GameSystems.Score), Order = 8, After = nameof(GameSystems.SplitRocks))]
-[Run(typeof(GameSystems), nameof(GameSystems.Explode), Order = 9, After = nameof(GameSystems.Score))]
-[Run(typeof(GameSystems), nameof(GameSystems.Waves), Order = 10, After = nameof(GameSystems.Explode))]
+[Run(typeof(GameSystems), nameof(GameSystems.DropUpgrade), Order = 9, After = nameof(GameSystems.Score))]
+[Run(typeof(GameSystems), nameof(GameSystems.CollectUpgrade), Order = 10, After = nameof(GameSystems.DropUpgrade))]
+[Run(typeof(GameSystems), nameof(GameSystems.Explode), Order = 11, After = nameof(GameSystems.CollectUpgrade))]
+[Run(typeof(GameSystems), nameof(GameSystems.Waves), Order = 12, After = nameof(GameSystems.Explode))]
 internal sealed partial class Simulation;
 
 [Schedule, Run(typeof(GameSystems), nameof(GameSystems.Extract), Order = 0)]

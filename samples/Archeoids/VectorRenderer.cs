@@ -66,12 +66,15 @@ internal sealed class VectorRenderer : IDisposable
 
         Text("ARCHEOIDS", 34, 24, 4.8f, Factory.Amber);
         Text("ARCHEVOLT / SILK.NET", 36, 70, 1.5f, Dim);
+        Text("WEAPON", 332, 27, 1.4f, Dim);
+        Text(WeaponSpec.For(state.Weapon).Name, 332, 53, 2, Factory.Lime);
         Text("SCORE", 590, 27, 1.4f, Dim);
         Text(state.Score.ToString("D6"), 590, 49, 3.4f, White);
         Text("SECTOR", 830, 27, 1.4f, Dim);
         Text(Math.Max(state.Wave, 1).ToString("D2"), 830, 49, 3.4f, White);
         Text("HULL", 1070, 27, 1.4f, Dim);
         Text("A/D  TURN    W  THRUST    SPACE  FIRE    P  PAUSE    R  RESTART", 36, 766, 1.3f, Dim);
+        Text("CATCH GREEN DIAMONDS TO UPGRADE YOUR GUNS AND RECHARGE YOUR SHIELD", 36, 784, 1.1f, Dim);
         string stats = $"{frame.FramesPerSecond:F0} FPS / {frame.Sprites.Count} ENTITIES / {milliseconds:F2} MS";
         Text(stats, 1246 - TextWidth(stats, 1.3f), 766, 1.3f, Factory.Cyan * new Vector4(1, 1, 1, 0.8f));
 
@@ -86,6 +89,7 @@ internal sealed class VectorRenderer : IDisposable
             CenterText("CLEAR THE SECTOR", 250, 3, White);
             CenterText("THRUST. DRIFT. SURVIVE.", 292, 1.5f, Dim);
         }
+        else if (state.UpgradeNotice > 0) CenterText("WEAPON UPGRADED", 124, 1.8f, Factory.Lime);
         Flush();
     }
 
