@@ -1,26 +1,32 @@
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+
 namespace Archevolt;
 
 internal sealed class WorkerPool : IDisposable
 {
+    private static readonly long s_spinBeforeBlockingTicks = TimeSpan.FromMicroseconds(50).Ticks * Stopwatch.Frequency / TimeSpan.TicksPerSecond;
     private readonly object _gate = new();
     private readonly Thread[] _workers;
+    private readonly long _spinTicks;
     private readonly int _ownerThread = Environment.CurrentManagedThreadId;
     private Exception?[] _errors = [];
     private Action<int>? _execute;
     private CancellationToken _cancellation;
-    private ulong _epoch;
+    private PaddedSignal _signal;
     private int _ready;
     private int _pending;
     private int _next;
     private int _count;
     private int _failed;
-    private bool _stopping;
     private PoolState _state;
 
     internal WorkerPool(int maxConcurrency)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxConcurrency);
         _workers = new Thread[maxConcurrency - 1];
+        bool oversubscribed = maxConcurrency > Environment.ProcessorCount;
+        _spinTicks = oversubscribed ? 0 : s_spinBeforeBlockingTicks;
         var started = 0;
         try
         {
@@ -52,7 +58,7 @@ internal sealed class WorkerPool : IDisposable
         {
             lock (_gate)
             {
-                _stopping = true;
+                _signal.Stopping = true;
                 Monitor.PulseAll(_gate);
             }
             for (var i = 0; i < started; i++)
@@ -82,7 +88,7 @@ internal sealed class WorkerPool : IDisposable
                 return;
 
             bool runParallel = _workers.Length != 0 && count != 0 && (count > 1 || ownerWork is not null);
-            var epoch = runParallel ? checked(_epoch + 1) : _epoch;
+            var epoch = runParallel ? checked(_signal.Epoch + 1) : _signal.Epoch;
             if (_errors.Length < count)
                 Array.Resize(ref _errors, count);
             Array.Clear(_errors, 0, count);
@@ -95,7 +101,7 @@ internal sealed class WorkerPool : IDisposable
             _state = PoolState.Running;
             if (runParallel)
             {
-                _epoch = epoch;
+                _signal.Epoch = epoch;
                 Monitor.PulseAll(_gate);
             }
         }
@@ -117,6 +123,12 @@ internal sealed class WorkerPool : IDisposable
         }
         finally
         {
+            if (Volatile.Read(ref _pending) != 0)
+            {
+                for (long deadline = Stopwatch.GetTimestamp() + _spinTicks;
+                    Volatile.Read(ref _pending) != 0 && Stopwatch.GetTimestamp() < deadline;)
+                    Thread.SpinWait(1);
+            }
             lock (_gate)
             {
                 while (_pending != 0)
@@ -155,13 +167,16 @@ internal sealed class WorkerPool : IDisposable
 
         while (true)
         {
+            for (long deadline = Stopwatch.GetTimestamp() + _spinTicks;
+                Volatile.Read(ref _signal.Epoch) == observedEpoch && !Volatile.Read(ref _signal.Stopping) && Stopwatch.GetTimestamp() < deadline;)
+                Thread.SpinWait(1);
             lock (_gate)
             {
-                while (!_stopping && observedEpoch == _epoch)
+                while (!_signal.Stopping && observedEpoch == _signal.Epoch)
                     Monitor.Wait(_gate);
-                if (_stopping)
+                if (_signal.Stopping)
                     return;
-                observedEpoch = _epoch;
+                observedEpoch = _signal.Epoch;
             }
 
             try
@@ -208,7 +223,7 @@ internal sealed class WorkerPool : IDisposable
                 return;
             if (_state != PoolState.Idle)
                 throw new InvalidOperationException("Cannot dispose a running worker pool.");
-            _stopping = true;
+            _signal.Stopping = true;
             _state = PoolState.Disposed;
             Monitor.PulseAll(_gate);
         }
@@ -221,6 +236,15 @@ internal sealed class WorkerPool : IDisposable
     {
         if (Environment.CurrentManagedThreadId != _ownerThread)
             throw new InvalidOperationException("The worker pool must be controlled by its owner thread.");
+    }
+
+    private const int CacheLinePairBytes = 128;
+
+    [StructLayout(LayoutKind.Explicit, Size = 3 * CacheLinePairBytes)]
+    private struct PaddedSignal
+    {
+        [FieldOffset(CacheLinePairBytes)] internal ulong Epoch;
+        [FieldOffset(CacheLinePairBytes + sizeof(ulong))] internal bool Stopping;
     }
 
     private enum PoolState
