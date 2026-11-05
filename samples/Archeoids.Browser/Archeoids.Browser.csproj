@@ -4,7 +4,8 @@
     <RuntimeIdentifier>browser-wasm</RuntimeIdentifier>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <PublishAot>false</PublishAot>
-    <RunAOTCompilation>false</RunAOTCompilation>
+    <RunAOTCompilation Condition="'$(Configuration)' == 'Release'">true</RunAOTCompilation>
+    <RunAOTCompilation Condition="'$(Configuration)' != 'Release'">false</RunAOTCompilation>
     <WasmEnableThreads>false</WasmEnableThreads>
   </PropertyGroup>
   <ItemGroup>

@@ -1,0 +1,23 @@
+{
+  "denseFrames": 4224,
+  "denseAverageFps": 239.6554952254511,
+  "denseMedianFrameMs": 4.199999988079071,
+  "peak": {
+    "time": 16349.5,
+    "text": "240 FPS / 1756 ENTITIES / 0.41 MS",
+    "values": [
+      240,
+      1756,
+      0.41
+    ]
+  },
+  "slowestDenseHud": {
+    "time": 811.4000000059605,
+    "text": "220 FPS / 826 ENTITIES / 0.31 MS",
+    "values": [
+      220,
+      826,
+      0.31
+    ]
+  }
+}

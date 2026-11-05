@@ -25,6 +25,7 @@ jobs:
       - uses: actions/setup-dotnet@v6.0.0
         with:
           dotnet-version: '11.0.x'
+      - run: dotnet workload install wasm-tools
       - run: dotnet publish samples/Archeoids.Browser -c Release -p:CompressionEnabled=false -o artifacts/archeoids
       - uses: actions/upload-pages-artifact@v5.0.0
         with:
