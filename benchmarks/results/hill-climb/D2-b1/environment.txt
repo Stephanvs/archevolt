@@ -1,0 +1,13 @@
+UTC=2026-11-05T14:45:42.1403126Z
+Launches=5
+Job=Default
+Iterations=--warmupCount 6 --iterationCount 20 --iterationTime 250
+Filter=*EntityStorageBenchmarks.Get*
+Sdk=11.0.100-rc.3.26522.148
+Head=28c6157f6c1863d49fa69a7db4221828d05159ad
+baseline=C:\Users\stephanvs\scoop\persist\t3code\user\worktrees\archevolt\t3-eb9e405f\artifacts\campaign\E3\bench
+baseline Archevolt.dll=9F9E9C93065F44AD911C5F42FC8F3E4A7F2DEABFE95560833BE53023873B3A7C
+baseline Archevolt.Benchmarks.dll=311C4958F033DA3030ADECD409468572154CE9F8FA941A5BB1A275A83E6CA9A4
+candidate=C:\Users\stephanvs\scoop\persist\t3code\user\worktrees\archevolt\t3-eb9e405f\artifacts\campaign\E3b\bench
+candidate Archevolt.dll=3120A304A57B22DAF30FF9900BF71AEF73A9BE3EB42471421557A3A46EADA4BF
+candidate Archevolt.Benchmarks.dll=04051670B6CCE3AC1A119CEF8F16BF27A30EE2374F90E1C89277C91C3CBE512A

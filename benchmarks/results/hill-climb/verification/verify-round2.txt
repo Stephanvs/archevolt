@@ -1,0 +1,25 @@
+# ./scripts/verify.ps1 at 3f0555a, the same tree as 846cace, after dotnet build-server shutdown
+PASS restore-build
+PASS test
+PASS archeoids-headless
+PASS pack
+PASS package-contents
+PASS consumer-jit
+PASS consumer-aot
+PASS sample-aot
+PASS performance-smoke
+C:\Users\stephanvs\scoop\persist\t3code\user\worktrees\archevolt\t3-eb9e405f\artifacts\packages\Archevolt.0.1.0.nupkg
+
+# test stage summary (artifacts/logs/test.txt)
+Test run summary: Passed!
+  C:\Users\stephanvs\scoop\persist\t3code\user\worktrees\archevolt\t3-eb9e405f\artifacts\bin\Archevolt.Generators.Tests\release\Archevolt.Generators.Tests.dll (net11.0|x64) passed [+87/x0/?0] (16s 874ms)
+  C:\Users\stephanvs\scoop\persist\t3code\user\worktrees\archevolt\t3-eb9e405f\artifacts\bin\Archevolt.Tests\release\Archevolt.Tests.dll (net11.0|x64) passed [+103/x0/?0] (1s 365ms)
+
+# sample-aot tail
+ecs=ok
+
+# performance-smoke tail: case,us,owner_bytes,all_thread_bytes
+generated-each,0.398,0,0
+generated-query,1.294,0,0
+generated-block,0.905,0,0
+generated-block-vector,0.348,0,0

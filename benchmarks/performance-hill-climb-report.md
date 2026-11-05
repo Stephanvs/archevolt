@@ -1,5 +1,7 @@
 # Performance hill climb, 5 November 2026
 
+[Round two](performance-hill-climb-round-2.md) settles the open decision below. Single-item batches now park spinning workers, and short single-item batches no longer run slower than before the spin. It also shortens `Get<T>` and compiles qualifying `[Each]` callbacks into SIMD kernels.
+
 This report executes [performance-hill-climb-plan.md](performance-hill-climb-plan.md). One change is committed on the branch and needs your decision before it counts as accepted. Worker-pool threads now spin for up to 50 µs before they block. A four-worker update of 1,000 entities fell from about 19 to about 1.5 µs, and partitioned batches up to 100,000 rows run 1.1 to 14 times faster. The change costs CPU time while workers spin, and short single-item batches that start right after a parallel batch ran slower in every dispatch sweep. The plan sends a change with cross-workload regressions to you, so [Open decisions](#open-decisions) lays out both costs.
 
 No generator change is retained. For the shapes inspected, generated row loops compile to the same Tier-1 instructions as the handwritten loop, and the remaining per-row gap comes from the user callback. No public API, generated public member, or consumer source changed.
