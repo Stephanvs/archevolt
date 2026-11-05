@@ -1,0 +1,14 @@
+# api-compat.ps1 at d4389a5, 2026-11-05T11:30:37Z
+APICompat ran successfully without finding any breaking changes.
+Archevolt: unchanged
+APICompat ran successfully without finding any breaking changes.
+Archevolt.Benchmarks: unchanged
+APICompat ran successfully without finding any breaking changes.
+Archevolt.Tests: unchanged
+APICompat ran successfully without finding any breaking changes.
+Archeoids: unchanged
+APICompat ran successfully without finding any breaking changes.
+Archeoids.Browser: unchanged
+APICompat ran successfully without finding any breaking changes.
+Archevolt.Particles: unchanged
+api-compat.ps1 exit=0

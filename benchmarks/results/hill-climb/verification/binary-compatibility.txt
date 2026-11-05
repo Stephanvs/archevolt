@@ -1,0 +1,35 @@
+# Assemblies compiled at b882d90 run against Archevolt.dll built at d4389a5, 2026-11-05T11:30:23Z
+18d89ddc9fc31331581275f8ceaf40d7dc73ef6ea04874a6ab79d7294af9028e *tests/Archevolt.dll
+63ec3026d52886a77564f5781db59632de3db5bc5cd4a78fbcc74ae2245d69be *tests/Archevolt.Tests.dll
+a1cae7f6e203bf53a5881f8320d0a29564c09ba14ffc3cb5f338183055297817 *bench/Archevolt.Benchmarks.dll
+# baseline hashes
+63ec3026d52886a77564f5781db59632de3db5bc5cd4a78fbcc74ae2245d69be *bin/Archevolt.Tests/release/Archevolt.Tests.dll
+a1cae7f6e203bf53a5881f8320d0a29564c09ba14ffc3cb5f338183055297817 *bench/Archevolt.Benchmarks.dll
+# Archevolt.Tests (compiled at b882d90)
+   Archevolt.Tests  Total: 102, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,432s
+# Archevolt.Benchmarks --quick (compiled at b882d90; validates every movement result in setup and cleanup)
+runtime=.NET 11.0.0-rc.3.26522.148
+os=Microsoft Windows 10.0.26300
+architecture=X64
+processors=32
+maxConcurrency=1
+entities=100000;warmup=32;repetitions=64
+method,ns_per_entity,owner_bytes,total_managed_bytes
+handwritten,1.318,0,0
+generated-each,1.488,0,0
+generated-query,1.400,0,0
+generated-block,1.347,0,0
+generated-block-vector,0.423,0,0
+runtime=.NET 11.0.0-rc.3.26522.148
+os=Microsoft Windows 10.0.26300
+architecture=X64
+processors=32
+maxConcurrency=4
+entities=100000;warmup=32;repetitions=64
+method,ns_per_entity,owner_bytes,total_managed_bytes
+handwritten,1.165,0,0
+generated-each,0.856,0,0
+generated-query,1.243,0,0
+generated-block,0.783,0,0
+generated-block-vector,0.323,0,0
+exit=0

@@ -1,0 +1,26 @@
+# 25 runs of Archevolt.Tests -trait Category=Scheduling at d4389a5
+run  1: Archevolt.Tests  Total: 60, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,446s
+run  2: Archevolt.Tests  Total: 60, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,422s
+run  3: Archevolt.Tests  Total: 60, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,437s
+run  4: Archevolt.Tests  Total: 60, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,425s
+run  5: Archevolt.Tests  Total: 60, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,418s
+run  6: Archevolt.Tests  Total: 60, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,417s
+run  7: Archevolt.Tests  Total: 60, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,416s
+run  8: Archevolt.Tests  Total: 60, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,408s
+run  9: Archevolt.Tests  Total: 60, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,441s
+run 10: Archevolt.Tests  Total: 60, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,424s
+run 11: Archevolt.Tests  Total: 60, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,458s
+run 12: Archevolt.Tests  Total: 60, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,449s
+run 13: Archevolt.Tests  Total: 60, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,472s
+run 14: Archevolt.Tests  Total: 60, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,425s
+run 15: Archevolt.Tests  Total: 60, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,423s
+run 16: Archevolt.Tests  Total: 60, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,408s
+run 17: Archevolt.Tests  Total: 60, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,417s
+run 18: Archevolt.Tests  Total: 60, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,409s
+run 19: Archevolt.Tests  Total: 60, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,429s
+run 20: Archevolt.Tests  Total: 60, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,430s
+run 21: Archevolt.Tests  Total: 60, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,421s
+run 22: Archevolt.Tests  Total: 60, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,429s
+run 23: Archevolt.Tests  Total: 60, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,420s
+run 24: Archevolt.Tests  Total: 60, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,462s
+run 25: Archevolt.Tests  Total: 60, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,427s
