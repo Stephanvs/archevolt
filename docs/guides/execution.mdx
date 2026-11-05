@@ -11,7 +11,7 @@ Serial execution is the default. `WorldBuilder.UseParallelExecution(maxConcurren
 
 A batch with one runnable work item executes on the calling thread. A partitioned system can produce multiple work items.
 
-After a parallel batch, each worker spins for up to 50 µs before it blocks, and the calling thread spins for up to 50 µs while it waits for workers. A batch that starts inside that window wakes no thread. The spinning uses CPU time between closely spaced batches. A pool whose limit exceeds `Environment.ProcessorCount` blocks without spinning.
+After a parallel batch, each worker spins for up to 50 µs before it blocks, and the calling thread spins for up to 50 µs while it waits for workers. A parallel batch that starts inside that window wakes no thread. A single-item batch makes spinning workers block at once, so they do not compete with the calling thread, and the next parallel batch wakes them. The spinning uses CPU time between closely spaced parallel batches. A pool whose limit exceeds `Environment.ProcessorCount` blocks without spinning.
 
 A bound schedule borrows this pool, so disposing one schedule does not stop other schedules. Resource and component conflicts determine which systems can run together, and `Partitioned = true` on `[Each]` or `[EachBlock]` opts eligible systems into [row-range partitioning](/guides/systems#partitioning).
 

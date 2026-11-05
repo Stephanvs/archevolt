@@ -78,32 +78,37 @@ internal sealed class WorkerPool : IDisposable
         ArgumentOutOfRangeException.ThrowIfNegative(count);
         ArgumentNullException.ThrowIfNull(execute);
 
-        lock (_gate)
-        {
-            ObjectDisposedException.ThrowIf(_state == PoolState.Disposed, this);
-            if (_state != PoolState.Idle)
-                throw new InvalidOperationException("The worker pool is already running.");
-            cancellation.ThrowIfCancellationRequested();
-            if (count == 0 && ownerWork is null)
-                return;
+        ObjectDisposedException.ThrowIf(_state == PoolState.Disposed, this);
+        if (_state != PoolState.Idle)
+            throw new InvalidOperationException("The worker pool is already running.");
+        cancellation.ThrowIfCancellationRequested();
+        if (count == 0 && ownerWork is null)
+            return;
 
-            bool runParallel = _workers.Length != 0 && count != 0 && (count > 1 || ownerWork is not null);
-            var epoch = runParallel ? checked(_signal.Epoch + 1) : _signal.Epoch;
-            if (_errors.Length < count)
-                Array.Resize(ref _errors, count);
-            Array.Clear(_errors, 0, count);
-            _execute = execute;
-            _cancellation = cancellation;
-            _count = count;
-            _next = -1;
-            _failed = 0;
-            _pending = runParallel ? _workers.Length : 0;
-            _state = PoolState.Running;
-            if (runParallel)
+        bool runParallel = _workers.Length != 0 && count != 0 && (count > 1 || ownerWork is not null);
+        var epoch = runParallel ? checked(_signal.Epoch + 1) : _signal.Epoch;
+        if (_errors.Length < count)
+            Array.Resize(ref _errors, count);
+        Array.Clear(_errors, 0, count);
+        _execute = execute;
+        _cancellation = cancellation;
+        _count = count;
+        _next = -1;
+        _failed = 0;
+        _state = PoolState.Running;
+        if (runParallel)
+        {
+            lock (_gate)
             {
+                _pending = _workers.Length;
+                _signal.Parked = false;
                 _signal.Epoch = epoch;
                 Monitor.PulseAll(_gate);
             }
+        }
+        else if (!_signal.Parked)
+        {
+            _signal.Parked = true;
         }
 
         Exception? ownerFailure = null;
@@ -123,19 +128,20 @@ internal sealed class WorkerPool : IDisposable
         }
         finally
         {
-            if (Volatile.Read(ref _pending) != 0)
+            if (runParallel)
             {
-                for (long deadline = Stopwatch.GetTimestamp() + _spinTicks;
-                    Volatile.Read(ref _pending) != 0 && Stopwatch.GetTimestamp() < deadline;)
-                    Thread.SpinWait(1);
+                if (Volatile.Read(ref _pending) != 0)
+                {
+                    for (long deadline = Stopwatch.GetTimestamp() + _spinTicks;
+                        Volatile.Read(ref _pending) != 0 && Stopwatch.GetTimestamp() < deadline;)
+                        Thread.SpinWait(1);
+                }
+                lock (_gate)
+                    while (_pending != 0)
+                        Monitor.Wait(_gate);
             }
-            lock (_gate)
-            {
-                while (_pending != 0)
-                    Monitor.Wait(_gate);
-                _execute = null;
-                _state = PoolState.Idle;
-            }
+            _execute = null;
+            _state = PoolState.Idle;
         }
 
         if (Volatile.Read(ref _failed) != 0)
@@ -168,7 +174,8 @@ internal sealed class WorkerPool : IDisposable
         while (true)
         {
             for (long deadline = Stopwatch.GetTimestamp() + _spinTicks;
-                Volatile.Read(ref _signal.Epoch) == observedEpoch && !Volatile.Read(ref _signal.Stopping) && Stopwatch.GetTimestamp() < deadline;)
+                Volatile.Read(ref _signal.Epoch) == observedEpoch && !Volatile.Read(ref _signal.Stopping)
+                    && !Volatile.Read(ref _signal.Parked) && Stopwatch.GetTimestamp() < deadline;)
                 Thread.SpinWait(1);
             lock (_gate)
             {
@@ -245,6 +252,7 @@ internal sealed class WorkerPool : IDisposable
     {
         [FieldOffset(CacheLinePairBytes)] internal ulong Epoch;
         [FieldOffset(CacheLinePairBytes + sizeof(ulong))] internal bool Stopping;
+        [FieldOffset(CacheLinePairBytes + sizeof(ulong) + 1)] internal bool Parked;
     }
 
     private enum PoolState
