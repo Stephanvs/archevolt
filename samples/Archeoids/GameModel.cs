@@ -33,9 +33,10 @@ internal static class Arena
 [Component] internal readonly record struct Shield(float Remaining);
 [Component] internal readonly struct Player;
 [Component] internal readonly struct Bullet;
+[Component] internal readonly struct Upgrade;
 [Component] internal readonly struct Invulnerable;
 
-internal enum Shape { Ship, Rock, Bullet, Particle }
+internal enum Shape { Ship, Rock, Bullet, Particle, Upgrade }
 [Component] internal readonly record struct Appearance(Shape Shape, float Radius, uint Seed, Vector4 Color);
 
 [Bundle]
@@ -56,6 +57,26 @@ internal readonly partial record struct BulletBundle(
 internal readonly partial record struct ParticleBundle(
     Position Position, Velocity Velocity, Rotation Rotation, Lifetime Lifetime, Appearance Appearance);
 
+[Bundle]
+internal readonly partial record struct UpgradeBundle(
+    Position Position, Velocity Velocity, Rotation Rotation, Collider Collider,
+    Upgrade Upgrade, Lifetime Lifetime, Appearance Appearance);
+
+internal enum WeaponTier { Single, Twin, RapidTwin, Quad, Overdrive }
+
+internal readonly record struct WeaponSpec(int Barrels, float Interval, string Name)
+{
+    public static WeaponSpec For(WeaponTier tier) => tier switch
+    {
+        WeaponTier.Single => new(1, 0.15f, "SINGLE"),
+        WeaponTier.Twin => new(2, 0.15f, "TWIN GUNS"),
+        WeaponTier.RapidTwin => new(2, 0.09f, "RAPID TWIN"),
+        WeaponTier.Quad => new(4, 0.09f, "QUAD GUNS"),
+        WeaponTier.Overdrive => new(4, 0.05f, "OVERDRIVE"),
+        _ => throw new ArgumentOutOfRangeException(nameof(tier))
+    };
+}
+
 [Resource] internal readonly record struct Controls(float Turn, bool Thrust, bool Fire);
 [Resource] internal readonly record struct FrameTime(float DeltaSeconds);
 [Resource]
@@ -65,6 +86,8 @@ internal struct Session
     public int Lives;
     public int Wave;
     public float WaveDelay;
+    public WeaponTier Weapon;
+    public float UpgradeNotice;
     public readonly bool GameOver => Lives == 0;
 }
 
@@ -100,6 +123,7 @@ internal static class Factory
 {
     public static readonly Vector4 Cyan = new(0.4f, 0.95f, 0.9f, 1);
     public static readonly Vector4 Amber = new(1, 0.65f, 0.26f, 1);
+    public static readonly Vector4 Lime = new(0.7f, 1, 0.4f, 1);
 
     public static ShipBundle Ship() => new(new(Arena.Center), new(Vector2.Zero), new(-MathF.PI / 2),
         new(12), new(0, 0), new(), new(), new(2.5f), new(Shape.Ship, 15, 0, Cyan));
@@ -113,4 +137,8 @@ internal static class Factory
 
     public static ParticleBundle Particle(Vector2 position, Vector2 velocity, float seconds, Vector4 color, float radius = 2)
         => new(new(Arena.Wrap(position)), new(velocity), new(0), new(seconds, seconds), new(Shape.Particle, radius, 0, color));
+
+    public static UpgradeBundle Upgrade(Vector2 position, Vector2 velocity)
+        => new(new(Arena.Wrap(position)), new(velocity * 0.2f), new(0, 0.8f), new(22),
+            new(), new(18, 18), new(Shape.Upgrade, 17, 0, Lime));
 }

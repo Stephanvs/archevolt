@@ -74,7 +74,7 @@ export async function createRenderer(canvas, overlay, fail) {
         text.fillText(value, x - (align === "center" ? measured / 2 : align === "right" ? measured : 0), y);
     }
 
-    return function render(vertices, score, wave, lives, entities, milliseconds, framesPerSecond, paused) {
+    return function render(vertices, score, wave, lives, entities, milliseconds, framesPerSecond, paused, weapon, upgradeNotice) {
         // The MemoryView expires when this synchronous import returns. Copy only the active
         // bytes into reusable storage; never retain a view into a movable WASM heap.
         const byteLength = vertices.length;
@@ -122,12 +122,15 @@ export async function createRenderer(canvas, overlay, fail) {
         text.textBaseline = "top";
         label("ARCHEOIDS", 34, 18, 42, amber, 600);
         label("ARCHEVOLT / WEBGPU", 36, 70, 15, dim);
+        label("WEAPON", 332, 25, 14, dim);
+        label(weapon, 332, 51, 22, "#b3ff66", 600);
         label("SCORE", 590, 25, 14, dim);
         label(String(score).padStart(6, "0"), 590, 46, 32, white, 600);
         label("SECTOR", 830, 25, 14, dim);
         label(String(Math.max(wave, 1)).padStart(2, "0"), 830, 46, 32, white, 600);
         label("HULL", 1070, 25, 14, dim);
         label("A/D  TURN    W  THRUST    SPACE  FIRE    P  PAUSE    R  RESTART", 36, 764, 15, dim);
+        label("CATCH GREEN DIAMONDS TO UPGRADE YOUR GUNS AND RECHARGE YOUR SHIELD", 36, 784, 11, dim);
         label(`${framesPerSecond.toFixed(0)} FPS / ${entities} ENTITIES / ${milliseconds.toFixed(2)} MS`, 1246, 764, 15, cyan, 400, "right");
         if (paused || lives === 0) {
             label(paused ? "PAUSED" : "SIGNAL LOST", 640, 343, 64, paused ? white : amber, 600, "center");
@@ -136,5 +139,6 @@ export async function createRenderer(canvas, overlay, fail) {
             label("CLEAR THE SECTOR", 640, 245, 30, white, 600, "center");
             label("THRUST. DRIFT. SURVIVE.", 640, 292, 16, dim, 400, "center");
         }
+        else if (upgradeNotice > 0) label("WEAPON UPGRADED", 640, 124, 20, "#b3ff66", 600, "center");
     };
 }

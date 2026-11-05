@@ -52,6 +52,9 @@ internal sealed class FrameGeometry
         Line(new(32, 100), new(1248, 100), 1, new(0.3f, 0.46f, 0.5f, 0.55f));
         Line(new(32, 744), new(1248, 744), 1, new(0.3f, 0.46f, 0.5f, 0.55f));
 
+        for (int i = 0; i < 5; i++)
+            Rect(332 + i * 18, 82, 12, 3, i <= (int)state.Weapon ? Factory.Lime : Dim with { W = 0.3f });
+
         for (int i = 0; i < 3; i++)
             DrawSprite(new(new(1082 + i * 45, 65), -MathF.PI / 2,
                 new(Shape.Ship, 11, 0, i < state.Lives ? Factory.Cyan : Dim), i < state.Lives ? 1 : 0.2f), Vector2.Zero);
@@ -89,6 +92,19 @@ internal sealed class FrameGeometry
             for (int i = 0; i < points.Length; i++) Stroke(points[i], points[(i + 1) % points.Length], color);
         }
         else if (a.Shape == Shape.Bullet) Stroke(p - forward * a.Radius, p + forward * a.Radius, color, 2);
+        else if (a.Shape == Shape.Upgrade)
+        {
+            Vector2 top = p + forward * a.Radius;
+            Vector2 right = p + side * a.Radius;
+            Vector2 bottom = p - forward * a.Radius;
+            Vector2 left = p - side * a.Radius;
+            Triangle(top, right, bottom, color with { W = color.W * 0.12f });
+            Triangle(top, bottom, left, color with { W = color.W * 0.12f });
+            Stroke(top, right, color, 2); Stroke(right, bottom, color, 2);
+            Stroke(bottom, left, color, 2); Stroke(left, top, color, 2);
+            Stroke(p + new Vector2(-4, -6), p + new Vector2(-4, 6), color, 2);
+            Stroke(p + new Vector2(4, -6), p + new Vector2(4, 6), color, 2);
+        }
         else
         {
             Rect(p.X - a.Radius * 2, p.Y - a.Radius * 2, a.Radius * 4, a.Radius * 4,
