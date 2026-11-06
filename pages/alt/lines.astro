@@ -1,0 +1,115 @@
+---
+/**
+ * Round 2, "Line by line": judge A's hero and three value chapters. Plain C# carries the code, the build
+ * errors, and the setup steps. Speed opens with the comparison of Motion.Move part by part, then the numbers.
+ * Headless closes with the one mention of the sample.
+ */
+import AltLayout from "../_alt/AltLayout.astro";
+import "../_alt/v2/v2.css";
+import { Code } from "astro:components";
+import data from "blume:data";
+import * as ev from "../_alt/evidence";
+import CompareLines from "../_alt/v2/CompareLines.astro";
+import Final from "../_alt/v2/Final.astro";
+import Headless from "../_alt/v2/Headless.astro";
+import Hero from "../_alt/v2/Hero.astro";
+import Speed from "../_alt/v2/Speed.astro";
+import Wire from "../_alt/v2/Wire.astro";
+import { us } from "../_alt/v2/code";
+
+const codeTheme = data.config.codeThemes.dark;
+
+const title = "Archevolt: build fast simulations in plain C#";
+const description =
+  "Archevolt is an entity component system for .NET games and simulations. Write components as structs and systems as static methods. A source generator compiles them into direct calls at build time.";
+
+const values = [
+  { n: "01", label: "Plain C#", proof: "Structs and static methods. Mistakes fail the build.", href: "#write" },
+  { n: "02", label: "Speed", proof: `${us(ev.perfFacts.kernel.after)} µs to move 100,000 entities.`, href: "#speed" },
+  { n: "03", label: "Headless", proof: "Your host, your loop, your threads.", href: "#headless" },
+];
+
+/*
+ * Real diagnostic messages. AV001: src/Archevolt.Generators/ArchevoltGenerator.cs line 81. AV002: the same file,
+ * line 135. AV006: evidence.ts av006 (QueryGeneration.cs line 21).
+ */
+const errors = [
+  { cause: "Motion is declared without partial", code: "AV001", message: "Motion and every containing type must be non-generic partial declarations." },
+  { cause: "Position holds a string", code: "AV002", message: "Position must be a closed unmanaged, non-owning value type." },
+  { cause: "A Changed<Position> filter, Position untracked", code: "AV006", message: ev.av006.replace(/^error AV006: /, "") },
+];
+---
+
+<AltLayout slug="lines" title={title} description={description}>
+  <Hero extra="values" values={values} />
+
+  <section class="section v2-anchor" id="write" aria-labelledby="write-title">
+    <div class="frame">
+      <div class="sec-label" data-reveal><span>01</span>Plain C#</div>
+      <div class="system">
+        <div class="system-copy" data-reveal>
+          <h2 class="sec-title" id="write-title">Write the simulation, not the plumbing</h2>
+          <p class="sec-lede">
+            Components are structs. A system is a static method that takes <code>ref</code> to write and <code>in</code>
+            to read. The generator writes the queries, the loops, and the schedule wiring.
+          </p>
+          <ul class="system-facts">
+            <li><span>You write</span>Components, systems, and the attributes that order them.</li>
+            <li><span>The generator writes</span>Typed queries, direct calls, and schedule plans, in your partial types and namespace.</li>
+          </ul>
+        </div>
+        <figure class="window system-window" data-reveal data-story="system">
+          <div class="window-bar">
+            <span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+            <span class="window-file">Motion.cs</span>
+            <span class="window-tag">you write</span>
+          </div>
+          <div class="code">
+            <Code code={ev.heroCode} lang="csharp" theme={codeTheme} />
+            <span class="code-hot" aria-hidden="true"><span>runs for every matching row</span></span>
+          </div>
+        </figure>
+      </div>
+
+      <div class="v2-build-block" data-reveal>
+        <div>
+          <h3 class="v2-sub">Mistakes fail the build</h3>
+          <p class="sec-lede">
+            A declaration the generator cannot compile is a build error, not a surprise at run time.{" "}
+            {ev.diagnostics.total} diagnostics, {ev.diagnostics.errors} of them errors.
+          </p>
+        </div>
+        <figure class="window">
+          <div class="window-bar">
+            <span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+            <span class="window-file">Terminal</span>
+            <span class="window-tag">three mistakes</span>
+          </div>
+          <p class="v2-build">
+            <span><span class="v2-build-prompt">$</span> dotnet build</span>
+            {
+              errors.map((error) => (
+                <>
+                  <span class="v2-build-cause">// {error.cause}</span>
+                  <span>
+                    <b>error {error.code}:</b> {error.message}
+                  </span>
+                </>
+              ))
+            }
+          </p>
+        </figure>
+      </div>
+
+      <Wire sub />
+    </div>
+  </section>
+
+  <CompareLines n="02" label="Speed">
+    <Speed sub heading="Speed is a requirement" gaps />
+  </CompareLines>
+
+  <Headless n="03" label="Headless" visuals />
+
+  <Final />
+</AltLayout>

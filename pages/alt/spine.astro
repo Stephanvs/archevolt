@@ -1,0 +1,762 @@
+---
+/**
+ * The value spine: a hero and three value chapters. Code, numbers, and the sample sit inside the value
+ * they prove. Spec: .arena/landing/out-spine.md, sections 3 to 5, with the overrides in
+ * .arena/landing/v2/brief.md ("### `spine`").
+ */
+import AltLayout from "../_alt/AltLayout.astro";
+import "../_alt/spine.css";
+import { Code } from "astro:components";
+import { Image } from "astro:assets";
+import data from "blume:data";
+import archeoids from "../../docs/samples/archeoids.png";
+import Icon from "../_home/Icon.astro";
+import InstallCommand from "../_home/InstallCommand.astro";
+import TaglineReveal from "../_home/TaglineReveal.astro";
+import AotVisual from "../_home/visuals/AotVisual.astro";
+import ExecutionVisual from "../_home/visuals/ExecutionVisual.astro";
+import MessagesVisual from "../_home/visuals/MessagesVisual.astro";
+import QueryVisual from "../_home/visuals/QueryVisual.astro";
+import ScheduleVisual from "../_home/visuals/ScheduleVisual.astro";
+import StorageVisual from "../_home/visuals/StorageVisual.astro";
+import * as ev from "../_alt/evidence";
+
+const codeTheme = data.config.codeThemes.dark;
+
+const title = "Archevolt: readable C# that compiles to fast simulation loops";
+const description =
+  "A headless entity component system for .NET. Components are structs, systems are static methods, and a source generator compiles them into direct loops.";
+
+/** The three values, in reading order. The hero links to each chapter by its id. */
+const values = [
+  {
+    id: "plain-csharp",
+    label: "Write plain C#",
+    desc: "Structs, static methods, and the code the generator writes for you",
+  },
+  {
+    id: "speed",
+    label: "Keep updates fast",
+    desc: "Kernel timings, how a change is measured, and what is still slower",
+  },
+  {
+    id: "architecture",
+    label: "Choose your architecture",
+    desc: "Headless. Your host, serial or parallel, JIT or NativeAOT",
+  },
+];
+
+/* 01 */
+
+const insets01 = [
+  {
+    key: "query",
+    wide: true,
+    label: "Queries",
+    title: "Typed rows, no lookups",
+    body: "Named queries produce concrete rows with `ref` and `ref readonly` access. Nothing is boxed or looked up by type at run time.",
+    href: ev.links.queries,
+    cta: "Queries guide",
+  },
+  {
+    key: "schedule",
+    label: "Schedules",
+    title: "Order you declare once",
+    body: "Order systems with `Order`, `Before`, `After`, stages, and sets. The planner adds a conservative order where access conflicts.",
+    href: ev.links.schedules,
+    cta: "Schedules guide",
+  },
+];
+
+/* 02 */
+
+const kernel = ev.perfFacts.kernel;
+const bevy = ev.perfFacts.bevyParity;
+const maxUs = Math.max(...ev.movement.map((row) => row.us));
+/** Show each figure with the precision its source reports: one decimal for 5 November rows and Arch, two otherwise. */
+const decimals = (row: ev.MovementRow) => (row.date === "5 Nov" || row.us >= 100 ? 1 : 2);
+const rowTag = (row: ev.MovementRow) =>
+  row.kind === "baseline" ? `${row.date} · no scheduler` : row.kind === "reference" ? `${row.date} · reference` : row.date;
+
+// Costs: perfFacts.allocation.scope, and docs/performance.mdx, "Entity operations" (SpawnBatch) and
+// "Things that cost" and "Parallel execution" (dispatch on small workloads, measure with one worker first).
+const costs = [
+  "Spawning and other structural changes can grow storage and allocate. `SpawnBatch` reserves storage for the whole batch first.",
+  "Small workloads can cost more to dispatch in parallel than to run serially. Measure with one worker before you enable more.",
+];
+
+/* 03 */
+
+const insets03 = [
+  {
+    key: "exec",
+    label: "Execution",
+    title: "Serial until you opt in",
+    body: `${ev.facts.threads} Small workloads can cost more in parallel, so measure first.`,
+    href: ev.links.execution,
+    cta: "Execution guide",
+  },
+  {
+    key: "messages",
+    label: "Data flow",
+    title: "Resources, messages, changes",
+    body: "Share resources, track added and changed components, and send messages that each reader consumes at its own pace.",
+    href: ev.links.messages,
+    cta: "Messages guide",
+  },
+  {
+    key: "aot",
+    label: "Deployment",
+    title: "JIT, trimmed, or NativeAOT",
+    body: ev.facts.deployment,
+    href: ev.links.installation,
+    cta: "Installation",
+  },
+];
+
+const callouts = [
+  { label: "ship", x: 52.9, y: 46.7 },
+  { label: "rock", x: 55.5, y: 24.1 },
+  { label: "rock", x: 35.9, y: 57.5 },
+  { label: "8 entities", x: 91.5, y: 91.1, align: "end" },
+];
+
+const yours = [
+  {
+    label: "Host",
+    text: "Any .NET program. Archeoids runs one simulation under Silk.NET on the desktop and on .NET WebAssembly with WebGPU in the browser.",
+  },
+  {
+    label: "Composition",
+    text: "Modules collect systems and bundles. Schedules declare order with `Order`, `Before`, `After`, stages, and sets, and `BoundSchedule.Bind` composes them at run time.",
+  },
+  { label: "Package", text: ev.facts.package },
+];
+
+// facts.ownership, facts.structural, and facts.package, split into one limit per line.
+const limits = [
+  {
+    label: "Threads",
+    text: "A world has one owner thread. Outside a schedule, change it there. Inside systems, structural changes go through `Commands` and apply at schedule barriers.",
+  },
+  { label: "Registration", text: "Registration is fixed when the world is built." },
+  { label: "Storage", text: "Storage is archetype tables only." },
+  {
+    label: "Dependencies",
+    text: "The zero dependency count covers the Archevolt package. The sample adds Silk.NET for the desktop window and rendering.",
+  },
+];
+
+// facts.engine, facts.requirements, facts.package, and facts.status, written as answers.
+const fitQuestions = [
+  {
+    q: "Is Archevolt a game engine?",
+    a: "No. It has no window, input, rendering, or audio. Pair it with a library such as Silk.NET, or run simulations with no graphics.",
+  },
+  {
+    q: "What do I need to build with it?",
+    a: `The .NET 11 SDK, a project that targets net11.0, and C# 15. Install release candidates while .NET 11 is in preview. ${ev.facts.package}`,
+  },
+  {
+    q: "Will the API change?",
+    a: "It can. Archevolt is a research project with no users. Its public API, storage layout, and generated code can change without compatibility shims.",
+  },
+];
+
+/** Split text on backticks so inline code renders as <code>. */
+const segments = (text: string) => text.split("`").map((part, index) => ({ code: index % 2 === 1, part }));
+const two = (index: number) => String(index + 1).padStart(2, "0");
+---
+
+<AltLayout slug="spine" title={title} description={description}>
+  <!-- Hero: the category, the promise, and a route to each value -->
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="frame hero-inner">
+      <p class="hero-badge" data-rise style="--d:0">
+        <span class="pulse-dot"></span>
+        Headless .NET ECS · MIT
+      </p>
+      <h1 class="hero-title" id="hero-title" data-rise style="--d:90">
+        Readable C# that compiles{" "}<br />
+        to fast loops
+      </h1>
+      <div class="hero-grid">
+        <div class="hero-left">
+          <p class="hero-lede" data-rise style="--d:180">
+            Archevolt is an entity component system (ECS) for .NET games and simulations. Entities hold their data in
+            plain structs, and systems are static methods that update every entity with the components they name. A
+            source generator compiles each system into a direct loop. Archevolt has no window or renderer, so your
+            program decides how it runs.
+          </p>
+          <div class="hero-actions" data-rise style="--d:270">
+            <a class="button" href={ev.links.quickstart}>
+              Read the quickstart
+              <Icon name="arrow-right" />
+            </a>
+            <a class="spine-textlink" href={ev.links.installation}>Check the requirements</a>
+          </div>
+          <p class="spine-status" data-rise style="--d:360">
+            <span class="spine-status-tag">Status</span>
+            A research project with no users. It needs the .NET 11 SDK and C# 15. The public API, storage layout, and
+            generated code can change between versions.
+          </p>
+        </div>
+        <div class="hero-stage" data-rise style="--d:300" aria-hidden="true">
+          <canvas class="hero-field" data-field></canvas>
+          <p class="spine-field-label">Illustration · entities moving between archetype tables</p>
+        </div>
+      </div>
+      <nav class="spine-routes" aria-label="The three values" data-rise style="--d:420">
+        {
+          values.map((value, index) => (
+            <a class="spine-route" href={`#${value.id}`}>
+              <span class="spine-route-num">{two(index)}</span>
+              <span class="spine-route-name">
+                {value.label}
+                <Icon name="arrow-right" />
+              </span>
+              <span class="spine-route-desc">{value.desc}</span>
+            </a>
+          ))
+        }
+      </nav>
+    </div>
+  </section>
+
+  <!-- 01: the ergonomic API -->
+  <section class="section" id="plain-csharp" aria-labelledby="plain-title">
+    <div class="frame">
+      <div class="sec-label" data-reveal><span>01</span>Write plain C#</div>
+      <div class="system">
+        <div class="system-copy" data-reveal>
+          <h2 class="sec-title" id="plain-title">Write the simulation. The generator writes the plumbing.</h2>
+          <p class="sec-lede">
+            You describe what a system reads, what it writes, and what it does to one entity. At build time, a source
+            generator turns that method into the update code, inside your own partial types and namespace.
+          </p>
+          <ul class="system-facts">
+            <li><span>Components</span><div class="spine-fact">unmanaged structs, stored in dense native tables</div></li>
+            <li><span>Systems</span><div class="spine-fact">static methods that take <code>ref</code> to write and <code>in</code> to read</div></li>
+            <li><span>Generated</span><div class="spine-fact">the query, the access plan, the schedule wiring, and the loop</div></li>
+          </ul>
+        </div>
+        <figure class="window system-window" data-reveal data-story="system">
+          <div class="window-bar">
+            <span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+            <span class="window-file">Motion.cs</span>
+            <span class="window-tag">system declaration</span>
+          </div>
+          <div class="code">
+            <Code code={ev.heroCode} lang="csharp" theme={codeTheme} />
+            <span class="code-hot" aria-hidden="true"><span>runs for every matching row</span></span>
+          </div>
+        </figure>
+      </div>
+
+      <div class="system spine-flip spine-block">
+        <div data-reveal>
+          <h3 class="spine-h3">The loop you did not write</h3>
+          <p class="spine-p">
+            The generator wrote this <code>Run</code> method for <code>Motion.Move</code>. It is real output, built from
+            main in Release on 5 November, with namespace prefixes removed. It walks every table block that has both
+            components and calls <code>Move</code> directly for each row.
+          </p>
+          <p class="spine-p">
+            When the method qualifies, the whole block goes to a SIMD kernel instead.{" "}
+            <a class="spine-textlink" href="#speed">Chapter 02 shows the kernel</a>.
+          </p>
+          <ul class="system-facts">
+            <li><span>Direct calls</span><div class="spine-fact">Nothing is boxed, wrapped in a delegate, or looked up by type at run time.</div></li>
+            <li><span>Your types</span><div class="spine-fact">{ev.facts.generated}</div></li>
+          </ul>
+        </div>
+        <figure class="window" data-reveal>
+          <div class="window-bar">
+            <span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+            <span class="window-file">Motion.Move.g.cs</span>
+            <span class="window-tag">generated · excerpt</span>
+          </div>
+          <div class="code">
+            <Code code={ev.generatedRun} lang="csharp" theme={codeTheme} />
+          </div>
+        </figure>
+      </div>
+
+      <div class="bento spine-insets spine-insets-2" data-scene>
+        {
+          insets01.map((card, index) => (
+            <a class:list={["bento-card", { "is-wide": card.wide }]} href={card.href} style={`--d:${index * 85}`}>
+              <div class="bento-visual">
+                {card.key === "query" && <QueryVisual />}
+                {card.key === "schedule" && <ScheduleVisual />}
+              </div>
+              <div class="bento-body">
+                <span class="mono-label">{card.label}</span>
+                <h3>{card.title}</h3>
+                <p>{segments(card.body).map(({ code, part }) => (code ? <code>{part}</code> : part))}</p>
+                <span class="pill">
+                  {card.cta}
+                  <Icon name="arrow-right" />
+                </span>
+              </div>
+            </a>
+          ))
+        }
+      </div>
+
+      <div class="system spine-block">
+        <div data-reveal>
+          <h3 class="spine-h3">Mistakes stop the build</h3>
+          <p class="spine-p">
+            The generator checks every declaration while you compile. It reports {ev.diagnostics.total} diagnostics, and
+            {" "}{ev.diagnostics.errors} of them are errors. Only {ev.diagnostics.warning} is a warning. Here is the
+            error for a change filter on a component that does not track changes. Adding <code>[TrackChanges]</code> to
+            the component fixes it.
+          </p>
+          <ul class="system-facts">
+            <li><span>Partial types</span><div class="spine-fact">Types the generator extends must be <code>partial</code> (AV001).</div></li>
+            <li><span>Unmanaged components</span><div class="spine-fact">Components are unmanaged structs (AV002). Reference types go in managed resources.</div></li>
+            <li><span>Attributes</span><div class="spine-fact">You declare systems, modules, and schedules with attributes.</div></li>
+          </ul>
+        </div>
+        <figure class="window spine-diag" data-reveal>
+          <div class="window-bar">
+            <span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+            <span class="window-file">dotnet build</span>
+            <span class="window-tag">AV006 · real message</span>
+          </div>
+          <div class="code">
+            <Code code={ev.av006} lang="text" theme={codeTheme} />
+          </div>
+        </figure>
+      </div>
+
+      <p class="sec-foot" data-reveal>
+        <a href={ev.links.quickstart}>Run the complete example in the quickstart</a>. It adds a module, a schedule,
+        and a world, and prints <code>1</code>. Read more in the <a href={ev.links.queries}>queries guide</a>, the
+        {" "}<a href={ev.links.schedules}>schedules guide</a>, and the <a href={ev.links.diagnostics}>diagnostics reference</a>.
+      </p>
+    </div>
+  </section>
+
+  <TaglineReveal lines={["Your components stay structs.", "Your systems stay methods.", "The generator writes the loop."]} />
+
+  <!-- 02: performance -->
+  <section class="section" id="speed" aria-labelledby="speed-title">
+    <div class="frame">
+      <div class="sec-label" data-reveal><span>02</span>Keep updates fast</div>
+      <h2 class="sec-title sec-title-wide" id="speed-title" data-reveal>Speed is a requirement</h2>
+      <p class="sec-lede spine-lede" data-reveal>
+        Every design decision is judged by what it costs in the update loop. The newest result is the SIMD kernel.
+        In optimized builds, the generator compiles a plain <code>[Each]</code> method like <code>Motion.Move</code>{" "}
+        into a <code>Vector256</code> loop.
+      </p>
+
+      <div class="perf spine-perf">
+        <div class="perf-hero" data-reveal>
+          <p class="spine-tag">5 November 2026 · on main · not yet in a NuGet release</p>
+          <p class="perf-number">{kernel.after.toFixed(1)}<span class="spine-unit"> µs</span></p>
+          <p class="perf-caption">
+            to move 100,000 entities with the same <code>[Each]</code> method on one worker, down from
+            {" "}{kernel.before.toFixed(1)} µs before the kernel. {bevy.claim}
+          </p>
+          <dl class="perf-minis">
+            <div>
+              <dt>
+                Bevy 0.20 <code>for_each</code> on the same update, measured 2 November on the same machine while idle.
+                The Archevolt figure is from 5 November, with the machine in use.
+              </dt>
+              <dd>{bevy.bevy.toFixed(2)} µs</dd>
+            </div>
+            <div>
+              <dt>{ev.perfFacts.allocation.scope}</dt>
+              <dd>{ev.perfFacts.allocation.value}</dd>
+            </div>
+          </dl>
+        </div>
+        <div class="perf-chart spine-chart" data-reveal data-bars>
+          <p class="perf-chart-title">
+            Moving 100,000 entities on one worker, median µs per update
+            <span>
+              Archevolt's times include schedule dispatch, resource access, lease checks, and query traversal. The C#
+              handwritten loop has no scheduler.
+            </span>
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Case</th>
+                <th scope="col" class="num">Median µs, range</th>
+              </tr>
+            </thead>
+            <tbody>
+              {
+                ev.movement.map((row) => (
+                  <tr
+                    class:list={{
+                      "is-baseline": row.kind === "baseline",
+                      "spine-is-ref": row.kind === "reference",
+                      "spine-is-before": row.kind === "archevolt" && row.name.includes("before"),
+                    }}
+                  >
+                    <th scope="row">
+                      <span class="bar-label">
+                        {segments(row.name).map(({ code, part }) => (code ? <code>{part}</code> : part))}
+                        <span class="bar-tag">{rowTag(row)}</span>
+                      </span>
+                      <span class="bar" style={`--w:${((row.us / maxUs) * 100).toFixed(2)}%`}>
+                        <span class="bar-fill" />
+                      </span>
+                    </th>
+                    <td class="num">
+                      {row.us.toFixed(decimals(row))}
+                      <span class="spine-range">
+                        {row.range[0].toFixed(decimals(row))} to {row.range[1].toFixed(decimals(row))}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <p class="sec-foot" data-reveal>
+        Medians of three process runs on one AMD Ryzen 9 5950X with Windows 11 and .NET 11 rc.3, Release builds,
+        with the fastest and slowest process as the range. The 2 November rows ran on the idle machine at commit
+        8029e7f. The 5 November rows ran on the same machine in normal use, before and after the kernel, in
+        alternating processes. The kernel is on main and not yet in a NuGet release. One machine, not a ranking.
+        {" "}<a href={ev.links.roundTwo}>Read the round two report</a>
+      </p>
+
+      <div class="system spine-block">
+        <div data-reveal>
+          <h3 class="spine-h3">The method you read is the kernel that runs</h3>
+          <p class="spine-p">
+            The generator reads <code>Motion.Move</code> and sees that every float of <code>Position</code> gets the
+            same formula. It emits a vector loop over the columns, treated as flat float arrays, with a scalar tail.
+            The excerpt is real output from main, built in Release on 5 November.
+          </p>
+          <ul class="system-facts">
+            <li>
+              <span>Qualifies</span>
+              <div class="spine-fact">
+                An <code>[Each]</code> method that writes one component with the same float formula in every lane. It
+                may use float arithmetic and negation, <code>Vector2</code>, <code>Vector3</code>, and
+                {" "}<code>Vector4</code> operators, constants, locals, fields, records, and <code>with</code>{" "}
+                expressions.
+              </div>
+            </li>
+            <li><span>Does not qualify</span><div class="spine-fact">{ev.kernelScope.doesNot}</div></li>
+            <li><span>Same bits</span><div class="spine-fact">{ev.kernelScope.correctness}</div></li>
+            <li><span>Debug builds</span><div class="spine-fact">{ev.kernelScope.debug}</div></li>
+          </ul>
+          <p class="spine-p">
+            <a class="spine-textlink" href={ev.links.simdKernels}>Read how SIMD kernels qualify</a>
+          </p>
+        </div>
+        <figure class="window" data-reveal>
+          <div class="window-bar">
+            <span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+            <span class="window-file">Motion.Move.g.cs</span>
+            <span class="window-tag">generated · Release · excerpt</span>
+          </div>
+          <div class="code">
+            <Code code={ev.generatedKernel} lang="csharp" theme={codeTheme} />
+          </div>
+        </figure>
+      </div>
+
+      <div class="system spine-flip spine-block">
+        <div data-reveal>
+          <h3 class="spine-h3">What the speed rests on</h3>
+          <p class="spine-p">
+            The kernel can treat a column as a flat float array because of how Archevolt stores components. The other
+            decisions follow the same rule.
+          </p>
+          <ul class="system-facts">
+            <li><span>Storage</span><div class="spine-fact">Components are unmanaged structs in dense, aligned, structure of arrays tables, one per archetype, outside the managed heap.</div></li>
+            <li><span>Calls</span><div class="spine-fact">The generator emits direct calls, with no reflection, boxing, delegates, or lookup by type at run time.</div></li>
+            <li><span>Build</span><div class="spine-fact">A declaration that cannot compile to the generated form fails the build instead of falling back at run time.</div></li>
+            <li>
+              <span>Change tracking</span>
+              <div class="spine-fact">
+                A <code>Changed&lt;T&gt;</code> scan with nothing changed takes {ev.perfFacts.unchangedScan.value} µs
+                at 1,000 or 100,000 entities, because it skips untouched tables. Measured at the 2 November checkpoint
+                on one machine.
+              </div>
+            </li>
+            <li><span>Threads</span><div class="spine-fact">Parallel execution is opt-in, bounded, and partitionable.</div></li>
+          </ul>
+        </div>
+        <div class="bento spine-insets-1" data-scene>
+          <a class="bento-card" href={ev.links.architecture}>
+            <div class="bento-visual">
+              <StorageVisual />
+            </div>
+            <div class="bento-body">
+              <span class="mono-label">Storage</span>
+              <h3>Dense native tables</h3>
+              <p>
+                Each archetype gets its own table, and each component its own aligned column. A system reads rows that
+                sit next to each other in memory.
+              </p>
+              <span class="pill">
+                Architecture
+                <Icon name="arrow-right" />
+              </span>
+            </div>
+          </a>
+        </div>
+      </div>
+
+      <div class="spine-split spine-block">
+        <div data-reveal>
+          <h3 class="spine-h3">How a change earns its place</h3>
+          <p class="spine-p">
+            Performance work runs as a hill climb. These rules are fixed before any candidate runs, and a change ships
+            only if it passes all of them.
+          </p>
+          <div class="spine-actions">
+            <p class="spine-small">Rerun the quick benchmarks from a clone of the repository.</p>
+            <InstallCommand command={ev.rerunBenchmarks} />
+          </div>
+          <ul class="spine-links">
+            <li><a class="spine-textlink" href={ev.links.roundOne}>Read the round one report</a></li>
+            <li><a class="spine-textlink" href={ev.links.roundTwo}>Read the round two report</a></li>
+          </ul>
+        </div>
+        <ol class="spine-rules" data-reveal>
+          {ev.perfProcess.map((rule) => <li>{rule}</li>)}
+        </ol>
+      </div>
+
+      <div class="spine-block">
+        <div class="spine-split">
+          <div data-reveal>
+            <h3 class="spine-h3">The known work</h3>
+            <p class="spine-p">
+              These cases are still slower than Bevy on the same machine. Each has a cause that the round two report
+              names, and each is open work.
+            </p>
+          </div>
+          <div data-reveal>
+            <p class="spine-small spine-costs-title">Costs to plan for</p>
+            <ul class="spine-costs">
+              {costs.map((cost) => <li>{segments(cost).map(({ code, part }) => (code ? <code>{part}</code> : part))}</li>)}
+            </ul>
+          </div>
+        </div>
+        <ul class="spine-gaps" data-reveal>
+          {
+            ev.gaps.map((gap) => (
+              <li class="spine-gap">
+                <h4>{segments(gap.case).map(({ code, part }) => (code ? <code>{part}</code> : part))}</h4>
+                <p class="spine-gap-nums">
+                  <span>Archevolt <b>{gap.now}</b></span>
+                  {gap.bevy && <span>Bevy 0.20 <b>{gap.bevy}</b></span>}
+                </p>
+                <p>{gap.note}</p>
+              </li>
+            ))
+          }
+        </ul>
+        <p class="sec-foot" data-reveal>
+          Archevolt measured on 5 November 2026 on main, while the machine was in use. Bevy 0.20 measured on 2
+          November on the same AMD Ryzen 9 5950X, idle. One machine, not a ranking.{" "}
+          <a href={ev.links.whatRemains}>Read what remains</a> or <a href={ev.links.performance}>read the full performance page</a>
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03: the flexible architecture -->
+  <section class="section" id="architecture" aria-labelledby="architecture-title">
+    <div class="frame">
+      <div class="sec-label" data-reveal><span>03</span>Choose your architecture</div>
+      <h2 class="sec-title sec-title-wide" id="architecture-title" data-reveal>
+        A library, not an engine. Your program decides the shape.
+      </h2>
+      <p class="sec-lede spine-lede" data-reveal>
+        Archevolt has no window, input, rendering, or audio. It runs the simulation. Your program owns the host, the
+        update cadence, and the threads.
+      </p>
+
+      <div class="arcade spine-arcade" data-reveal>
+        <div class="arcade-copy">
+          <h3 class="spine-h3">One simulation, two hosts</h3>
+          <p>{ev.sample.summary} {ev.sample.hosts}</p>
+          <a class="button" href={ev.links.browserGame}>
+            Play Archeoids in your browser
+            <Icon name="arrow-right" />
+          </a>
+          <span class="spine-note">{ev.sample.browserNote}</span>
+          <span class="spine-note">Or run it on the desktop from a clone of the repository.</span>
+          <InstallCommand command={ev.runSample} />
+          <a class="pill pill-light" href={ev.links.sample}>
+            Read the Archeoids sample
+            <Icon name="arrow-right" />
+          </a>
+        </div>
+        <div class="arcade-screen" data-story="arcade">
+          <Image
+            src={archeoids}
+            alt="Archeoids gameplay with a cyan ship, drifting asteroids, and a score and lives HUD."
+            widths={[640, 1100, 1600]}
+            sizes="(min-width: 1024px) 640px, 100vw"
+            loading="lazy"
+          />
+          {
+            callouts.map((callout, index) => (
+              <span
+                class:list={["callout", { "is-end": callout.align === "end" }]}
+                style={`left:${callout.x}%;top:${callout.y}%`}
+                data-callout={index}
+                aria-hidden="true"
+              >
+                <span class="callout-ring" />
+                <span class="callout-tag">entity · {callout.label}</span>
+              </span>
+            ))
+          }
+        </div>
+      </div>
+
+      <div class="bento spine-insets spine-insets-3" data-scene>
+        {
+          insets03.map((card, index) => (
+            <a class="bento-card" href={card.href} style={`--d:${index * 85}`}>
+              <div class="bento-visual">
+                {card.key === "exec" && <ExecutionVisual />}
+                {card.key === "messages" && <MessagesVisual />}
+                {card.key === "aot" && <AotVisual />}
+              </div>
+              <div class="bento-body">
+                <span class="mono-label">{card.label}</span>
+                <h3>{card.title}</h3>
+                <p>{segments(card.body).map(({ code, part }) => (code ? <code>{part}</code> : part))}</p>
+                <span class="pill">
+                  {card.cta}
+                  <Icon name="arrow-right" />
+                </span>
+              </div>
+            </a>
+          ))
+        }
+      </div>
+
+      <div class="spine-fit spine-block">
+        <div data-reveal>
+          <h3 class="spine-h3">What stays yours</h3>
+          <ul class="system-facts">
+            {
+              yours.map((item) => (
+                <li>
+                  <span>{item.label}</span>
+                  <div class="spine-fact">
+                    {segments(item.text).map(({ code, part }) => (code ? <code>{part}</code> : part))}
+                  </div>
+                </li>
+              ))
+            }
+          </ul>
+        </div>
+        <div data-reveal>
+          <h3 class="spine-h3">Where Archevolt stops</h3>
+          <ul class="system-facts">
+            {
+              limits.map((item) => (
+                <li>
+                  <span>{item.label}</span>
+                  <div class="spine-fact">
+                    {segments(item.text).map(({ code, part }) => (code ? <code>{part}</code> : part))}
+                  </div>
+                </li>
+              ))
+            }
+          </ul>
+        </div>
+      </div>
+
+      <div class="faq-layout spine-block">
+        <div data-reveal>
+          <h3 class="spine-h3">Before you try it</h3>
+          <p class="spine-p">A complete program, and three questions to settle before you add the package.</p>
+        </div>
+        <div class="faq spine-faq" data-reveal>
+          <details class="faq-item">
+            <summary>
+              <span class="faq-num">C#</span>
+              <span class="faq-q">Show a module, a schedule, and a world</span>
+              <span class="faq-icon"><Icon name="plus" /></span>
+            </summary>
+            <div class="spine-faq-body">
+              <figure class="window">
+                <div class="window-bar">
+                  <span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+                  <span class="window-file">GameEcs.cs</span>
+                  <span class="window-tag">module and schedule</span>
+                </div>
+                <div class="code">
+                  <Code code={ev.moduleCode} lang="csharp" theme={codeTheme} />
+                </div>
+              </figure>
+              <figure class="window">
+                <div class="window-bar">
+                  <span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+                  <span class="window-file">Program.cs</span>
+                  <span class="window-tag">world</span>
+                </div>
+                <div class="code">
+                  <Code code={ev.runCode} lang="csharp" theme={codeTheme} />
+                </div>
+              </figure>
+              <p class="spine-small">
+                <a class="spine-textlink" href={ev.links.quickstart}>The quickstart</a> puts these pieces and{" "}
+                <code>Motion.cs</code> together into one program that prints <code>1</code>.
+              </p>
+            </div>
+          </details>
+          {
+            fitQuestions.map((faq, index) => (
+              <details class="faq-item">
+                <summary>
+                  <span class="faq-num">{two(index)}</span>
+                  <span class="faq-q">{faq.q}</span>
+                  <span class="faq-icon">
+                    <Icon name="plus" />
+                  </span>
+                </summary>
+                <p>{faq.a}</p>
+              </details>
+            ))
+          }
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- The action that closes the architecture chapter -->
+  <section class="final" aria-labelledby="final-title">
+    <div class="frame">
+      <div class="final-panel" data-reveal>
+        <svg class="final-bolt" viewBox="0 0 120 220" aria-hidden="true">
+          <path d="M78 4 L18 128 H56 L40 216 L104 84 H64 Z" pathLength="1"></path>
+        </svg>
+        <p class="mono-label">Get started</p>
+        <h2 id="final-title">Try it in your own project</h2>
+        <p class="final-lede">
+          Two structs, one method, and a schedule. The quickstart walks through the whole program. You need the .NET
+          11 SDK and C# 15.
+        </p>
+        <div class="hero-actions">
+          <a class="button" href={ev.links.quickstart}>
+            Read the quickstart
+            <Icon name="arrow-right" />
+          </a>
+          <InstallCommand command={ev.install} />
+        </div>
+      </div>
+    </div>
+  </section>
+</AltLayout>

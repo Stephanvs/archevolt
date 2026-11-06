@@ -1,0 +1,107 @@
+---
+/**
+ * "Archevolt is headless": the flexible architecture value, three facts, the one mention of the sample,
+ * and with `visuals` the execution and deployment cards from the current page.
+ */
+import { Image } from "astro:assets";
+import archeoids from "../../../docs/samples/archeoids.png";
+import Icon from "../../_home/Icon.astro";
+import AotVisual from "../../_home/visuals/AotVisual.astro";
+import ExecutionVisual from "../../_home/visuals/ExecutionVisual.astro";
+import * as ev from "../evidence";
+import { segments } from "./code";
+
+interface Props {
+  n: string;
+  label?: string;
+  visuals?: boolean;
+}
+
+const { n, label = "Architecture", visuals = false } = Astro.props;
+
+const facts = [
+  { title: "Any host", body: "Call `simulation.Run()` from a game loop, a server, a test, or a tool." },
+  { title: "Serial or parallel", body: "Serial by default. Opt into a bounded worker pool and mark systems as partitioned." },
+  { title: "JIT or NativeAOT", body: "Runs under JIT, trimming, and NativeAOT. The runtime has no package dependencies." },
+];
+
+const cards = [
+  {
+    key: "exec",
+    label: "Execution",
+    title: "Parallel when you ask for it",
+    body: "Serial execution is the reference behavior. Enable a bounded worker pool and mark eligible systems as partitioned.",
+    href: ev.links.execution,
+    cta: "Execution guide",
+  },
+  {
+    key: "aot",
+    label: "Deployment",
+    title: "Ready for NativeAOT",
+    body: "The package runs under JIT, trimming, and NativeAOT. The runtime has no package dependencies.",
+    href: ev.links.installation,
+    cta: "Installation",
+  },
+];
+---
+
+<section class="section v2-anchor" id="headless" aria-labelledby="headless-title">
+  <div class="frame">
+    <div class="sec-label" data-reveal><span>{n}</span>{label}</div>
+    <div data-reveal>
+      <h2 class="sec-title" id="headless-title">Archevolt is headless</h2>
+      <p class="sec-lede">No window, input, rendering, or audio. You pick the host, the loop, and the threads.</p>
+    </div>
+
+    {
+      visuals ? (
+        <div class="bento v2-bento" data-scene>
+          {cards.map((card, index) => (
+            <a class="bento-card" href={card.href} style={`--d:${index * 85}`}>
+              <div class="bento-visual">
+                {card.key === "exec" && <ExecutionVisual />}
+                {card.key === "aot" && <AotVisual />}
+              </div>
+              <div class="bento-body">
+                <span class="mono-label">{card.label}</span>
+                <h3>{card.title}</h3>
+                <p>{card.body}</p>
+                <span class="pill">
+                  {card.cta}
+                  <Icon name="arrow-right" />
+                </span>
+              </div>
+            </a>
+          ))}
+        </div>
+      ) : (
+        <ul class="v2-facts" role="list" data-reveal>
+          {facts.map((fact) => (
+            <li>
+              <h3>{fact.title}</h3>
+              <p>{segments(fact.body).map(({ code, part }) => (code ? <code>{part}</code> : part))}</p>
+            </li>
+          ))}
+        </ul>
+      )
+    }
+
+    <a class="v2-sample" href={ev.links.browserGame} data-reveal>
+      <Image
+        src={archeoids}
+        alt=""
+        widths={[160, 320]}
+        sizes="160px"
+        loading="lazy"
+      />
+      <span class="v2-sample-copy">
+        <span class="v2-sample-label">Sample · Archeoids</span>
+        <span>One simulation on two hosts: Silk.NET on the desktop and WebGPU in the browser.</span>
+      </span>
+      <span class="v2-link">
+        Play it
+        <Icon name="arrow-right" />
+      </span>
+    </a>
+  </div>
+</section>

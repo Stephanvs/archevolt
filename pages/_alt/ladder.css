@@ -1,0 +1,518 @@
+/* The question ladder alternative (/alt/ladder). Scoped under .home .ladder-*, built on home.css. */
+
+.home .ladder-anchor {
+  scroll-margin-top: 64px;
+}
+
+.home .ladder-wide-title {
+  max-width: 960px;
+}
+
+/* Hero: proof row as jump links */
+
+.home .ladder-proof {
+  display: grid;
+  margin: 48px 0 0;
+  padding: 0;
+  list-style: none;
+  border-block: 1px solid var(--h-line);
+}
+
+.home .ladder-proof li + li {
+  border-top: 1px solid var(--h-line);
+}
+
+.home .ladder-proof a {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr) auto;
+  grid-template-areas: "value label icon";
+  align-items: center;
+  gap: 4px 12px;
+  padding: 12px 4px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.home .ladder-proof-value {
+  grid-area: value;
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  transition: color 300ms var(--ease);
+}
+
+.home .ladder-proof-label {
+  grid-area: label;
+  color: var(--h-muted);
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  letter-spacing: 0.04em;
+}
+
+.home .ladder-proof-label sup {
+  margin-left: 2px;
+  color: var(--h-brand);
+  line-height: 0;
+}
+
+.home .ladder-proof .icon {
+  grid-area: icon;
+  color: var(--h-muted);
+  font-size: 0.875rem;
+  transform: rotate(90deg);
+  transition:
+    color 300ms var(--ease),
+    transform 500ms var(--ease);
+}
+
+.home .ladder-proof a:hover .ladder-proof-value,
+.home .ladder-proof a:hover .icon {
+  color: var(--h-brand);
+}
+
+.home .ladder-proof a:hover .icon {
+  transform: rotate(90deg) translateX(3px);
+}
+
+@media (min-width: 640px) {
+  .home .ladder-proof {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .home .ladder-proof li + li {
+    border-top: 0;
+    border-left: 1px solid var(--h-line);
+  }
+
+  .home .ladder-proof a {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "value icon"
+      "label label";
+    align-items: baseline;
+    height: 100%;
+    padding: 16px 12px;
+  }
+}
+
+.home .ladder-hero .hero-footnote + .hero-footnote {
+  margin-top: 4px;
+}
+
+.home .ladder-stage-note {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--h-line-strong);
+  border-radius: 4px;
+  background: var(--h-bg);
+  color: var(--h-muted);
+  font-family: var(--h-mono);
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 639px) {
+  .home .ladder-hero .hero-stage {
+    min-height: 260px;
+  }
+}
+
+/* 02: who does what, and a real build error */
+
+.home .ladder-split {
+  display: grid;
+  gap: 32px;
+  margin-top: 48px;
+}
+
+@media (min-width: 1024px) {
+  .home .ladder-split {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 48px;
+    align-items: start;
+    margin-top: 64px;
+  }
+}
+
+.home .ladder-who td {
+  width: 50%;
+  padding: 12px 8px;
+  border-top: 1px solid var(--h-line);
+  vertical-align: top;
+  text-wrap: pretty;
+}
+
+.home .ladder-who thead th {
+  width: 50%;
+}
+
+.home .ladder-build {
+  min-width: 0;
+}
+
+.home .ladder-term {
+  margin: 0;
+  padding: 20px 24px;
+  color: var(--i-bright);
+  font-family: var(--h-mono);
+  font-size: 0.875rem;
+  line-height: 1.5rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.home .ladder-term-prompt {
+  color: var(--i-cyan);
+  user-select: none;
+}
+
+.home .ladder-term-error {
+  color: var(--i-amber);
+  font-weight: 600;
+}
+
+.home .ladder-term-cap {
+  padding: 12px 24px 16px;
+  border-top: 1px solid var(--i-line);
+  color: var(--i-text);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  text-wrap: pretty;
+}
+
+.home .ladder-term-cap code {
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: var(--i-cell);
+  color: var(--i-bright);
+}
+
+.home .ladder-list code {
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: var(--h-line);
+  color: var(--h-fg);
+}
+
+.home .ladder-build .ladder-list {
+  margin-top: 24px;
+}
+
+/* 03: performance */
+
+.home .ladder-perf .perf-number {
+  white-space: nowrap;
+}
+
+@media (min-width: 1024px) {
+  .home .ladder-perf .perf-number {
+    font-size: 7rem;
+  }
+}
+
+.home .ladder-unit {
+  margin-left: 0.08em;
+  font-size: 0.3em;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.home .ladder-flag {
+  display: inline-flex;
+  margin: 16px 0 0;
+  padding: 2px 8px;
+  border: 1px solid var(--h-line-strong);
+  border-radius: 9999px;
+  color: var(--h-fg);
+  font-family: var(--h-mono);
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.home .ladder-range {
+  display: block;
+  margin-top: 2px;
+  color: var(--h-muted);
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.home .ladder-before .bar-fill {
+  background: color-mix(in oklab, var(--h-brand) 40%, transparent);
+}
+
+.home .ladder-scope {
+  margin-top: 32px;
+  border-block: 1px solid var(--h-line);
+}
+
+.home .ladder-scope summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 0;
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+  transition: color 300ms var(--ease);
+}
+
+.home .ladder-scope summary::-webkit-details-marker {
+  display: none;
+}
+
+.home .ladder-scope summary:hover {
+  color: var(--h-brand);
+}
+
+.home .ladder-scope[open] .faq-icon {
+  transform: rotate(45deg);
+}
+
+.home .ladder-scope-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home .ladder-scope-list li {
+  padding: 8px 0;
+  color: var(--h-muted);
+  font-size: 0.875rem;
+  line-height: 1.375rem;
+  text-wrap: pretty;
+}
+
+.home .ladder-scope-list code,
+.home .ladder-ledger-list code,
+.home .ladder-gap-case code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--h-line);
+  color: var(--h-fg);
+}
+
+.home .ladder-more,
+.home .ladder-ledger-links a {
+  color: var(--h-fg);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--h-brand);
+  text-underline-offset: 4px;
+}
+
+.home .ladder-more {
+  display: inline-block;
+  margin: 8px 0 16px;
+}
+
+.home .ladder-ledger {
+  display: grid;
+  gap: 48px;
+  margin-top: 64px;
+}
+
+@media (min-width: 1024px) {
+  .home .ladder-ledger {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 40px;
+    margin-top: 80px;
+  }
+}
+
+.home .ladder-ledger-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding-top: 20px;
+  border-top: 2px solid var(--h-fg);
+}
+
+.home .ladder-ledger-col h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.home .ladder-ledger-intro {
+  margin: 8px 0 0;
+  color: var(--h-muted);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  text-wrap: pretty;
+}
+
+.home .ladder-ledger-list {
+  flex: 1;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: ladder-step;
+}
+
+.home .ladder-ledger-list li {
+  padding: 12px 0;
+  border-top: 1px solid var(--h-line);
+  color: var(--h-muted);
+  font-size: 0.9375rem;
+  line-height: 1.5rem;
+  text-wrap: pretty;
+}
+
+.home .ladder-ledger-steps li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 8px;
+  counter-increment: ladder-step;
+}
+
+.home .ladder-ledger-steps li::before {
+  content: counter(ladder-step, decimal-leading-zero);
+  color: var(--h-brand);
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1.5rem;
+}
+
+.home .ladder-gap-case {
+  display: block;
+  color: var(--h-fg);
+  font-weight: 600;
+}
+
+.home .ladder-gap-nums {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 16px;
+  margin: 4px 0;
+  color: var(--h-fg);
+  font-family: var(--h-mono);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.home .ladder-ledger-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 8px 0 0;
+}
+
+.home .ladder-rerun {
+  display: grid;
+  gap: 16px;
+  margin-top: 64px;
+  padding-top: 32px;
+  border-top: 1px solid var(--h-line);
+}
+
+@media (min-width: 1024px) {
+  .home .ladder-rerun {
+    grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
+    gap: 64px;
+    align-items: center;
+  }
+}
+
+.home .ladder-rerun .install {
+  justify-self: start;
+}
+
+.home .ladder-rerun-copy {
+  margin: 8px 0 0;
+  color: var(--h-muted);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+/* 04: the bento without the Deployment card. The guides card fills the last row. */
+
+.home .ladder-bento {
+  margin-top: 48px;
+}
+
+@media (min-width: 640px) {
+  .home .ladder-bento .bento-guides {
+    grid-column: span 1;
+  }
+}
+
+@media (min-width: 1024px) {
+  .home .ladder-bento {
+    margin-top: 64px;
+  }
+
+  .home .ladder-bento .bento-guides {
+    grid-column: span 2;
+  }
+}
+
+/* 05: sample */
+
+.home .ladder-sample .ladder-note {
+  margin: -12px 0 0;
+  color: var(--i-text);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+/* 06: fit */
+
+.home .ladder-fit .targets {
+  margin-top: 48px;
+}
+
+.home .ladder-facts.system-facts {
+  margin-top: 40px;
+}
+
+@media (min-width: 768px) {
+  .home .ladder-facts.system-facts {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 48px;
+  }
+}
+
+/* 07: start, with the closing panel merged in */
+
+.home .ladder-final.final-panel {
+  margin-top: 64px;
+}
+
+.home .ladder-final h3 {
+  position: relative;
+  max-width: 720px;
+  margin: 16px 0 0;
+  font-size: 3rem;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.05em;
+  text-wrap: balance;
+}
+
+@media (min-width: 1024px) {
+  .home .ladder-final h3 {
+    font-size: 4.5rem;
+  }
+}

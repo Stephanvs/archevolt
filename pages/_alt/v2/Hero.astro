@@ -1,0 +1,103 @@
+---
+/**
+ * Round two hero: judge A's heading and lede, the current page's actions and entity field.
+ * `extra` adds the current page's proof figures or a navigation row for the three values.
+ */
+import Icon from "../../_home/Icon.astro";
+import InstallCommand from "../../_home/InstallCommand.astro";
+import * as ev from "../evidence";
+
+interface Value {
+  n: string;
+  label: string;
+  proof: string;
+  href: string;
+}
+
+interface Props {
+  extra?: "proof" | "values";
+  values?: Value[];
+}
+
+const { extra, values = [] } = Astro.props;
+---
+
+<section class="hero" aria-labelledby="hero-title">
+  <div class="frame hero-inner">
+    <p class="hero-badge" data-rise style="--d:0">
+      <span class="pulse-dot"></span>
+      Headless ECS for .NET · MIT
+    </p>
+    <h1 class="hero-title" id="hero-title" data-rise style="--d:90">
+      Build fast simulations{" "}<br />
+      in plain C#
+    </h1>
+    <div class="hero-grid">
+      <div class="hero-left">
+        <p class="hero-lede" data-rise style="--d:180">
+          Archevolt is an entity component system, or ECS, for .NET games and simulations. You write components as
+          structs and systems as static methods. A source generator compiles them into direct calls at build time, and
+          your program keeps its own host, loop, and threads.
+        </p>
+        <div class="hero-actions" data-rise style="--d:270">
+          <a class="button" href={ev.links.quickstart}>
+            Read the quickstart
+            <Icon name="arrow-right" />
+          </a>
+          <InstallCommand command={ev.install} />
+        </div>
+        {
+          extra === "proof" && (
+            <>
+              <dl class="hero-proof" data-rise style="--d:360">
+                <div>
+                  <dt>Dependencies</dt>
+                  <dd>0</dd>
+                </div>
+                <div>
+                  <dt>
+                    Allocations<sup aria-hidden="true">*</sup>
+                  </dt>
+                  <dd>0 B</dd>
+                </div>
+                <div>
+                  <dt>Optimized</dt>
+                  <dd>AOT</dd>
+                </div>
+              </dl>
+              <p class="hero-footnote" data-rise style="--d:420">
+                <span aria-hidden="true">* </span>Allocated per warmed update.
+              </p>
+            </>
+          )
+        }
+      </div>
+      <div class="hero-stage" data-rise style="--d:300" aria-hidden="true">
+        <canvas class="hero-field" data-field></canvas>
+        <div class="hero-hud">
+          <span>entities <b data-hud-entities>0</b></span>
+          <span>archetypes <b>4</b></span>
+          <span>tick <b data-hud-tick>000000</b></span>
+        </div>
+      </div>
+    </div>
+    {
+      extra === "values" && (
+        <nav class="v2-values" aria-label="What Archevolt stands for" data-rise style="--d:420">
+          <ol>
+            {values.map((value) => (
+              <li>
+                <a href={value.href}>
+                  <span class="v2-values-n">{value.n}</span>
+                  <span class="v2-values-label">{value.label}</span>
+                  <Icon name="arrow-right" />
+                  <span class="v2-values-proof">{value.proof}</span>
+                </a>
+              </li>
+            ))}
+          </ol>
+        </nav>
+      )
+    }
+  </div>
+</section>

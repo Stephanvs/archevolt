@@ -1,0 +1,718 @@
+---
+/**
+ * The question ladder: eight blocks, one visitor question each, in the order a .NET developer asks them.
+ * Spec: .arena/landing/out-ladder.md, sections 4 to 6, with the overrides in .arena/landing/v2/brief.md.
+ */
+import AltLayout from "../_alt/AltLayout.astro";
+import "../_alt/ladder.css";
+import { Code } from "astro:components";
+import { Image } from "astro:assets";
+import data from "blume:data";
+import archeoids from "../../docs/samples/archeoids.png";
+import Icon from "../_home/Icon.astro";
+import InstallCommand from "../_home/InstallCommand.astro";
+import TaglineReveal from "../_home/TaglineReveal.astro";
+import ExecutionVisual from "../_home/visuals/ExecutionVisual.astro";
+import MessagesVisual from "../_home/visuals/MessagesVisual.astro";
+import QueryVisual from "../_home/visuals/QueryVisual.astro";
+import ScheduleVisual from "../_home/visuals/ScheduleVisual.astro";
+import StorageVisual from "../_home/visuals/StorageVisual.astro";
+import * as ev from "../_alt/evidence";
+
+const codeTheme = data.config.codeThemes.dark;
+
+const title = "Archevolt: simulate thousands of entities in plain C#";
+const description =
+  "Archevolt is a headless entity component system for .NET. Write components as structs and systems as static methods. A source generator settles queries, access, and schedule order at compile time.";
+
+/** Split text on backticks so inline code renders as <code>. */
+const segments = (text: string) => text.split("`").map((part, index) => ({ code: index % 2 === 1, part }));
+const two = (index: number) => String(index + 1).padStart(2, "0");
+
+/* Hero */
+
+const kernel = ev.perfFacts.kernel;
+const proof = [
+  { href: "#ladder-performance", value: `${kernel.after.toFixed(1)} µs`, label: "to move 100,000 entities", mark: true },
+  { href: "#ladder-compile", value: String(ev.diagnostics.total), label: "build-time diagnostics" },
+  { href: "#ladder-fit", value: "0", label: "runtime package dependencies" },
+];
+
+/* 02: docs/concepts/architecture.mdx, the compile time and run time table. */
+const split = [
+  ["Named query rows, enumerators, and shapes", "Which archetypes currently match a query"],
+  ["Direct calls to your system methods", "Table traversal and row-range partitioning"],
+  ["Bundle descriptors and module manifests", "World registration and validation"],
+  ["Declarative schedule plans", "Binding, barriers, and command playback"],
+];
+const [avCode, ...avRest] = ev.av006.split(": ");
+
+/* 03: performance */
+
+/** 2 November rows carry two decimals in benchmarks/results.md, 5 November rows one in the round two report. */
+const fmt = (value: number, date: ev.MovementRow["date"]) => value.toFixed(date === "2 Nov" ? 2 : 1);
+const chartRows = [
+  ...ev.movement.filter((row) => row.kind === "archevolt"),
+  // The handwritten loops and Bevy stay as reference rows. Arch is left out of this chart.
+  ...ev.movement.filter((row) => row.kind !== "archevolt" && !row.name.startsWith("Arch ")),
+];
+const maxUs = Math.max(...chartRows.map((row) => row.us));
+const isKernel = (row: ev.MovementRow) => row.kind === "archevolt" && row.us === kernel.after;
+const rowTag = (row: ev.MovementRow) =>
+  row.kind === "baseline"
+    ? `${row.date} · no scheduler`
+    : row.kind === "reference"
+      ? `${row.date} · reference`
+      : isKernel(row)
+        ? `${row.date} · on main`
+        : row.date;
+
+/*
+ * docs/performance.mdx, "Things that cost" and "Entity operations" (2 November checkpoint, commit 8029e7f), and
+ * "Parallel execution" for the 5 November dispatch figures (performance-hill-climb-report.md).
+ */
+const costs = [
+  "Structural churn moves rows between archetype tables. Inserting and removing a tag costs about 87 ns per entity at 1,000 entities (2 November).",
+  "Spawning grows storage, so it allocates. The first command playback without preallocated capacity allocated 160.12 KB for 1,000 tag round trips (2 November).",
+  `Small worlds can cost more to dispatch in parallel than to run serially. A four-worker update of 1,000 entities takes about ${ev.perfFacts.dispatch.after} µs back to back, and about 32 µs when the calling thread sleeps 2 ms between updates (5 November).`,
+  "Writable access stamps a change on tracked components even when the value is equal.",
+];
+
+/* 04: the bento, without the Deployment card, which moves to 06 */
+
+const features = [
+  {
+    key: "query",
+    wide: true,
+    label: "Queries",
+    title: "Typed rows, no lookups",
+    body: "Named queries produce concrete rows with `ref` and `ref readonly` access. Nothing is boxed or looked up by type at run time.",
+    href: ev.links.queries,
+    cta: "Queries guide",
+  },
+  {
+    key: "storage",
+    label: "Storage",
+    title: "Dense native tables",
+    body: "Components live in aligned, structure of arrays tables, one per archetype, outside the managed heap.",
+    href: ev.links.architecture,
+    cta: "Architecture",
+  },
+  {
+    key: "schedule",
+    label: "Schedules",
+    title: "Ordering you declare once",
+    body: "Order systems with `Order`, `Before`, `After`, stages, and sets. The planner adds conservative ordering where access conflicts.",
+    href: ev.links.schedules,
+    cta: "Schedules guide",
+  },
+  {
+    key: "exec",
+    wide: true,
+    label: "Execution",
+    title: "Parallel when you ask for it",
+    body: "Serial execution is the reference behavior. Enable a bounded worker pool and mark eligible systems as partitioned.",
+    href: ev.links.execution,
+    cta: "Execution guide",
+  },
+  {
+    key: "messages",
+    label: "Data flow",
+    title: "Changes, resources, messages",
+    body: "Track added and changed components, share resources, and send messages that each reader consumes at its own pace.",
+    href: ev.links.messages,
+    cta: "Messages guide",
+  },
+];
+
+const guides = data.routes
+  .filter((route) => route.path.includes("/guides/") && route.indexable && !route.hidden)
+  .map((route) => route.title);
+
+const callouts = [
+  { label: "ship", x: 52.9, y: 46.7 },
+  { label: "rock", x: 55.5, y: 24.1 },
+  { label: "rock", x: 35.9, y: 57.5 },
+  { label: "8 entities", x: 91.5, y: 91.1, align: "end" },
+];
+
+/* 06: fit. Verification follows scripts/verify.ps1 and docs/validation.mdx. */
+
+const fit = [
+  { label: "Engine", text: `None. ${ev.facts.engine}` },
+  { label: "Package", text: ev.facts.package },
+  { label: "Deployment", text: ev.facts.deployment },
+  { label: "Threads", text: ev.facts.threads },
+  { label: "Limits", text: ev.facts.ownership },
+  { label: "Requirements", text: ev.facts.requirements },
+  {
+    label: "Verification",
+    text: "`./scripts/verify.ps1` builds and tests the solution, publishes NativeAOT consumers, and fails if warmed traversal allocates managed memory.",
+  },
+  { label: "Status", text: ev.facts.status },
+  { label: "Comparisons", text: ev.facts.comparisons },
+  { label: "License", text: ev.facts.license },
+];
+
+/* 07: start */
+
+const steps = [
+  {
+    title: "Add the package",
+    body: "One package holds the runtime and its source generator. Your project needs the .NET 11 SDK and C# 15, so install a release candidate while .NET 11 is in preview.",
+    command: ev.install,
+  },
+  {
+    title: "Collect systems into a module",
+    body: "A module gathers systems and bundles. A schedule declares which systems run and in what order.",
+    code: ev.moduleCode,
+  },
+  {
+    title: "Build a world and run it",
+    body: "Spawn entities from bundles, bind the schedule to the world, and run it once per update.",
+    code: ev.runCode,
+  },
+];
+---
+
+<AltLayout slug="ladder" title={title} description={description}>
+  <!-- Hero. Is this for the problem I have? -->
+  <section class="hero ladder-hero" aria-labelledby="hero-title">
+    <div class="frame hero-inner">
+      <p class="hero-badge" data-rise style="--d:0">
+        <span class="pulse-dot"></span>
+        Headless ECS for .NET · MIT
+      </p>
+      <h1 class="hero-title" id="hero-title" data-rise style="--d:90">
+        Simulate thousands{" "}<br />
+        of entities in plain C#
+      </h1>
+      <div class="hero-grid">
+        <div class="hero-left">
+          <p class="hero-lede" data-rise style="--d:180">
+            Archevolt is an entity component system (ECS) for .NET. You write components as structs and systems as
+            static methods. A source generator settles queries, access, and order at compile time, and turns simple
+            float math into SIMD loops.
+          </p>
+          <div class="hero-actions" data-rise style="--d:270">
+            <a class="button" href={ev.links.quickstart}>
+              Read the quickstart
+              <Icon name="arrow-right" />
+            </a>
+            <InstallCommand command={ev.install} />
+          </div>
+          <ul class="ladder-proof" data-rise style="--d:360">
+            {
+              proof.map((item) => (
+                <li>
+                  <a href={item.href}>
+                    <span class="ladder-proof-value">{item.value}</span>
+                    <span class="ladder-proof-label">
+                      {item.label}
+                      {item.mark && <sup aria-hidden="true">*</sup>}
+                    </span>
+                    <Icon name="arrow-right" />
+                  </a>
+                </li>
+              ))
+            }
+          </ul>
+          <p class="hero-footnote" data-rise style="--d:420">
+            <span aria-hidden="true">* </span>One <code>[Each]</code> method on one worker, 5 November 2026, one
+            machine. The SIMD kernel is on main and not yet in a NuGet release.
+          </p>
+          <p class="hero-footnote" data-rise style="--d:460">Requires the .NET 11 SDK and C# 15.</p>
+        </div>
+        <div class="hero-stage" data-rise style="--d:300" aria-hidden="true">
+          <canvas class="hero-field" data-field></canvas>
+          <p class="ladder-stage-note">Illustration · runs no Archevolt code</p>
+          <div class="hero-hud">
+            <span>entities <b data-hud-entities>0</b></span>
+            <span>archetypes <b>4</b></span>
+            <span>tick <b data-hud-tick>000000</b></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 01. What would I write? -->
+  <section class="section ladder-anchor" id="ladder-code" aria-labelledby="ladder-code-title">
+    <div class="frame">
+      <div class="sec-label" data-reveal><span>01</span>The code</div>
+      <div class="system">
+        <div class="system-copy" data-reveal>
+          <h2 class="sec-title" id="ladder-code-title">Two structs and a method. That is the whole system.</h2>
+          <p class="sec-lede">
+            You write the simulation, not the plumbing. Components are unmanaged structs. A system is a static method
+            that asks for <code>ref</code> to write and <code>in</code> to read, and the generator writes the loop
+            that runs it over every entity with both components. If you know Bevy, the shape will look familiar.
+          </p>
+          <ul class="system-facts">
+            <li><span>Typed access</span>concrete rows, nothing boxed or looked up by type</li>
+            <li><span>Your code</span>generated declarations stay in your namespace and partial types</li>
+          </ul>
+        </div>
+        <figure class="window system-window" data-reveal data-story="system">
+          <div class="window-bar">
+            <span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+            <span class="window-file">Motion.cs</span>
+            <span class="window-tag">you write this</span>
+          </div>
+          <div class="code">
+            <Code code={ev.heroCode} lang="csharp" theme={codeTheme} />
+            <span class="code-hot" aria-hidden="true"><span>runs for every matching row</span></span>
+          </div>
+        </figure>
+      </div>
+      <p class="sec-foot" data-reveal>
+        Read the <a href={ev.links.systems}>systems guide</a> and the <a href={ev.links.queries}>queries guide</a>.
+      </p>
+    </div>
+  </section>
+
+  <!-- Opens 02. Holds for schedules declared with attributes, not BoundSchedule.Bind. -->
+  <TaglineReveal
+    lines={["Your build settles what each system reads and writes,", "which declared systems can run together,", "and the order they run in."]}
+  />
+
+  <!-- 02. What does the generator do with it, and what does that cost me? -->
+  <section class="section ladder-anchor" id="ladder-compile" aria-labelledby="ladder-compile-title">
+    <div class="frame">
+      <div class="sec-label" data-reveal><span>02</span>At compile time</div>
+      <div data-reveal>
+        <h2 class="sec-title" id="ladder-compile-title">Decided before your program runs</h2>
+        <p class="sec-lede">
+          The generator writes typed query rows, direct calls to your systems, and schedule plans into your own
+          partial types. A declaration that cannot compile to that form fails the build instead of taking a slower
+          path at run time.
+        </p>
+      </div>
+      <div class="ladder-split">
+        <div class="perf-chart ladder-who" data-reveal>
+          <p class="perf-chart-title">
+            Who does what
+            <span>The generator writes the typed parts. The runtime still owns storage and execution.</span>
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Generated at compile time</th>
+                <th scope="col">Handled at run time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {
+                split.map(([generated, runtime]) => (
+                  <tr>
+                    <td>{generated}</td>
+                    <td>{runtime}</td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+        <div class="ladder-build" data-reveal>
+          <figure class="window">
+            <div class="window-bar">
+              <span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+              <span class="window-file">Build output</span>
+              <span class="window-tag">fails the build</span>
+            </div>
+            <pre class="ladder-term"><span class="ladder-term-prompt" aria-hidden="true">$ </span>dotnet build{"\n"}<span class="ladder-term-error">{avCode}</span>: {avRest.join(": ")}</pre>
+            <figcaption class="ladder-term-cap">
+              The real message for a <code>Changed&lt;Position&gt;</code> filter on a component without
+              <code>[TrackChanges]</code>. Add the attribute to <code>Position</code> and the build passes.
+            </figcaption>
+          </figure>
+          <ul class="system-facts ladder-list">
+            <li>
+              <span>Diagnostics</span>
+              {ev.diagnostics.total} rules check your declarations as you build. {ev.diagnostics.errors} are errors.
+              {ev.diagnostics.warning} warns when the planner has to pick an order for two conflicting systems.
+            </li>
+            <li>
+              <span>The cost</span>
+              Types the generator touches must be <code>partial</code> (AV001), and components must be unmanaged
+              structs (AV002).
+            </li>
+          </ul>
+        </div>
+      </div>
+      <p class="sec-foot" data-reveal>
+        Read the <a href={ev.links.architecture}>architecture overview</a> and the
+        <a href={ev.links.diagnostics}>diagnostics reference</a>.
+      </p>
+    </div>
+  </section>
+
+  <!-- 03. Is it fast, and how do I know? -->
+  <section class="section ladder-anchor" id="ladder-performance" aria-labelledby="ladder-performance-title">
+    <div class="frame">
+      <div class="sec-label" data-reveal><span>03</span>Performance</div>
+      <div data-reveal>
+        <h2 class="sec-title ladder-wide-title" id="ladder-performance-title">
+          Speed is a requirement, measured against the loop you would write by hand
+        </h2>
+        <p class="sec-lede">
+          Every design decision is judged by what it costs in the update loop. In optimized builds, the generator now
+          compiles <code>Motion.Move</code>, the method from 01, into a <code>Vector256</code> loop. You still write
+          the plain method, and Debug builds still call it, so a breakpoint in it still stops.
+        </p>
+      </div>
+
+      <div class="perf ladder-perf">
+        <div class="perf-hero" data-reveal>
+          <p class="perf-number">{kernel.after.toFixed(1)}<span class="ladder-unit">µs</span></p>
+          <p class="perf-caption">
+            to move 100,000 entities with one <code>[Each]</code> method on one worker, down from
+            {kernel.before.toFixed(1)} µs. Measured 5 November 2026.
+          </p>
+          <p class="ladder-flag">On main · not yet in a NuGet release</p>
+          <dl class="perf-minis">
+            <div>
+              <dt>
+                Bevy 0.20 <code>for_each</code> on the same workload, measured 2 November on the same machine while
+                it was idle. {ev.perfFacts.bevyParity.claim}
+              </dt>
+              <dd>{ev.perfFacts.bevyParity.bevy.toFixed(2)} µs</dd>
+            </div>
+            <div>
+              <dt>{ev.perfFacts.allocation.scope}</dt>
+              <dd>{ev.perfFacts.allocation.value}</dd>
+            </div>
+          </dl>
+          <details class="ladder-scope">
+            <summary>
+              Which methods compile to a kernel
+              <span class="faq-icon"><Icon name="plus" /></span>
+            </summary>
+            <ul class="ladder-scope-list">
+              <li>
+                An <code>[Each]</code> method that writes one component with the same float formula for every lane.
+                It may use float arithmetic, negation, <code>Vector2</code>, <code>Vector3</code>, and
+                <code>Vector4</code> operators, constants, locals, fields, records, and <code>with</code> expressions.
+              </li>
+              <li>{ev.kernelScope.doesNot}</li>
+              <li>{ev.kernelScope.correctness}</li>
+              <li>{ev.kernelScope.debug}</li>
+            </ul>
+            <a class="ladder-more" href={ev.links.simdKernels}>Read how SIMD kernels work</a>
+          </details>
+        </div>
+        <div class="perf-chart" data-reveal data-bars>
+          <p class="perf-chart-title">
+            Moving 100,000 entities on one worker, median µs per update
+            <span>
+              Archevolt's times include schedule dispatch, resource access, lease checks, and query traversal. The
+              handwritten C# loop has no scheduler. Under each median is its range across process runs.
+            </span>
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Case</th>
+                <th scope="col" class="num">Median µs</th>
+              </tr>
+            </thead>
+            <tbody>
+              {
+                chartRows.map((row) => (
+                  <tr class:list={{ "is-baseline": row.kind !== "archevolt", "ladder-before": row.kind === "archevolt" && !isKernel(row) }}>
+                    <th scope="row">
+                      <span class="bar-label">
+                        {segments(row.name).map(({ code, part }) => (code ? <code>{part}</code> : part))}
+                        <span class="bar-tag">{rowTag(row)}</span>
+                      </span>
+                      <span class="bar" style={`--w:${((row.us / maxUs) * 100).toFixed(2)}%`}>
+                        <span class="bar-fill" />
+                      </span>
+                    </th>
+                    <td class="num">
+                      {fmt(row.us, row.date)}
+                      <span class="ladder-range">
+                        {fmt(row.range[0], row.date)} to {fmt(row.range[1], row.date)}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <p class="sec-foot" data-reveal>
+        {ev.movementNote}{" "}
+        <a href={ev.links.performance}>Read the full performance report</a>
+      </p>
+
+      <div class="ladder-ledger">
+        <div class="ladder-ledger-col" data-reveal>
+          <h3>How a speed change gets in</h3>
+          <p class="ladder-ledger-intro">Every performance change runs a hill climb. These rules hold in both rounds.</p>
+          <ol class="ladder-ledger-list ladder-ledger-steps">
+            {ev.perfProcess.map((rule) => <li>{rule}</li>)}
+          </ol>
+          <p class="ladder-ledger-links">
+            <a href={ev.links.roundOne}>Round one report</a>
+            <a href={ev.links.roundTwo}>Round two report</a>
+          </p>
+        </div>
+        <div class="ladder-ledger-col" data-reveal>
+          <h3>What still costs</h3>
+          <p class="ladder-ledger-intro">Measured on the same machine. Plan for these in a hot loop.</p>
+          <ul class="ladder-ledger-list">
+            {costs.map((cost) => <li>{cost}</li>)}
+          </ul>
+          <p class="ladder-ledger-links">
+            <a href={`${ev.links.performance}#things-that-cost`}>Things that cost</a>
+          </p>
+        </div>
+        <div class="ladder-ledger-col" data-reveal>
+          <h3>Where it is still slower</h3>
+          <p class="ladder-ledger-intro">
+            The next work, each with its measured cause. Archevolt measured 5 November, Bevy 0.20 on 2 November, one
+            machine.
+          </p>
+          <ul class="ladder-ledger-list">
+            {
+              ev.gaps.map((gap) => (
+                <li>
+                  <span class="ladder-gap-case">
+                    {segments(gap.case).map(({ code, part }) => (code ? <code>{part}</code> : part))}
+                  </span>
+                  <span class="ladder-gap-nums">
+                    <span>Archevolt {gap.now}</span>
+                    {gap.bevy && <span>Bevy {gap.bevy}</span>}
+                  </span>
+                  {gap.note}
+                </li>
+              ))
+            }
+          </ul>
+          <p class="ladder-ledger-links">
+            <a href={ev.links.whatRemains}>What remains</a>
+          </p>
+        </div>
+      </div>
+
+      <div class="ladder-rerun" data-reveal>
+        <div>
+          <p class="targets-label">Rerun it</p>
+          <p class="ladder-rerun-copy">
+            <code>--quick</code> runs a short movement measurement in one process on your machine.
+          </p>
+        </div>
+        <InstallCommand command={ev.rerunBenchmarks} />
+      </div>
+    </div>
+  </section>
+
+  <!-- 04. Does it cover the rest of my program? -->
+  <section class="section ladder-anchor" id="ladder-features" aria-labelledby="ladder-features-title">
+    <div class="frame">
+      <div class="sec-label" data-reveal><span>04</span>What you get</div>
+      <div data-reveal>
+        <h2 class="sec-title ladder-wide-title" id="ladder-features-title">
+          Queries, storage, schedules, threads, and messages in one package
+        </h2>
+        <p class="sec-lede">
+          Each card opens a guide with runnable code, except Storage, which opens the architecture page that explains
+          the tables.
+        </p>
+      </div>
+      <div class="bento ladder-bento" data-scene>
+        {
+          features.map((feature, index) => (
+            <a class:list={["bento-card", { "is-wide": feature.wide }]} href={feature.href} style={`--d:${index * 85}`}>
+              <div class="bento-visual">
+                {feature.key === "query" && <QueryVisual />}
+                {feature.key === "storage" && <StorageVisual />}
+                {feature.key === "schedule" && <ScheduleVisual />}
+                {feature.key === "exec" && <ExecutionVisual />}
+                {feature.key === "messages" && <MessagesVisual />}
+              </div>
+              <div class="bento-body">
+                <span class="mono-label">{feature.label}</span>
+                <h3>{feature.title}</h3>
+                <p>{segments(feature.body).map(({ code, part }) => (code ? <code>{part}</code> : part))}</p>
+                <span class="pill">
+                  {feature.cta}
+                  <Icon name="arrow-right" />
+                </span>
+              </div>
+            </a>
+          ))
+        }
+        <a class="bento-card bento-guides" href={ev.links.guides} style={`--d:${features.length * 85}`}>
+          <div class="bento-visual">
+            <div class="viz viz-guides" aria-hidden="true">
+              <div class="vg-list">
+                {
+                  [0, 1].map(() => (
+                    <ul>
+                      {guides.map((guide, index) => (
+                        <li>
+                          <span>{two(index)}</span>
+                          {guide}
+                        </li>
+                      ))}
+                    </ul>
+                  ))
+                }
+              </div>
+            </div>
+          </div>
+          <div class="bento-body">
+            <span class="mono-label">Guides</span>
+            <h3>{guides.length} guides, one per feature</h3>
+            <p>Components, modules, queries, schedules, resources, commands, and the rest, each with runnable code.</p>
+            <span class="pill">
+              Explore the docs
+              <Icon name="arrow-right" />
+            </span>
+          </div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05. Has anything real been built with it? -->
+  <section class="section ladder-anchor" id="ladder-sample" aria-labelledby="ladder-sample-title">
+    <div class="frame">
+      <div class="sec-label" data-reveal><span>05</span>Sample</div>
+      <div class="arcade ladder-sample" data-reveal>
+        <div class="arcade-copy">
+          <h2 class="sec-title" id="ladder-sample-title">Every ship, rock, bullet, and particle is an entity</h2>
+          <p>
+            Archeoids is a playable Asteroids style game. Archevolt runs the gameplay. Silk.NET draws it on the
+            desktop, and the browser build runs the same simulation on .NET WebAssembly with WebGPU. Both builds share
+            the same game source files.
+          </p>
+          <a class="button" href={ev.links.browserGame}>
+            Play Archeoids in your browser
+            <Icon name="arrow-right" />
+          </a>
+          <p class="ladder-note">{ev.sample.browserNote}</p>
+          <InstallCommand command={ev.runSample} />
+          <a class="pill pill-light" href={ev.links.sample}>
+            Explore the Archeoids sample
+            <Icon name="arrow-right" />
+          </a>
+        </div>
+        <div class="arcade-screen" data-story="arcade">
+          <Image
+            src={archeoids}
+            alt="Archeoids gameplay with a cyan ship, drifting asteroids, and a score and lives HUD."
+            widths={[640, 1100, 1600]}
+            sizes="(min-width: 1024px) 640px, 100vw"
+            loading="lazy"
+          />
+          {
+            callouts.map((callout, index) => (
+              <span
+                class:list={["callout", { "is-end": callout.align === "end" }]}
+                style={`left:${callout.x}%;top:${callout.y}%`}
+                data-callout={index}
+                aria-hidden="true"
+              >
+                <span class="callout-ring" />
+                <span class="callout-tag">entity · {callout.label}</span>
+              </span>
+            ))
+          }
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 06. Does it fit my project's constraints? -->
+  <section class="section ladder-anchor ladder-fit" id="ladder-fit" aria-labelledby="ladder-fit-title">
+    <div class="frame">
+      <div class="sec-label" data-reveal><span>06</span>Fit</div>
+      <div data-reveal>
+        <h2 class="sec-title" id="ladder-fit-title">A library, not an engine</h2>
+        <p class="sec-lede">
+          Archevolt holds the simulation and runs your systems when you call it. Your program owns the window, the
+          input, and the frame loop. Check these facts before you install.
+        </p>
+      </div>
+      <div class="targets" data-reveal data-story="targets">
+        <p class="targets-label">Runs under</p>
+        <p class="targets-row">
+          <span data-target-word>JIT</span><span class="targets-sep">/</span><span data-target-word>Trimmed</span><span class="targets-sep">/</span><span data-target-word>NativeAOT</span>
+        </p>
+        <p class="targets-note">The same package, verified in clean consumers on each. NativeAOT evidence is Windows x64.</p>
+      </div>
+      <ul class="system-facts ladder-list ladder-facts" data-reveal>
+        {
+          fit.map((item) => (
+            <li>
+              <span>{item.label}</span>
+              {segments(item.text).map(({ code, part }) => (code ? <code>{part}</code> : part))}
+            </li>
+          ))
+        }
+      </ul>
+      <p class="sec-foot" data-reveal>
+        Read the <a href={ev.links.installation}>installation guide</a>,
+        <a href={ev.links.validation}>validation and limits</a>, the
+        <a href={ev.links.execution}>execution guide</a>, and the <a href={ev.links.changelog}>changelog</a>.
+      </p>
+    </div>
+  </section>
+
+  <!-- 07. How do I start, and how much do I write? -->
+  <section class="section ladder-anchor" id="ladder-start" aria-labelledby="ladder-start-title">
+    <div class="frame">
+      <div class="sec-label" data-reveal><span>07</span>Start</div>
+      <h2 class="sec-title sec-title-wide" id="ladder-start-title" data-reveal>From package to running world in three steps</h2>
+      <ol class="steps">
+        {
+          steps.map((step, index) => (
+            <li class="step" data-reveal>
+              <span class="step-number" aria-hidden="true">
+                {two(index)}
+              </span>
+              <div class="step-copy">
+                <h3>{step.title}</h3>
+                <p>{step.body}</p>
+              </div>
+              <div class="step-visual">
+                {step.command ? (
+                  <InstallCommand command={step.command} typed />
+                ) : (
+                  <div class="window">
+                    <div class="code">
+                      <Code code={step.code!} lang="csharp" theme={codeTheme} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </li>
+          ))
+        }
+      </ol>
+      <p class="sec-foot" data-reveal>
+        The <a href={ev.links.quickstart}>quickstart</a> puts these pieces into one 39-line program that prints
+        <code>1</code>.
+      </p>
+      <div class="final-panel ladder-final" data-reveal>
+        <svg class="final-bolt" viewBox="0 0 120 220" aria-hidden="true">
+          <path d="M78 4 L18 128 H56 L40 216 L104 84 H64 Z" pathLength="1"></path>
+        </svg>
+        <p class="mono-label">Get started</p>
+        <h3>Run your first system</h3>
+        <p class="final-lede">Two structs, one method, and a schedule. The quickstart walks through the whole program.</p>
+        <div class="hero-actions">
+          <a class="button" href={ev.links.quickstart}>
+            Read the quickstart
+            <Icon name="arrow-right" />
+          </a>
+          <InstallCommand command={ev.install} />
+        </div>
+      </div>
+    </div>
+  </section>
+</AltLayout>

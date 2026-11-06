@@ -1,0 +1,655 @@
+/*
+ * Judge B's structure (/alt/judge-b). Only what home.css lacks. Every selector starts with .home .judge-b-,
+ * and overrides of home.css classes add a judge-b class so they win without relying on import order.
+ */
+
+.home .judge-b-anchor {
+  scroll-margin-top: 88px;
+}
+
+/* Section labels that also name the value a section proves */
+
+.home .sec-label.judge-b-label {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.home .sec-label.judge-b-label .judge-b-value {
+  order: 1;
+  padding: 2px 8px;
+  border: 1px solid var(--h-line-strong);
+  border-radius: 9999px;
+  color: var(--h-fg);
+  letter-spacing: 0.08em;
+}
+
+/* Hero: status line, value links, and the illustration caption */
+
+.home .judge-b-status {
+  max-width: 560px;
+  margin: 24px 0 0;
+  color: var(--h-muted);
+  font-size: 0.875rem;
+  line-height: 1.375rem;
+  text-wrap: pretty;
+}
+
+.home .judge-b-status-tag {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 0 8px;
+  border: 1px solid var(--h-line-strong);
+  border-radius: 9999px;
+  color: var(--h-fg);
+  font-family: var(--h-mono);
+  font-size: 0.6875rem;
+  line-height: 1.25rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.home .judge-b-status a,
+.home .judge-b-link {
+  color: var(--h-fg);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--h-brand);
+  text-underline-offset: 4px;
+}
+
+.home .judge-b-status a:hover,
+.home .judge-b-link:hover {
+  color: var(--h-brand);
+}
+
+.home .judge-b-values {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 40px 0 0;
+  padding: 0;
+  border-top: 1px solid var(--h-line);
+  list-style: none;
+}
+
+@media (min-width: 480px) {
+  .home .judge-b-values {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .home .judge-b-values li:nth-child(odd) {
+    border-right: 1px solid var(--h-line);
+  }
+}
+
+.home .judge-b-values li {
+  border-bottom: 1px solid var(--h-line);
+}
+
+.home .judge-b-values a {
+  display: grid;
+  gap: 4px;
+  height: 100%;
+  padding: 14px 12px;
+  color: var(--h-fg);
+  text-decoration: none;
+  transition: background-color 300ms var(--ease);
+}
+
+.home .judge-b-values a:hover {
+  background: var(--h-surface);
+}
+
+.home .judge-b-values-name {
+  color: var(--h-brand);
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.home .judge-b-values-proof {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.home .judge-b-values-proof sup {
+  margin-left: 1px;
+  color: var(--h-brand);
+  font-size: 0.75rem;
+  line-height: 0;
+}
+
+.home .judge-b-values-proof .icon {
+  color: var(--h-muted);
+  transition:
+    transform 500ms var(--ease),
+    color 300ms var(--ease);
+}
+
+.home .judge-b-values a:hover .icon {
+  color: var(--h-brand);
+  transform: translateY(2px);
+}
+
+.home .judge-b-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.home .judge-b-stage .hero-stage {
+  flex: 1;
+}
+
+.home .judge-b-stage-note {
+  margin: 0;
+  color: var(--h-muted);
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  text-wrap: pretty;
+}
+
+/* Shared pieces */
+
+.home .sec-title.judge-b-wide {
+  max-width: 960px;
+}
+
+.home .judge-b-copy.judge-b-flush,
+.home .judge-b-note.judge-b-flush {
+  margin-top: 0;
+}
+
+.home .judge-b-more-list.judge-b-gap-top {
+  margin-top: 16px;
+}
+
+.home .judge-b-h3 {
+  margin: 0;
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.home .judge-b-copy {
+  max-width: 600px;
+  margin: 12px 0 0;
+  color: var(--h-muted);
+  font-size: 1rem;
+  line-height: 1.5rem;
+  text-wrap: pretty;
+}
+
+.home .judge-b-note {
+  max-width: 720px;
+  margin: 16px 0 0;
+  color: var(--h-muted);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  text-wrap: pretty;
+}
+
+.home .judge-b-kicker {
+  margin: 48px 0 0;
+  color: var(--h-muted);
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.home .system-facts.judge-b-facts {
+  margin-top: 24px;
+}
+
+.home .judge-b-split {
+  display: grid;
+  gap: 56px;
+  margin-top: 72px;
+}
+
+@media (min-width: 1024px) {
+  .home .judge-b-split {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 64px;
+    align-items: start;
+  }
+}
+
+/* Optional depth, built on the FAQ item look */
+
+.home .judge-b-more {
+  margin-top: 56px;
+  border-bottom: 1px solid var(--h-line);
+}
+
+.home .judge-b-more .faq-item summary {
+  grid-template-columns: minmax(0, 1fr) 24px;
+}
+
+.home .judge-b-more-body {
+  display: grid;
+  gap: 24px;
+  padding: 0 0 32px;
+}
+
+@media (min-width: 1024px) {
+  .home .judge-b-more-body.is-pair {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: 32px;
+    align-items: start;
+  }
+}
+
+.home .judge-b-more-body > p {
+  max-width: 640px;
+  margin: 0;
+  color: var(--h-muted);
+  font-size: 1rem;
+  line-height: 1.5rem;
+  text-wrap: pretty;
+}
+
+.home .judge-b-more-list {
+  max-width: 720px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home .judge-b-more-list li {
+  padding: 12px 0;
+  border-top: 1px solid var(--h-line);
+  color: var(--h-muted);
+  font-size: 1rem;
+  line-height: 1.5rem;
+}
+
+/* 02 The method beside its generated kernel */
+
+.home .judge-b-pair {
+  display: grid;
+  gap: 16px;
+  margin-top: 48px;
+}
+
+@media (min-width: 1024px) {
+  .home .judge-b-pair {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: 24px;
+    align-items: start;
+  }
+}
+
+.home .window.judge-b-dense .code pre.astro-code {
+  padding: 20px;
+  font-size: 0.8125rem;
+  line-height: 1.375rem;
+}
+
+.home .judge-b-build-out {
+  margin: 0;
+  padding: 20px 24px;
+  overflow-x: auto;
+  color: var(--i-bright);
+  font-family: var(--h-mono);
+  font-size: 0.875rem;
+  line-height: 1.5rem;
+}
+
+.home .judge-b-build-out > span {
+  display: block;
+  white-space: nowrap;
+}
+
+.home .judge-b-build-prompt {
+  color: var(--i-cyan);
+}
+
+.home .judge-b-build-error {
+  color: var(--i-amber);
+}
+
+.home .judge-b-build {
+  margin-top: 24px;
+}
+
+.home .judge-b-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--h-line);
+  border-radius: 16px;
+  background: var(--h-surface);
+}
+
+.home .judge-b-table {
+  width: 100%;
+  min-width: 420px;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.home .judge-b-table th,
+.home .judge-b-table td {
+  padding: 12px 16px;
+  border-top: 1px solid var(--h-line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.home .judge-b-table thead th {
+  border-top: 0;
+  color: var(--h-muted);
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+}
+
+.home .judge-b-table tbody td {
+  color: var(--h-muted);
+}
+
+.home .judge-b-table tbody td:first-child {
+  color: var(--h-fg);
+}
+
+/* 03 Performance */
+
+.home .system-facts.judge-b-decisions {
+  display: grid;
+  gap: 0 32px;
+  margin-top: 16px;
+}
+
+@media (min-width: 768px) {
+  .home .system-facts.judge-b-decisions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .home .system-facts.judge-b-decisions {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.home .perf.judge-b-perf {
+  margin-top: 64px;
+}
+
+.home .perf-number.judge-b-perf-number {
+  font-size: 5rem;
+}
+
+.home .perf-number.judge-b-perf-number small {
+  margin-left: 0.12em;
+  font-size: 0.4em;
+  letter-spacing: -0.02em;
+}
+
+@media (min-width: 1024px) {
+  .home .perf-number.judge-b-perf-number {
+    font-size: 6rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .home .perf-number.judge-b-perf-number {
+    font-size: 7rem;
+  }
+}
+
+.home .perf-caption.judge-b-perf-caption {
+  max-width: 360px;
+  font-size: 1rem;
+  line-height: 1.5rem;
+}
+
+.home .perf-chart .judge-b-range,
+.home .perf-chart .judge-b-date {
+  color: var(--h-muted);
+}
+
+.home .judge-b-process {
+  margin: 24px 0 0;
+  padding: 0;
+  counter-reset: judge-b-step;
+  list-style: none;
+}
+
+.home .judge-b-process li {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--h-line);
+  color: var(--h-muted);
+  font-size: 1rem;
+  line-height: 1.5rem;
+  counter-increment: judge-b-step;
+}
+
+.home .judge-b-process li::before {
+  content: counter(judge-b-step, decimal-leading-zero);
+  color: var(--h-brand);
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1.5rem;
+}
+
+.home .judge-b-gaps {
+  margin: 24px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home .judge-b-gaps li {
+  padding: 16px 0;
+  border-top: 1px solid var(--h-line);
+}
+
+.home .judge-b-gap-case {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 600;
+}
+
+.home .judge-b-gap-nums {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 24px;
+  margin: 8px 0 0;
+  font-family: var(--h-mono);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.home .judge-b-gap-nums div {
+  display: flex;
+  gap: 8px;
+}
+
+.home .judge-b-gap-nums dt {
+  color: var(--h-muted);
+}
+
+.home .judge-b-gap-nums dd {
+  margin: 0;
+}
+
+.home .judge-b-gap-note {
+  margin: 8px 0 0;
+  color: var(--h-muted);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  text-wrap: pretty;
+}
+
+.home .judge-b-rerun {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin-top: 48px;
+}
+
+.home .judge-b-rerun .install {
+  min-width: 0;
+}
+
+.home .judge-b-rerun-label {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--h-muted);
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* 04 Bento without the Deployment card: the guides card fills the last row */
+
+@media (min-width: 640px) {
+  .home .judge-b-bento .bento-guides {
+    grid-column: span 1;
+  }
+}
+
+@media (min-width: 1024px) {
+  .home .judge-b-bento .bento-guides {
+    grid-column: span 2;
+  }
+}
+
+.home .bento.judge-b-bento {
+  margin-top: 48px;
+}
+
+/* 05 Sample */
+
+.home .judge-b-arcade-note {
+  margin: -8px 0 0;
+  color: var(--i-text);
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+}
+
+.home .arcade-copy p.judge-b-arcade-note {
+  font-size: 0.75rem;
+  line-height: 1.125rem;
+}
+
+/* 06 Fit */
+
+.home .judge-b-runs {
+  display: grid;
+  gap: 40px;
+  margin-top: 48px;
+}
+
+@media (min-width: 1024px) {
+  .home .judge-b-runs {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    gap: 64px;
+    align-items: center;
+  }
+}
+
+.home .targets.judge-b-targets {
+  margin-top: 0;
+}
+
+.home .bento-visual.judge-b-aot {
+  border: 1px solid var(--i-cell);
+  border-radius: 16px;
+}
+
+.home .judge-b-fit {
+  display: grid;
+  gap: 0 48px;
+  margin: 64px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 768px) {
+  .home .judge-b-fit {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.home .judge-b-fit li {
+  padding: 20px 0;
+  border-top: 1px solid var(--h-line);
+}
+
+.home .judge-b-fit-label {
+  margin: 0;
+  color: var(--h-muted);
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.home .judge-b-fit-q {
+  margin: 8px 0 0;
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.home .judge-b-fit-a {
+  margin: 4px 0 0;
+  color: var(--h-muted);
+  font-size: 1rem;
+  line-height: 1.5rem;
+  text-wrap: pretty;
+}
+
+.home .judge-b-fit-a a {
+  margin-left: 4px;
+}
+
+/* 07 Start, closed by the final panel */
+
+.home .final-panel.judge-b-final {
+  margin-top: 80px;
+}
+
+.home .final-panel.judge-b-final h3 {
+  position: relative;
+  max-width: 720px;
+  margin: 16px 0 0;
+  font-size: 3rem;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.05em;
+  text-wrap: balance;
+}
+
+@media (min-width: 1024px) {
+  .home .final-panel.judge-b-final h3 {
+    font-size: 4.5rem;
+  }
+}

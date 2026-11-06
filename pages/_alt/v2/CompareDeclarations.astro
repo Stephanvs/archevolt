@@ -1,0 +1,142 @@
+---
+/**
+ * "The readable version is the fast version", as clickable declarations. Each block is one declaration
+ * from the landing page code. Picking it opens the file the generator writes for it, with the lines that
+ * declaration produced lit.
+ */
+import { Code } from "astro:components";
+import data from "blume:data";
+import { bundleFile, linesWith, moduleFile, moveFile, scheduleFile, type GeneratedFile } from "../generated";
+import { markLines, segments, source } from "./code";
+
+interface Props {
+  n: string;
+}
+
+const { n } = Astro.props;
+const codeTheme = data.config.codeThemes.dark;
+
+interface Declaration {
+  key: string;
+  kind: string;
+  name: string;
+  code: string;
+  file: GeneratedFile;
+  lit: number[];
+  note: string;
+}
+
+const declarations: Declaration[] = [
+  {
+    key: "components",
+    kind: "[Component]",
+    name: "Position, Velocity",
+    code: source.components,
+    file: moduleFile,
+    lit: linesWith(moduleFile.code, ".Component<Position>", ".Component<Velocity>"),
+    note: "Components get no file of their own. The module registers each one.",
+  },
+  {
+    key: "move",
+    kind: "[Each]",
+    name: "Motion.Move",
+    code: source.move,
+    file: moveFile,
+    lit: linesWith(moveFile.code, "Vector256.LoadUnsafe", "Vector256.StoreUnsafe"),
+    note: "Your method becomes a `Vector256` loop over the Position and Velocity columns. Without vector hardware, the loop calls `Move` once per row.",
+  },
+  {
+    key: "bundle",
+    kind: "[Bundle]",
+    name: "Particle",
+    code: source.bundle,
+    file: bundleFile,
+    lit: linesWith(bundleFile.code, "writer.Put("),
+    note: "A descriptor, and a `Write` method that puts each field in its column when you spawn.",
+  },
+  {
+    key: "module",
+    kind: "[EcsModule]",
+    name: "GameEcs",
+    code: source.module,
+    file: moduleFile,
+    lit: linesWith(moduleFile.code, "new ModuleBuilder(", ".Bundle<Particle>", ".System(Motion.Move_Descriptor)", ".Build();"),
+    note: "One descriptor for every component, bundle, and system in the module.",
+  },
+  {
+    key: "schedule",
+    kind: "[Schedule]",
+    name: "Simulation",
+    code: source.schedule,
+    file: scheduleFile,
+    lit: linesWith(scheduleFile.code, "Create(World world)", "Motion.Move_Descriptor", "\"Motion.Move\"", "new int[] { 0 }"),
+    note: "`Create` binds the systems to a world, in the order you declared.",
+  },
+];
+
+const initial = "move";
+---
+
+<section class="section v2-anchor" id="generated" aria-labelledby="generated-title">
+  <div class="frame">
+    <div class="sec-label" data-reveal><span>{n}</span>Generated code</div>
+    <div data-reveal>
+      <h2 class="sec-title sec-title-wide" id="generated-title">The readable version is the fast version</h2>
+      <p class="sec-lede">
+        Select a declaration to open the file the generator writes for it. In a Release build, <code>Motion.Move</code>
+        becomes a <code>Vector256</code> loop. You keep the method.
+      </p>
+    </div>
+
+    <div class="v2-decl" data-compare data-reveal>
+      <div class="v2-decl-list" role="group" aria-label="Your code">
+        <p class="v2-decl-caption">You write</p>
+        {
+          declarations.map((declaration) => (
+            <div class:list={["v2-decl-block", { "is-on": declaration.key === initial }]} data-pick-block>
+              <button
+                type="button"
+                class="v2-decl-head"
+                data-pick={declaration.key}
+                aria-pressed={String(declaration.key === initial)}
+                aria-controls={`v2-decl-${declaration.key}`}
+              >
+                <span class="v2-decl-kind">{declaration.kind}</span>
+                <span class="v2-decl-name">{declaration.name}</span>
+                <span class="v2-decl-file">{declaration.file.name}</span>
+              </button>
+              <div class="code v2-decl-code v2-wrap">
+                <Code code={declaration.code} lang="csharp" theme={codeTheme} />
+              </div>
+            </div>
+          ))
+        }
+      </div>
+
+      <div class="v2-decl-out">
+        <p class="v2-decl-caption">The generator writes</p>
+        {
+          declarations.map((declaration) => (
+            <figure class="window v2-gen" id={`v2-decl-${declaration.key}`} data-panel={declaration.key} hidden={declaration.key !== initial}>
+              <div class="window-bar">
+                <span class="window-dots" aria-hidden="true">
+                  <span />
+                  <span />
+                  <span />
+                </span>
+                <span class="window-file">{declaration.file.name}</span>
+                <span class="window-tag">generated</span>
+              </div>
+              <p class="v2-gen-note">
+                {segments(declaration.note).map(({ code, part }) => (code ? <code>{part}</code> : part))}
+              </p>
+              <div class="code v2-scroll" data-scroll tabindex="0" aria-label={`${declaration.file.name}, generated code`}>
+                <Code code={declaration.file.code} lang="csharp" theme={codeTheme} transformers={[markLines(declaration.lit)]} />
+              </div>
+            </figure>
+          ))
+        }
+      </div>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,950 @@
+---
+/**
+ * "One argument": the landing page as one causal argument, the way TigerBeetle argues.
+ * The values come first, in words. Then the trade-off, the decision (compile time), and each value
+ * as a consequence of that decision, with its design, its proof, and where it stops.
+ */
+import AltLayout from "../_alt/AltLayout.astro";
+import "../_alt/story.css";
+import { Code } from "astro:components";
+import { Image } from "astro:assets";
+import data from "blume:data";
+import archeoids from "../../docs/samples/archeoids.png";
+import Icon from "../_home/Icon.astro";
+import InstallCommand from "../_home/InstallCommand.astro";
+import TaglineReveal from "../_home/TaglineReveal.astro";
+import ExecutionVisual from "../_home/visuals/ExecutionVisual.astro";
+import MessagesVisual from "../_home/visuals/MessagesVisual.astro";
+import QueryVisual from "../_home/visuals/QueryVisual.astro";
+import ScheduleVisual from "../_home/visuals/ScheduleVisual.astro";
+import StorageVisual from "../_home/visuals/StorageVisual.astro";
+import * as ev from "../_alt/evidence";
+
+const codeTheme = data.config.codeThemes.dark;
+
+const title = "Archevolt: plain C# systems, compiled for speed";
+const description =
+  "Archevolt is an entity component system for .NET. You write components as structs and systems as static methods, and a source generator compiles them into direct loops. No engine, MIT licensed.";
+
+/** Split text on backticks so inline code renders as <code>. */
+const segments = (text: string) => text.split("`").map((part, index) => ({ code: index % 2 === 1, part }));
+const two = (index: number) => String(index + 1).padStart(2, "0");
+/** Print a number with the precision its source gives, and at least one decimal. */
+const fmt = (value: number) => (Number.isInteger(value) ? value.toFixed(1) : String(value));
+
+const { kernel, bevyParity, allocation, unchangedScan } = ev.perfFacts;
+
+/* Hero: the three values, each with one line of proof that links to the section that argues it. */
+const values = [
+  {
+    href: "#performance",
+    name: "Performance",
+    head: "Speed is a requirement",
+    proof: `${fmt(kernel.after)} µs.`,
+    scope: `${kernel.scope} On main, not yet in a NuGet release.`,
+  },
+  {
+    href: "#ergonomics",
+    name: "Ergonomic API",
+    head: "You write the simulation",
+    proof: "Two structs and a method.",
+    scope: `That is a whole system. A mistake fails the build with one of ${ev.diagnostics.total} diagnostics.`,
+  },
+  {
+    href: "#flexibility",
+    name: "Flexible architecture",
+    head: "A library, not an engine",
+    proof: "Two hosts, one simulation.",
+    scope: "Archeoids runs on the desktop under Silk.NET and in the browser under WebGPU.",
+  },
+];
+
+/* 01: the trade-off. Generic, names no library. */
+const tradeoff = [
+  {
+    label: "Decide at run time",
+    title: "Readable, and the cost repeats",
+    body: "The library matches queries, looks up component types, and calls your code through delegates or interfaces while the update runs. Your systems stay short. The lookup work runs again on every update.",
+    read: "your simulation",
+    pay: "lookups on every update",
+  },
+  {
+    label: "Write it by hand",
+    title: "Fast, and the cost moves to you",
+    body: "You take the speed back with spans, pointers, and SIMD intrinsics. The loop runs fast. The simulation logic now hides inside it, and every change to the math is a change to vector code.",
+    read: "spans, pointers, and intrinsics",
+    pay: "review time on every change",
+  },
+];
+
+/* 02: what the kernel covers. "Qualifies" is reworded from ev.kernelScope.qualifies to avoid a mid-sentence colon. */
+const kernelFacts = [
+  {
+    label: "Qualifies",
+    text: "An `[Each]` method that writes one component with the same float formula in every lane. It may use float `+`, `-`, `*`, `/`, and negation, the `Vector2`, `Vector3`, and `Vector4` operators, constants, locals, fields, records, and `with` expressions.",
+  },
+  { label: "Keeps the call per entity", text: ev.kernelScope.doesNot },
+  { label: "Writes the same bits", text: ev.kernelScope.correctness },
+  { label: "Debug builds", text: ev.kernelScope.debug },
+];
+
+/* 03: performance. */
+const perfFollows = [
+  {
+    label: "Storage",
+    text: "Components are unmanaged structs in dense, aligned, structure of arrays tables outside the managed heap, one table per archetype.",
+  },
+  {
+    label: "Calls",
+    text: "Generated code calls your method directly. Nothing is reflected, boxed, wrapped in a delegate, or looked up by type while the update runs.",
+  },
+  { label: "Loops", text: "In optimized builds, qualifying `[Each]` methods compile to `Vector256` kernels." },
+  { label: "Memory", text: "Warmed, fixed-capacity updates allocate zero managed bytes, with one worker or four." },
+  { label: "Threads", text: "Parallel execution is opt-in, bounded, and partitionable." },
+];
+
+const maxUs = Math.max(...ev.movement.map((row) => row.us));
+const rowTag = { archevolt: "", reference: "reference", baseline: "baseline, no scheduler" } as const;
+
+/* 04: ergonomics. */
+const ergoFollows = [
+  { label: "Components", text: "Unmanaged structs. A one-line `readonly record struct` is the usual style." },
+  { label: "Systems", text: "Static methods. The parameters say what a system reads and what it writes." },
+  { label: "Generated code", text: ev.facts.generated },
+  {
+    label: "Checks",
+    text: `${ev.diagnostics.total} build diagnostics. ${ev.diagnostics.errors} are errors, and ${ev.diagnostics.warning} is a warning.`,
+  },
+];
+
+const emitCommand = "dotnet build -c Release -p:EmitCompilerGeneratedFiles=true";
+
+const apiSteps = [
+  {
+    title: "Collect systems into a module",
+    body: "A module gathers systems and bundles. A schedule declares which systems run and in what order.",
+    file: "GameEcs.cs",
+    code: ev.moduleCode,
+  },
+  {
+    title: "Build a world and run it",
+    body: "Spawn entities from bundles, bind the schedule to the world, and run it once per update.",
+    file: "Program.cs",
+    code: ev.runCode,
+  },
+  {
+    title: "Read what the build wrote",
+    body: "Generated members land in your partial types and your namespace. Ask the compiler to write them to disk, and every line is there to read.",
+    command: emitCommand,
+  },
+];
+
+/* docs/guides/components-and-bundles.mdx, [Component, TrackChanges]. */
+const trackFix = `[Component, TrackChanges]
+public readonly record struct Position(float X);`;
+
+const features = [
+  {
+    key: "query",
+    wide: true,
+    label: "Queries",
+    title: "Typed rows, no lookups",
+    body: "Named queries produce concrete rows with `ref` and `ref readonly` access. Nothing is boxed or looked up by type at run time.",
+    href: ev.links.queries,
+    cta: "Queries guide",
+  },
+  {
+    key: "storage",
+    label: "Storage",
+    title: "Dense native tables",
+    body: "Components live in aligned, structure of arrays tables, one per archetype, outside the managed heap.",
+    href: ev.links.architecture,
+    cta: "Architecture",
+  },
+  {
+    key: "schedule",
+    label: "Schedules",
+    title: "Ordering you declare once",
+    body: "Order systems with `Order`, `Before`, `After`, stages, and sets. The planner adds conservative ordering where access conflicts.",
+    href: ev.links.schedules,
+    cta: "Schedules guide",
+  },
+  {
+    key: "exec",
+    wide: true,
+    label: "Execution",
+    title: "Parallel when you ask for it",
+    body: "Serial execution is the reference behavior. Enable a bounded worker pool and mark eligible systems as partitioned.",
+    href: ev.links.execution,
+    cta: "Execution guide",
+  },
+  {
+    key: "messages",
+    label: "Data flow",
+    title: "Changes, resources, messages",
+    body: "Track added and changed components, share resources, and send messages that each reader consumes at its own pace.",
+    href: ev.links.messages,
+    cta: "Messages guide",
+  },
+];
+
+const guides = data.routes
+  .filter((route) => route.path.includes("/guides/") && route.indexable && !route.hidden)
+  .map((route) => route.title);
+
+/* 05: flexibility. */
+const flexFollows = [
+  { label: "Host", text: ev.facts.engine },
+  {
+    label: "Composition",
+    text: "Modules collect systems and bundles. Schedules order them with `Order`, `Before`, `After`, stages, and sets, and `BoundSchedule.Bind` composes schedules at run time.",
+  },
+  { label: "Data flow", text: "Resources, messages that each reader consumes at its own pace, and change tracking." },
+  { label: "Package", text: ev.facts.package },
+];
+
+const callouts = [
+  { label: "ship", x: 52.9, y: 46.7 },
+  { label: "rock", x: 55.5, y: 24.1 },
+  { label: "rock", x: 35.9, y: 57.5 },
+  { label: "8 entities", x: 91.5, y: 91.1, align: "end" },
+];
+
+/* docs/guides/execution.mdx, "Serial and parallel". */
+const parallelCode = `using var world = new WorldBuilder()
+    .AddModule(GameEcs.Module)
+    .UseParallelExecution(maxConcurrency: 4)
+    .Build();`;
+
+/* ev.facts.ownership and ev.facts.structural, one limit per row. */
+const limits = [
+  { label: "Threads", text: "A world has one owner thread. Outside a schedule, change the world only from that thread." },
+  { label: "Registration", text: "Modules are fixed when the world is built." },
+  { label: "Storage", text: "Archetype tables only." },
+  { label: "Structural changes", text: ev.facts.structural },
+];
+
+/* 06: where it stands. */
+const fit = [
+  { label: "Status", text: ev.facts.status },
+  { label: "Requirements", text: ev.facts.requirements },
+  { label: "Package", text: ev.facts.package },
+  { label: "Comparisons", text: ev.facts.comparisons },
+  { label: "License", text: ev.facts.license },
+];
+---
+
+<AltLayout slug="story" title={title} description={description}>
+  <!-- Hero: the values as a promise -->
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="frame hero-inner">
+      <p class="hero-badge" data-rise style="--d:0">
+        <span class="pulse-dot"></span>
+        Headless ECS for .NET · MIT
+      </p>
+      <h1 class="hero-title" id="hero-title" data-rise style="--d:90">
+        Plain C# systems,{" "}<br />
+        compiled for speed
+      </h1>
+      <div class="hero-grid">
+        <div class="hero-left">
+          <p class="hero-lede" data-rise style="--d:180">
+            Archevolt is an entity component system (ECS) for .NET, a library that keeps game and simulation state in
+            tables of plain structs. You write systems as static methods. A source generator turns them into direct
+            loops at compile time. There is no engine around it, so your program decides the shape.
+          </p>
+          <div class="hero-actions" data-rise style="--d:270">
+            <a class="button" href={ev.links.quickstart}>
+              Read the quickstart
+              <Icon name="arrow-right" />
+            </a>
+            <InstallCommand command={ev.install} />
+          </div>
+          <p class="story-status" data-rise style="--d:330">
+            <b>Status</b>
+            <span>
+              Research project with no users. The public API and generated code can change without compatibility
+              shims. Requires the .NET 11 SDK and C# 15.
+            </span>
+          </p>
+          <nav class="story-values" aria-labelledby="values-title" data-rise style="--d:390">
+            <p class="story-values-label" id="values-title">What Archevolt stands for</p>
+            <ul>
+              {
+                values.map((value) => (
+                  <li>
+                    <a class="story-value" href={value.href}>
+                      <span class="story-value-name">{value.name}</span>
+                      <span class="story-value-head">{value.head}</span>
+                      <span class="story-value-proof">
+                        <b>{value.proof}</b> {value.scope}
+                      </span>
+                      <Icon name="arrow-right" />
+                    </a>
+                  </li>
+                ))
+              }
+            </ul>
+          </nav>
+        </div>
+        <div class="story-field" data-rise style="--d:300">
+          <div class="hero-stage" aria-hidden="true">
+            <canvas class="hero-field" data-field></canvas>
+            <div class="hero-hud">
+              <span>entities <b data-hud-entities>0</b></span>
+              <span>archetypes <b>4</b></span>
+              <span>tick <b data-hud-tick>000000</b></span>
+            </div>
+          </div>
+          <p class="story-field-note">
+            Illustration. Entities move between archetype tables as they gain and lose components. It runs no
+            Archevolt code.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 01: the trade-off -->
+  <section class="section" aria-labelledby="tradeoff-title">
+    <div class="frame">
+      <div class="sec-label" data-reveal><span>01</span>The trade-off</div>
+      <h2 class="sec-title sec-title-wide story-title-tight" id="tradeoff-title" data-reveal>
+        In .NET, an ECS usually makes you choose between readable and fast
+      </h2>
+      <p class="sec-lede" data-reveal>
+        Systems run over thousands of rows on every update. How a library finds those rows and calls your code decides
+        what each update costs.
+      </p>
+      <div class="story-tradeoff" data-reveal>
+        {
+          tradeoff.map((side) => (
+            <article class="story-card">
+              <span class="story-card-label">{side.label}</span>
+              <h3>{side.title}</h3>
+              <p>{side.body}</p>
+              <dl class="story-card-terms">
+                <div>
+                  <dt>You read</dt>
+                  <dd>{side.read}</dd>
+                </div>
+                <div>
+                  <dt>You pay</dt>
+                  <dd>{side.pay}</dd>
+                </div>
+              </dl>
+            </article>
+          ))
+        }
+      </div>
+      <p class="story-turn" data-reveal>Archevolt moves that work to the compiler.</p>
+    </div>
+  </section>
+
+  <TaglineReveal lines={["You write a plain method.", "The build writes the loop.", "Where the math allows, it writes SIMD."]} />
+
+  <!-- 02: the decision -->
+  <section class="section" aria-labelledby="decision-title">
+    <div class="frame">
+      <div class="sec-label" data-reveal><span>02</span>The decision</div>
+      <h2 class="sec-title" id="decision-title" data-reveal>Do the work at compile time</h2>
+      <p class="sec-lede story-lede-wide" data-reveal>
+        Archevolt's Roslyn source generator reads your components and systems during the build. It writes the query,
+        the access plan, the schedule wiring, and the loop into your own partial types. The loop calls your method
+        directly. A declaration the generator cannot compile fails the build, so nothing falls back to a lookup at run
+        time.
+      </p>
+
+      <div class="story-hinge">
+        <figure class="window system-window" data-reveal data-story="system">
+          <div class="window-bar">
+            <span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+            <span class="window-file">Motion.cs</span>
+            <span class="window-tag">you write this</span>
+          </div>
+          <div class="code">
+            <Code code={ev.heroCode} lang="csharp" theme={codeTheme} />
+            <span class="code-hot" aria-hidden="true"><span>becomes the vector loop</span></span>
+          </div>
+        </figure>
+        <figure class="window" data-reveal>
+          <div class="window-bar">
+            <span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+            <span class="window-file">Motion.Move.g.cs</span>
+            <span class="window-tag">the Release build writes this</span>
+          </div>
+          <div class="code">
+            <Code code={ev.generatedKernel} lang="csharp" theme={codeTheme} />
+          </div>
+        </figure>
+      </div>
+      <p class="sec-foot" data-reveal>
+        Real generator output for <code>Motion.Move</code>, captured from main on 5 November 2026 in a Release build.
+        It is an excerpt, with namespace prefixes and the <code>Vector128</code> branch removed. The kernel is on main
+        and not yet in a NuGet release.
+      </p>
+
+      <div class="story-block" data-reveal>
+        <h3 class="story-sub">What the kernel covers</h3>
+        <ul class="system-facts story-facts story-facts-grid">
+          {
+            kernelFacts.map((fact) => (
+              <li>
+                <span>{fact.label}</span>
+                {segments(fact.text).map(({ code, part }) => (code ? <code>{part}</code> : part))}
+              </li>
+            ))
+          }
+        </ul>
+        <ul class="story-links">
+          <li>
+            <a href={ev.links.simdKernels}>Read how SIMD kernels work<Icon name="arrow-right" /></a>
+          </li>
+          <li>
+            <a href={ev.links.architecture}>See what is generated and what runs<Icon name="arrow-right" /></a>
+          </li>
+        </ul>
+        <details class="story-more">
+          <summary>
+            <span>The <code>Run</code> method around the kernel</span>
+            <span class="faq-icon"><Icon name="plus" /></span>
+          </summary>
+          <div class="story-more-body">
+            <p>
+              When the kernel does not apply, the same loop calls <code>Move</code> once per row. It is a direct call,
+              with no delegate in between.
+            </p>
+            <figure class="window">
+              <div class="window-bar">
+                <span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+                <span class="window-file">Motion.Move.g.cs</span>
+                <span class="window-tag">excerpt</span>
+              </div>
+              <div class="code">
+                <Code code={ev.generatedRun} lang="csharp" theme={codeTheme} />
+              </div>
+            </figure>
+          </div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03: performance, the first consequence -->
+  <section class="section story-anchor" id="performance" aria-labelledby="performance-title">
+    <div class="frame">
+      <div class="sec-label" data-reveal><span>03</span>First value · Performance</div>
+      <div class="story-head">
+        <div data-reveal>
+          <h2 class="sec-title" id="performance-title">Speed is a requirement</h2>
+          <p class="sec-lede">
+            Archevolt judges every design decision by what it costs in the update loop. Where a number still trails,
+            it is listed on this page as the next piece of work.
+          </p>
+        </div>
+        <div data-reveal>
+          <p class="story-follows-label">What follows from it</p>
+          <ul class="system-facts story-facts">
+            {
+              perfFollows.map((fact) => (
+                <li>
+                  <span>{fact.label}</span>
+                  {segments(fact.text).map(({ code, part }) => (code ? <code>{part}</code> : part))}
+                </li>
+              ))
+            }
+          </ul>
+        </div>
+      </div>
+
+      <div class="perf story-block">
+        <div class="story-lead" data-reveal>
+          <p class="story-chip"><span class="pulse-dot"></span>5 November · on main · not in a release yet</p>
+          <p class="perf-number">{fmt(kernel.after)}<span class="story-unit">µs</span></p>
+          <p class="perf-caption">
+            {kernel.scope} Before the kernel, the same method took {fmt(kernel.before)} µs.
+          </p>
+          <p class="story-claim">
+            <b>{bevyParity.claim}</b>
+            <span>{bevyParity.scope} One machine, not a ranking.</span>
+          </p>
+          <dl class="perf-minis">
+            <div><dt>{allocation.scope}</dt><dd>{allocation.value}</dd></div>
+            <div><dt>{unchangedScan.scope}</dt><dd>{fmt(unchangedScan.value)} µs</dd></div>
+          </dl>
+        </div>
+        <div class="perf-chart story-chart" data-reveal data-bars>
+          <p class="perf-chart-title">
+            Moving 100,000 entities on one worker, median µs per update
+            <span>Lower is faster. Fastest and slowest process in brackets. Archevolt's times include schedule dispatch, resource access, lease checks, and query traversal.</span>
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Case</th>
+                <th scope="col" class="num">Median µs</th>
+              </tr>
+            </thead>
+            <tbody>
+              {
+                ev.movement.map((row, index) => (
+                  <tr
+                    class:list={{
+                      "is-lead": index === 0,
+                      "is-reference": row.kind === "reference",
+                      "is-baseline": row.kind === "baseline",
+                    }}
+                  >
+                    <th scope="row">
+                      <span class="bar-label">
+                        {segments(row.name).map(({ code, part }) => (code ? <code>{part}</code> : part))}
+                        {rowTag[row.kind] && <span class="bar-tag">{rowTag[row.kind]}</span>}
+                      </span>
+                      <span class="bar" style={`--w:${((row.us / maxUs) * 100).toFixed(2)}%`}>
+                        <span class="bar-fill" />
+                      </span>
+                      <span class="story-row-meta">
+                        {row.date} · [{fmt(row.range[0])}, {fmt(row.range[1])}]
+                      </span>
+                    </th>
+                    <td class="num">{fmt(row.us)}</td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <p class="sec-foot" data-reveal>
+        {ev.movementNote}{" "}
+        <a href={ev.links.performance}>Read the full performance report</a>
+      </p>
+
+      <div class="story-block story-process" data-reveal>
+        <div>
+          <h3 class="story-sub">Every speed change passes a gate set in advance</h3>
+          <p class="story-sub-lede">
+            A number is worth printing only if the method behind it can say no. Archevolt's performance work runs as a
+            hill climb. Each round fixes its acceptance gate first, then measures every candidate against preserved
+            builds.
+          </p>
+          <ul class="story-links">
+            <li><a href={ev.links.roundOne}>Read the round one report<Icon name="arrow-right" /></a></li>
+            <li><a href={ev.links.roundTwo}>Read the round two report<Icon name="arrow-right" /></a></li>
+          </ul>
+        </div>
+        <ol class="story-gate">
+          {ev.perfProcess.map((step) => <li>{step}</li>)}
+        </ol>
+      </div>
+
+      <div class="story-block" data-reveal>
+        <h3 class="story-sub">Where it is still slower</h3>
+        <p class="story-sub-lede">
+          Speed is a requirement, so a slower case is open work. The round two report names the cause behind each one.
+        </p>
+        <ul class="story-gaps">
+          {
+            ev.gaps.map((gap) => (
+              <li class="story-gap">
+                <p class="story-gap-case">
+                  {segments(gap.case).map(({ code, part }) => (code ? <code>{part}</code> : part))}
+                </p>
+                <dl class="story-gap-nums">
+                  <div>
+                    <dt>Archevolt</dt>
+                    <dd>{gap.now}</dd>
+                  </div>
+                  {gap.bevy && (
+                    <div>
+                      <dt>Bevy 0.20</dt>
+                      <dd>{gap.bevy}</dd>
+                    </div>
+                  )}
+                </dl>
+                <p class="story-gap-note">{gap.note}</p>
+              </li>
+            ))
+          }
+        </ul>
+        {/* Scope from benchmarks/performance-hill-climb-round-2.md, "Distance to Bevy". */}
+        <p class="sec-foot">
+          Archevolt measured 5 November on one machine in normal use. Bevy 0.20 measured 2 November on the same machine
+          while idle. One machine, not a ranking.{" "}
+          <a href={ev.links.whatRemains}>Read what remains</a>
+        </p>
+      </div>
+
+      <div class="story-rerun" data-reveal>
+        <div>
+          <p class="story-rerun-title">Measure it on your machine</p>
+          {/* docs/performance.mdx, "Reproduce". */}
+          <p>
+            Run it from a clone of the repository. <code>--quick</code> runs a short movement measurement in one
+            process.
+          </p>
+        </div>
+        <InstallCommand command={ev.rerunBenchmarks} />
+      </div>
+    </div>
+  </section>
+
+  <!-- 04: ergonomics, the second consequence -->
+  <section class="section story-anchor" id="ergonomics" aria-labelledby="ergonomics-title">
+    <div class="frame">
+      <div class="sec-label" data-reveal><span>04</span>Second value · Ergonomic API</div>
+      <div class="story-head">
+        <div data-reveal>
+          <h2 class="sec-title" id="ergonomics-title">You write the simulation. The generator writes the plumbing.</h2>
+          <p class="sec-lede">
+            Components are structs. A system is a static method that takes <code>ref</code> to write and
+            <code>in</code> to read. The readable version is the fast version. The <code>Motion.Move</code> in section
+            02 is the method the kernel came from.
+          </p>
+        </div>
+        <div data-reveal>
+          <p class="story-follows-label">What follows from it</p>
+          <ul class="system-facts story-facts">
+            {
+              ergoFollows.map((fact) => (
+                <li>
+                  <span>{fact.label}</span>
+                  {segments(fact.text).map(({ code, part }) => (code ? <code>{part}</code> : part))}
+                </li>
+              ))
+            }
+          </ul>
+        </div>
+      </div>
+
+      <div class="story-block">
+        <h3 class="story-sub" data-reveal>Three more pieces make a program</h3>
+        <ol class="steps story-steps">
+          {
+            apiSteps.map((step, index) => (
+              <li class="step" data-reveal>
+                <span class="step-number" aria-hidden="true">
+                  {two(index)}
+                </span>
+                <div class="step-copy">
+                  <h4>{step.title}</h4>
+                  <p>{step.body}</p>
+                </div>
+                <div class="step-visual">
+                  {step.command ? (
+                    <InstallCommand command={step.command} />
+                  ) : (
+                    <figure class="window">
+                      <div class="window-bar">
+                        <span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+                        <span class="window-file">{step.file}</span>
+                      </div>
+                      <div class="code">
+                        <Code code={step.code!} lang="csharp" theme={codeTheme} />
+                      </div>
+                    </figure>
+                  )}
+                </div>
+              </li>
+            ))
+          }
+        </ol>
+        <p class="sec-foot" data-reveal>
+          The <a href={ev.links.quickstart}>quickstart</a> puts these pieces into one program that prints <code>1</code>.
+        </p>
+      </div>
+
+      <div class="story-block story-diag" data-reveal>
+        <div>
+          <h3 class="story-sub">Mistakes stop the build</h3>
+          <p class="story-sub-lede">
+            The generator checks each declaration as you compile. Ask a system for <code>Changed&lt;Position&gt;</code>
+            while <code>Position</code> does not track changes, and the build fails with this error. The fix is one
+            attribute.
+          </p>
+          <p class="story-sub-lede">
+            {ev.diagnostics.total} diagnostics cover partial declarations, managed components, overlapping writes,
+            unknown systems, and schedule cycles. {ev.diagnostics.errors} of them are errors. {ev.diagnostics.warning}
+            warns when two conflicting systems have no explicit order.
+          </p>
+          <p class="story-cost">
+            The terms are strict. Types the generator touches must be <code>partial</code> (AV001). Components must be
+            unmanaged structs (AV002). Schedules are declared with attributes, and those attribute lists can get long.
+          </p>
+          <ul class="story-links">
+            <li><a href={ev.links.diagnostics}>Read the diagnostics reference<Icon name="arrow-right" /></a></li>
+          </ul>
+        </div>
+        <figure class="window">
+          <div class="window-bar">
+            <span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+            <span class="window-file">Terminal</span>
+            <span class="window-tag">build output</span>
+          </div>
+          <div class="story-term">
+            <code class="story-term-line"><span class="story-term-prompt">$ </span>dotnet build</code>
+            <code class="story-term-line story-term-error">{ev.av006}</code>
+          </div>
+          <div class="window-bar story-term-bar">
+            <span class="window-file">Position.cs</span>
+            <span class="window-tag">the fix</span>
+          </div>
+          <div class="code">
+            <Code code={trackFix} lang="csharp" theme={codeTheme} />
+          </div>
+        </figure>
+      </div>
+
+      <div class="story-block">
+        <h3 class="story-sub" data-reveal>Everything else works the same way</h3>
+        <p class="story-sub-lede" data-reveal>
+          Queries, schedules, threads, and messages are declarations too, and the generator writes the code that runs
+          them. Each card opens its documentation.
+        </p>
+        <div class="bento story-bento" data-scene>
+          {
+            features.map((feature, index) => (
+              <a class:list={["bento-card", { "is-wide": feature.wide }]} href={feature.href} style={`--d:${index * 85}`}>
+                <div class="bento-visual">
+                  {feature.key === "query" && <QueryVisual />}
+                  {feature.key === "storage" && <StorageVisual />}
+                  {feature.key === "schedule" && <ScheduleVisual />}
+                  {feature.key === "exec" && <ExecutionVisual />}
+                  {feature.key === "messages" && <MessagesVisual />}
+                </div>
+                <div class="bento-body">
+                  <span class="mono-label">{feature.label}</span>
+                  <h4>{feature.title}</h4>
+                  <p>{segments(feature.body).map(({ code, part }) => (code ? <code>{part}</code> : part))}</p>
+                  <span class="pill">
+                    {feature.cta}
+                    <Icon name="arrow-right" />
+                  </span>
+                </div>
+              </a>
+            ))
+          }
+          <a class="bento-card bento-guides" href={ev.links.guides} style={`--d:${features.length * 85}`}>
+            <div class="bento-visual">
+              <div class="viz viz-guides" aria-hidden="true">
+                <div class="vg-list">
+                  {
+                    [0, 1].map(() => (
+                      <ul>
+                        {guides.map((guide, index) => (
+                          <li>
+                            <span>{two(index)}</span>
+                            {guide}
+                          </li>
+                        ))}
+                      </ul>
+                    ))
+                  }
+                </div>
+              </div>
+            </div>
+            <div class="bento-body">
+              <span class="mono-label">Guides</span>
+              <h4>{guides.length} guides, one per feature</h4>
+              <p>Components, modules, queries, schedules, resources, commands, and the rest, each with its own page.</p>
+              <span class="pill">
+                Explore the guides
+                <Icon name="arrow-right" />
+              </span>
+            </div>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05: flexibility, the third consequence -->
+  <section class="section story-anchor" id="flexibility" aria-labelledby="flexibility-title">
+    <div class="frame">
+      <div class="sec-label" data-reveal><span>05</span>Third value · Flexible architecture</div>
+      <div class="story-head">
+        <div data-reveal>
+          <h2 class="sec-title" id="flexibility-title">A library, not an engine. Your program decides the shape.</h2>
+          <p class="sec-lede">
+            Archevolt runs the simulation and nothing else. The window, the input, the frame loop, and the renderer
+            belong to your program, so the same simulation can live in very different hosts.
+          </p>
+        </div>
+        <div data-reveal>
+          <p class="story-follows-label">What follows from it</p>
+          <ul class="system-facts story-facts">
+            {
+              flexFollows.map((fact) => (
+                <li>
+                  <span>{fact.label}</span>
+                  {segments(fact.text).map(({ code, part }) => (code ? <code>{part}</code> : part))}
+                </li>
+              ))
+            }
+          </ul>
+        </div>
+      </div>
+
+      <div class="arcade story-arcade story-block" data-reveal>
+        <div class="arcade-copy">
+          <span class="mono-label">Sample · {ev.sample.name}</span>
+          <h3 class="story-arcade-title">One simulation, two hosts</h3>
+          <p>{ev.sample.summary}</p>
+          <p>{ev.sample.hosts}</p>
+          <a class="button" href={ev.links.browserGame}>
+            Play Archeoids in your browser
+            <Icon name="arrow-right" />
+          </a>
+          <p class="story-arcade-note">{ev.sample.browserNote}</p>
+          <InstallCommand command={ev.runSample} />
+          <a class="pill pill-light" href={ev.links.sample}>
+            Read the Archeoids sample
+            <Icon name="arrow-right" />
+          </a>
+        </div>
+        <div class="arcade-screen" data-story="arcade">
+          <Image
+            src={archeoids}
+            alt="Archeoids gameplay with a cyan ship, drifting asteroids, and a score and lives HUD."
+            widths={[640, 1100, 1600]}
+            sizes="(min-width: 1024px) 640px, 100vw"
+            loading="lazy"
+          />
+          {
+            callouts.map((callout, index) => (
+              <span
+                class:list={["callout", { "is-end": callout.align === "end" }]}
+                style={`left:${callout.x}%;top:${callout.y}%`}
+                data-callout={index}
+                aria-hidden="true"
+              >
+                <span class="callout-ring" />
+                <span class="callout-tag">entity · {callout.label}</span>
+              </span>
+            ))
+          }
+        </div>
+      </div>
+
+      <div class="targets" data-reveal data-story="targets">
+        <p class="targets-label">Runs under</p>
+        <p class="targets-row">
+          <span data-target-word>JIT</span><span class="targets-sep">/</span><span data-target-word>Trimmed</span><span class="targets-sep">/</span><span data-target-word>NativeAOT</span>
+        </p>
+        <p class="targets-note">{ev.facts.deployment}</p>
+      </div>
+
+      <div class="story-block story-opt">
+        <div data-reveal>
+          <h3 class="story-sub">Serial until you opt in</h3>
+          <p class="story-sub-lede">
+            {ev.facts.threads} Small workloads can cost more to dispatch in parallel than to run serially, so measure
+            first.
+          </p>
+          <figure class="window story-opt-window">
+            <div class="window-bar">
+              <span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+              <span class="window-file">Program.cs</span>
+              <span class="window-tag">opt in</span>
+            </div>
+            <div class="code">
+              <Code code={parallelCode} lang="csharp" theme={codeTheme} />
+            </div>
+          </figure>
+          <ul class="story-links">
+            <li><a href={ev.links.execution}>Read the execution guide<Icon name="arrow-right" /></a></li>
+          </ul>
+        </div>
+        <div data-reveal>
+          <h3 class="story-sub">Where it stops</h3>
+          <p class="story-sub-lede">The shape of the program is yours. These parts are fixed.</p>
+          <ul class="system-facts story-facts">
+            {
+              limits.map((limit) => (
+                <li>
+                  <span>{limit.label}</span>
+                  {limit.text}
+                </li>
+              ))
+            }
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 06: where it stands, and how to start -->
+  <section class="section" aria-labelledby="status-title">
+    <div class="frame">
+      <div class="sec-label" data-reveal><span>06</span>Status</div>
+      <h2 class="sec-title" id="status-title" data-reveal>Where it stands, and how to start</h2>
+      <p class="sec-lede" data-reveal>
+        Check these before you install. A project that cannot move to .NET 11, or cannot absorb API changes, should
+        wait.
+      </p>
+      <dl class="story-fit" data-reveal>
+        {
+          fit.map((item) => (
+            <div>
+              <dt>{item.label}</dt>
+              <dd>{item.text}</dd>
+            </div>
+          ))
+        }
+      </dl>
+      <ul class="story-links" data-reveal>
+        <li><a href={ev.links.installation}>Read the installation guide<Icon name="arrow-right" /></a></li>
+        <li><a href={ev.links.changelog}>Read the changelog<Icon name="arrow-right" /></a></li>
+        <li><a href={ev.links.roadmap}>Read the roadmap<Icon name="arrow-right" /></a></li>
+        <li><a href={ev.links.github}>Browse the source on GitHub<Icon name="arrow-right" /></a></li>
+      </ul>
+
+      <div class="story-block">
+        <h3 class="story-sub" data-reveal>Start in three steps</h3>
+        <ol class="story-start" data-reveal>
+          <li>
+            <span class="story-start-num">01</span>
+            <h4>Install the .NET 11 SDK</h4>
+            <p>Target <code>net11.0</code> with C# 15. Install release candidates while .NET 11 is in preview.</p>
+            <a class="story-start-link" href={ev.links.installation}>Check the requirements<Icon name="arrow-right" /></a>
+          </li>
+          <li>
+            <span class="story-start-num">02</span>
+            <h4>Add the package</h4>
+            <p>One package holds the runtime and the source generator.</p>
+            <InstallCommand command={ev.install} typed />
+          </li>
+          <li>
+            <span class="story-start-num">03</span>
+            <h4>Follow the quickstart</h4>
+            <p>It builds the program from this page, two structs, a method, and a schedule, and prints <code>1</code>.</p>
+            <a class="story-start-link" href={ev.links.quickstart}>Read the quickstart<Icon name="arrow-right" /></a>
+          </li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- Final call to action -->
+  <section class="final" aria-labelledby="final-title">
+    <div class="frame">
+      <div class="final-panel" data-reveal>
+        <svg class="final-bolt" viewBox="0 0 120 220" aria-hidden="true">
+          <path d="M78 4 L18 128 H56 L40 216 L104 84 H64 Z" pathLength="1"></path>
+        </svg>
+        <p class="mono-label">Get started</p>
+        <h2 id="final-title">Run your first system</h2>
+        <p class="final-lede">
+          Write one method and let the build write the loop. The quickstart walks through the whole program.
+        </p>
+        <div class="hero-actions">
+          <a class="button" href={ev.links.quickstart}>
+            Read the quickstart
+            <Icon name="arrow-right" />
+          </a>
+          <InstallCommand command={ev.install} />
+        </div>
+      </div>
+    </div>
+  </section>
+</AltLayout>

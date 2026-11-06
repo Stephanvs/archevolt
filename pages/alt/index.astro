@@ -1,0 +1,75 @@
+---
+import AltLayout from "../_alt/AltLayout.astro";
+import { alternatives } from "../_alt/alternatives";
+import Icon from "../_home/Icon.astro";
+import "../_alt/v2/v2.css";
+
+const roundTwo = alternatives.filter((alternative) => alternative.round === 2);
+const roundOne = alternatives.filter((alternative) => alternative.round === 1);
+const two = (index: number) => String(index + 1).padStart(2, "0");
+---
+
+<AltLayout
+  slug="index"
+  title="Landing page alternatives"
+  description="Alternatives to the Archevolt landing page, built for review."
+>
+  <section class="alt-index" aria-labelledby="alt-index-title">
+    <div class="frame">
+      <p class="alt-index-n">Review build · round 2</p>
+      <h1 class="sec-title sec-title-wide" id="alt-index-title">Three ways to combine your picks</h1>
+      <p class="sec-lede">
+        All three share the same hero, generated code, setup steps, and headless section. They differ in how you click
+        through the generated code and in how much else the page carries.
+      </p>
+      <ol class="alt-index-list">
+        {
+          roundTwo.map((alternative, index) => (
+            <li>
+              <a class="alt-index-card" href={`/alt/${alternative.slug}`}>
+                <span class="alt-index-n">
+                  {two(index)} · {alternative.origin}
+                </span>
+                <h2>{alternative.name}</h2>
+                <p class="alt-index-shape">{alternative.shape}</p>
+                <p>{alternative.summary}</p>
+                <span class="v2-link">
+                  Open
+                  <Icon name="arrow-right" />
+                </span>
+              </a>
+            </li>
+          ))
+        }
+      </ol>
+
+      <h2 class="alt-index-h2">What every round 2 page keeps from your review</h2>
+      <ul class="alt-index-notes">
+        <li>Judge A's heading, "Build fast simulations in plain C#", and its lede.</li>
+        <li>
+          Judge B's "The readable version is the fast version", as clickable blocks over the generator's real output for
+          this code, in full. Only namespace qualifiers are removed, and the code is indented.
+        </li>
+        <li>The experience page's "Then wire it into a program" steps.</li>
+        <li>"Archevolt is headless" as a heading, and one line for the sample.</li>
+        <li>
+          No status line, no requirements above the fold, and no notes on capture dates or releases. The .NET 11 and C#
+          15 requirement appears once, at the install step.
+        </li>
+      </ul>
+
+      <h2 class="alt-index-h2">Round 1</h2>
+      <ul class="alt-index-round-one">
+        {
+          roundOne.map((alternative) => (
+            <li>
+              <a href={`/alt/${alternative.slug}`}>{alternative.name}</a>
+              <span>{alternative.origin}</span>
+            </li>
+          ))
+        }
+      </ul>
+      <p class="alt-index-foot">The <a href="/">current page</a> is unchanged. These pages are marked noindex.</p>
+    </div>
+  </section>
+</AltLayout>

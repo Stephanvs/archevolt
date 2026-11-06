@@ -1,0 +1,933 @@
+---
+/**
+ * Alternative: Experience first. The running game comes first. Each later section shows an artifact
+ * (the code, the measured update, the hosts, the build output), then names the value under it.
+ * Spec: .arena/landing/out-experience.md sections 3 to 5, with the overrides in .arena/landing/v2/brief.md.
+ */
+import AltLayout from "../_alt/AltLayout.astro";
+import "../_alt/experience.css";
+import { Code } from "astro:components";
+import { Image } from "astro:assets";
+import data from "blume:data";
+import playIcon from "@phosphor-icons/core/assets/fill/play-fill.svg?raw";
+import archeoids from "../../docs/samples/archeoids.png";
+import Icon from "../_home/Icon.astro";
+import InstallCommand from "../_home/InstallCommand.astro";
+import TaglineReveal from "../_home/TaglineReveal.astro";
+import AotVisual from "../_home/visuals/AotVisual.astro";
+import ExecutionVisual from "../_home/visuals/ExecutionVisual.astro";
+import MessagesVisual from "../_home/visuals/MessagesVisual.astro";
+import QueryVisual from "../_home/visuals/QueryVisual.astro";
+import ScheduleVisual from "../_home/visuals/ScheduleVisual.astro";
+import StorageVisual from "../_home/visuals/StorageVisual.astro";
+import * as ev from "../_alt/evidence";
+
+const codeTheme = data.config.codeThemes.dark;
+
+const title = "Archevolt · An entity component system for .NET, running";
+const description =
+  "Play a sample game whose simulation runs on Archevolt, then read the C# method behind it, its measured cost per update, and what the build rejects. MIT licensed. Requires .NET 11 and C# 15.";
+
+const play = playIcon.replace("<svg ", '<svg aria-hidden="true" focusable="false" class="icon" ');
+
+/* The arcade story's callouts belong to the still screenshot and disappear once the game runs. */
+const callouts = [
+  { label: "ship", x: 52.9, y: 46.7 },
+  { label: "rock", x: 55.5, y: 24.1 },
+  { label: "rock", x: 35.9, y: 57.5 },
+  { label: "8 entities", x: 91.5, y: 91.1, align: "end" },
+];
+
+const keys = [
+  { keys: ["A", "D"], action: "turn" },
+  { keys: ["W"], action: "thrust" },
+  { keys: ["Space"], action: "fire" },
+  { keys: ["P"], action: "pause" },
+];
+
+const steps = [
+  {
+    title: "Add the package",
+    body: "One package holds the runtime and its source generator. Generated declarations stay in your namespace and your partial types.",
+    command: ev.install,
+  },
+  {
+    title: "Collect systems into a module",
+    body: "A module gathers systems and bundles. A schedule declares which systems run and in what order.",
+    code: ev.moduleCode,
+  },
+  {
+    title: "Build a world and run it",
+    body: "Spawn entities from bundles, bind the schedule to the world, and run it once per update.",
+    code: ev.runCode,
+  },
+];
+
+const kernelFacts = [
+  { label: "Compiles to a kernel", text: ev.kernelScope.qualifies },
+  { label: "Keeps the call per entity", text: ev.kernelScope.doesNot },
+  { label: "Writes the same bits", text: ev.kernelScope.correctness },
+  { label: "Debug builds", text: ev.kernelScope.debug },
+];
+
+/* Movement chart. Values and ranges come from ev.movement; only the display format is decided here. */
+const fmt = (value: number) => (Number.isInteger(value) ? value.toFixed(1) : String(value));
+const maxUs = Math.max(...ev.movement.map((row) => row.us));
+const rowTag = (row: ev.MovementRow) => {
+  if (row.kind === "baseline") return "baseline, no scheduler";
+  if (row.kind === "reference") return "reference";
+  if (row.name.includes("SIMD kernel")) return "on main, not in a release yet";
+  return undefined;
+};
+const rowClass = (row: ev.MovementRow) => ({
+  "is-baseline": row.kind === "baseline",
+  "is-reference": row.kind === "reference",
+  "is-before": row.kind === "archevolt" && row.name.includes("before"),
+});
+
+/*
+ * Real diagnostic messages. AV001: src/Archevolt.Generators/ArchevoltGenerator.cs line 81, for a Motion class
+ * without `partial`. AV002: the same file, line 135, for a Position component that holds a string.
+ * AV006: ev.av006 (QueryGeneration.cs line 21).
+ */
+const diagnosticRows = [
+  {
+    cause: "Motion is declared without partial",
+    severity: "error",
+    code: "AV001",
+    message: "Motion and every containing type must be non-generic partial declarations.",
+  },
+  {
+    cause: "Position holds a string",
+    severity: "error",
+    code: "AV002",
+    message: "Position must be a closed unmanaged, non-owning value type.",
+  },
+  {
+    cause: "A Changed<Position> filter on an untracked component",
+    severity: "error",
+    code: "AV006",
+    message: ev.av006.replace(/^error AV006: /, ""),
+  },
+];
+
+const features = [
+  {
+    key: "query",
+    wide: true,
+    label: "Queries",
+    title: "Typed rows, no lookups",
+    body: "Named queries produce concrete rows with `ref` and `ref readonly` access. Nothing is boxed or looked up by type at run time.",
+    href: ev.links.queries,
+    cta: "Queries guide",
+  },
+  {
+    key: "storage",
+    label: "Storage",
+    title: "Dense native tables",
+    body: "Components live in aligned, structure of arrays tables, one per archetype, outside the managed heap.",
+    href: ev.links.architecture,
+    cta: "Architecture",
+  },
+  {
+    key: "schedule",
+    label: "Schedules",
+    title: "Ordering you declare once",
+    body: "Order systems with `Order`, `Before`, `After`, stages, and sets. The planner adds conservative ordering where access conflicts.",
+    href: ev.links.schedules,
+    cta: "Schedules guide",
+  },
+  {
+    key: "exec",
+    wide: true,
+    label: "Execution",
+    title: "Parallel when you ask for it",
+    body: "Serial execution is the reference behavior. Enable a bounded worker pool and mark eligible systems as partitioned.",
+    href: ev.links.execution,
+    cta: "Execution guide",
+  },
+  {
+    key: "messages",
+    label: "Data flow",
+    title: "Changes, resources, messages",
+    body: "Track added and changed components, share resources, and send messages that each reader consumes at its own pace.",
+    href: ev.links.messages,
+    cta: "Messages guide",
+  },
+  {
+    key: "aot",
+    label: "Deployment",
+    title: "Ready for NativeAOT",
+    body: ev.facts.deployment,
+    href: ev.links.installation,
+    cta: "Installation",
+  },
+];
+
+const guides = data.routes
+  .filter((route) => route.path.includes("/guides/") && route.indexable && !route.hidden)
+  .map((route) => route.title);
+
+const faqs = [
+  {
+    q: "Is Archevolt a game engine?",
+    a: "No. It is a headless ECS with no window, input, rendering, or audio. Archeoids pairs it with Silk.NET on the desktop and with WebGPU in the browser. You can also drive simulations with no graphics at all.",
+  },
+  {
+    q: "Is the browser game the same code as the NuGet package?",
+    a: "Not always. The browser build comes from the latest commit on `main`, so it can be ahead of the NuGet release. The SIMD kernels on this page are on `main` and not yet in a release.",
+  },
+  {
+    q: "Can the API change?",
+    a: "Yes. Archevolt is a research project with no users. The public API, storage layout, and generated code can change without compatibility shims.",
+  },
+  {
+    q: "What do I need to install?",
+    a: "One package, `Archevolt`, with the runtime and the Roslyn source generator. The runtime has no package dependencies. You need the .NET 11 SDK, a project targeting `net11.0`, and C# 15. Install release candidates while .NET 11 is in preview.",
+  },
+  {
+    q: "Does it allocate during an update?",
+    a: "Measured warmed, fixed capacity updates allocate zero managed bytes, with one worker or four. Spawning and other structural changes can grow storage and allocate.",
+  },
+  {
+    q: "Does it run systems in parallel?",
+    a: "Only when you opt in. Call `UseParallelExecution(maxConcurrency: 4)` on `WorldBuilder` and mark eligible systems with `[Each(Partitioned = true)]`. Small workloads can cost more to dispatch in parallel than to run serially, so measure first.",
+  },
+  {
+    q: "Does it work with NativeAOT and trimming?",
+    a: "Yes. The package is verified in clean consumers under JIT, trimming, and NativeAOT. The NativeAOT evidence is Windows x64.",
+  },
+  {
+    q: "What does the generator change in my code?",
+    a: "It adds members to your declarations, so the types it touches must be `partial`. Generated code stays in the namespace and partial owner of the original declaration.",
+  },
+  {
+    q: "How do systems add or remove components?",
+    a: "Structural changes inside systems go through `Commands` and become visible at schedule barriers. Outside a schedule, mutate the world directly on its owner thread.",
+  },
+  {
+    q: "How does it compare to other ECS libraries?",
+    a: "The benchmark suite records Bevy 0.20 and Arch 2.1.0 counterparts on the same machine. On `main`, the dense movement update now matches Bevy's. Write-then-scan and `Get<T>` still trail it. The numbers come from one machine and are not a ranking. The performance page lists every case and what it measures.",
+  },
+  {
+    q: "Is it free to use?",
+    a: "Yes. Archevolt is open source under the MIT license, and the source is on GitHub.",
+  },
+];
+
+const faqSchema = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: faqs.map((faq) => ({
+    "@type": "Question",
+    name: faq.q,
+    acceptedAnswer: { "@type": "Answer", text: faq.a.replaceAll("`", "") },
+  })),
+};
+
+/** Split text on backticks so inline code renders as <code>. */
+const segments = (text: string) => text.split("`").map((part, index) => ({ code: index % 2 === 1, part }));
+const two = (index: number) => String(index + 1).padStart(2, "0");
+---
+
+<AltLayout slug="experience" title={title} description={description}>
+  <!-- Hero: the game first. The poster swaps for the live browser build on click. -->
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="frame hero-inner">
+      <div class="experience-hero-grid">
+        <div class="experience-intro">
+          <p class="hero-badge" data-rise style="--d:0">
+            <span class="pulse-dot"></span>
+            Headless ECS for .NET · MIT
+          </p>
+          <h1 class="experience-title hero-title" id="hero-title" data-rise style="--d:90">
+            Fly the ship. Archevolt runs the gameplay.
+          </h1>
+          <p class="hero-lede experience-lede" data-rise style="--d:180">
+            Archeoids is a sample game built on Archevolt, an entity component system library for .NET. Every ship,
+            rock, bullet, and particle is an entity, and plain C# methods move them. Archevolt draws nothing. The host
+            program does.
+          </p>
+        </div>
+
+        <div class="experience-stage" data-rise style="--d:300">
+          <figure class="experience-screen" data-game data-game-src={ev.links.browserGame} data-state="poster">
+            <div class="experience-screen-frame" data-game-frame data-story="arcade">
+              <Image
+                class="experience-poster"
+                src={archeoids}
+                alt="Archeoids gameplay with a cyan ship, drifting asteroids, and a score and lives HUD."
+                widths={[640, 1100, 1600]}
+                sizes="(min-width: 1024px) 640px, 100vw"
+                loading="eager"
+              />
+              <span class="experience-shot-tag" aria-hidden="true">Screenshot</span>
+              {
+                callouts.map((callout, index) => (
+                  <span
+                    class:list={["callout", { "is-end": callout.align === "end" }]}
+                    style={`left:${callout.x}%;top:${callout.y}%`}
+                    data-callout={index}
+                    aria-hidden="true"
+                  >
+                    <span class="callout-ring" />
+                    <span class="callout-tag">entity · {callout.label}</span>
+                  </span>
+                ))
+              }
+              <button type="button" class="experience-play button" data-game-play aria-describedby="game-note">
+                <Fragment set:html={play} />
+                Play here
+              </button>
+            </div>
+            <figcaption class="experience-screen-bar">
+              <div class="experience-screen-row experience-desktop-only">
+                <p class="experience-keys" aria-label="Controls">
+                  {
+                    keys.map((entry) => (
+                      <span>
+                        {entry.keys.map((key) => (
+                          <kbd>{key}</kbd>
+                        ))}
+                        {entry.action}
+                      </span>
+                    ))
+                  }
+                </p>
+                <p class="experience-screen-links">
+                  <button type="button" class="experience-stop" data-game-stop>Stop the game</button>
+                  <a href={ev.links.browserGame} target="_blank" rel="noopener">Open the game in a new tab</a>
+                </p>
+              </div>
+              <p class="experience-game-note experience-desktop-only" id="game-note">{ev.sample.browserNote}</p>
+              <p class="experience-game-status" role="status" aria-live="polite" data-game-status></p>
+              <div class="experience-touch-only">
+                <p class="experience-game-note">
+                  Playing needs WebGPU and a keyboard. Open this page on a desktop to play here, or run the desktop build
+                  from a clone of the repository.
+                </p>
+                <InstallCommand command={ev.runSample} />
+              </div>
+            </figcaption>
+          </figure>
+        </div>
+
+        <div class="experience-actions" data-rise style="--d:270">
+          <div class="hero-actions">
+            <a class="button" href={ev.links.quickstart}>
+              Read the quickstart
+              <Icon name="arrow-right" />
+            </a>
+            <InstallCommand command={ev.install} />
+          </div>
+          <p class="experience-status">
+            <span class="experience-status-tag">Research project</span>{" "}
+            Requires the .NET 11 SDK and C# 15. The public API can change without compatibility shims.{" "}
+            <a href={ev.links.installation}>Installation requirements</a>
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 01: the code behind the moving part -->
+  <section class="section" id="code" aria-labelledby="code-title">
+    <div class="frame">
+      <div class="sec-label" data-reveal><span>01</span>The code</div>
+      <div class="system">
+        <div class="system-copy" data-reveal>
+          <h2 class="sec-title" id="code-title">Two structs and a method. That is a whole system.</h2>
+          <p class="sec-lede">
+            Components are unmanaged structs. A system is a static method that takes <code>ref</code> to write and{" "}
+            <code>in</code> to read. Archeoids moves its ships and rocks with <code>[Each]</code> methods of this shape.
+          </p>
+          <ul class="system-facts">
+            <li><span>You write</span>components, systems, and the attributes that group and order them</li>
+            <li><span>The generator writes</span>the query, the access plan, the schedule wiring, and the loop</li>
+            <li><span>Where it goes</span>your own partial types and your namespace</li>
+          </ul>
+        </div>
+        <figure class="window system-window" data-reveal data-story="system">
+          <div class="window-bar">
+            <span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+            <span class="window-file">Motion.cs</span>
+            <span class="window-tag">you write this</span>
+          </div>
+          <div class="code">
+            <Code code={ev.heroCode} lang="csharp" theme={codeTheme} />
+            <span class="code-hot" aria-hidden="true"><span>runs for every matching row</span></span>
+          </div>
+        </figure>
+      </div>
+
+      <div class="experience-gen" data-reveal>
+        <p class="experience-gen-label">
+          <span aria-hidden="true">↓</span>
+          <span>What the generator writes for <code>Move</code> in a Release build</span>
+        </p>
+        <figure class="window experience-gen-window">
+          <div class="window-bar">
+            <span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+            <span class="window-file">Motion.Move.g.cs</span>
+            <span class="window-tag">generated · Vector256</span>
+          </div>
+          <div class="code">
+            <Code code={ev.generatedKernel} lang="csharp" theme={codeTheme} />
+          </div>
+        </figure>
+        <p class="experience-gen-caption">
+          Real generator output for the method above, captured 5 November 2026 from <code>main</code> in a Release
+          build. Namespace prefixes and the <code>Vector128</code> branch are cut for length. The kernel is on{" "}
+          <code>main</code> and not yet in a NuGet release.
+        </p>
+        <dl class="experience-kernel-facts">
+          {
+            kernelFacts.map((fact) => (
+              <div>
+                <dt>{fact.label}</dt>
+                <dd>{fact.text}</dd>
+              </div>
+            ))
+          }
+        </dl>
+        <details class="experience-more">
+          <summary>
+            <span class="experience-more-icon" aria-hidden="true"><Icon name="plus" /></span>
+            <span>Show the generated <code>Run</code> method that calls the kernel</span>
+          </summary>
+          <p>
+            It walks each block of matching rows and hands the block to the kernel. On a CPU without vector
+            acceleration, it calls <code>Move</code> once per row.
+          </p>
+          <figure class="window">
+            <div class="window-bar">
+              <span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+              <span class="window-file">Motion.Move.g.cs</span>
+              <span class="window-tag">generated · Run</span>
+            </div>
+            <div class="code">
+              <Code code={ev.generatedRun} lang="csharp" theme={codeTheme} />
+            </div>
+          </figure>
+        </details>
+      </div>
+
+      <h3 class="experience-sub" data-reveal>Then wire it into a program</h3>
+      <ol class="steps">
+        {
+          steps.map((step, index) => (
+            <li class="step" data-reveal>
+              <span class="step-number" aria-hidden="true">
+                {two(index)}
+              </span>
+              <div class="step-copy">
+                <h4 class="experience-step-title">{step.title}</h4>
+                <p>{step.body}</p>
+              </div>
+              <div class="step-visual">
+                {step.command ? (
+                  <InstallCommand command={step.command} typed />
+                ) : (
+                  <div class="window">
+                    <div class="code">
+                      <Code code={step.code!} lang="csharp" theme={codeTheme} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </li>
+          ))
+        }
+      </ol>
+      <p class="sec-foot" data-reveal>
+        The <a href={ev.links.quickstart}>quickstart</a> puts these pieces into one 39-line program that prints{" "}
+        <code>1</code>.
+      </p>
+
+      <aside class="experience-value" aria-labelledby="value-api" data-reveal>
+        <div class="experience-value-head">
+          <p class="experience-value-label"><span>Value</span>Ergonomic API</p>
+          <h3 class="experience-value-claim" id="value-api">You write the simulation, not the plumbing.</h3>
+        </div>
+        <div class="experience-value-body">
+          <p>
+            The readable version is the fast version. The <code>Motion.Move</code> above is the same method that
+            compiles to the <code>Vector256</code> loop. You do not rewrite it for speed.
+          </p>
+          <p>
+            Mistakes surface in the build. <a href="#build">See three real diagnostics</a> below.
+          </p>
+          <p class="experience-value-limit">
+            <span>The costs</span>
+            Generated types must be <code>partial</code>. Components must be unmanaged. Schedules are declared with
+            attributes.
+          </p>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <TaglineReveal lines={["Your components stay structs.", "Your systems stay methods.", "The generator writes the loop."]} />
+
+  <!-- 02: the measured update -->
+  <section class="section" id="measured" aria-labelledby="measured-title">
+    <div class="frame">
+      <div class="sec-label" data-reveal><span>02</span>Measured</div>
+      <div data-reveal>
+        <h2 class="sec-title sec-title-wide experience-perf-title" id="measured-title">
+          The same method moves 100,000 entities in {fmt(ev.perfFacts.kernel.after)} µs
+        </h2>
+        <p class="sec-lede experience-perf-lede">
+          That is one worker on one AMD Ryzen 9 5950X, measured 5 November 2026. Before the generator compiled{" "}
+          <code>[Each]</code> methods into kernels, the same method took {fmt(ev.perfFacts.kernel.before)} µs. The new
+          time matches Bevy's dense movement update, which measured {fmt(ev.perfFacts.bevyParity.bevy)} µs on the same
+          machine on 2 November. The kernel is on <code>main</code> and not yet in a NuGet release.
+        </p>
+      </div>
+      <div class="perf">
+        <div class="perf-hero" data-reveal>
+          <p class="perf-number">{ev.perfFacts.allocation.value}</p>
+          <p class="perf-caption">
+            managed allocations per warmed, fixed-capacity update, with one worker or four. Spawning and other
+            structural changes can grow storage and allocate.
+          </p>
+          <dl class="perf-minis">
+            <div>
+              <dt>for a <code>Changed&lt;T&gt;</code> scan with nothing changed, at 1,000 or 100,000 entities, 2 November checkpoint</dt>
+              <dd>{ev.perfFacts.unchangedScan.value} µs</dd>
+            </div>
+            <div>
+              <dt>
+                for a tracked write over 100,000 entities, down from {fmt(ev.perfFacts.trackedWrite.before)} µs on 5
+                November. Within about 15% of Bevy's {ev.perfFacts.trackedWrite.bevy} µs.
+              </dt>
+              <dd>{fmt(ev.perfFacts.trackedWrite.after)} µs</dd>
+            </div>
+          </dl>
+        </div>
+        <div class="perf-chart experience-chart" data-reveal data-bars>
+          <p class="perf-chart-title">
+            Moving 100,000 entities on one worker, median µs per update
+            <span>
+              Archevolt's times include schedule dispatch, resource access, lease checks, and query traversal. The
+              handwritten C# loop has no scheduler. Under each case, the date and the fastest and slowest of three
+              processes.
+            </span>
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Case</th>
+                <th scope="col" class="num">Median µs</th>
+              </tr>
+            </thead>
+            <tbody>
+              {
+                ev.movement.map((row) => (
+                  <tr class:list={rowClass(row)}>
+                    <th scope="row">
+                      <span class="bar-label">
+                        {segments(row.name).map(({ code, part }) => (code ? <code>{part}</code> : part))}
+                        {rowTag(row) && <span class="bar-tag">{rowTag(row)}</span>}
+                      </span>
+                      <span class="experience-row-meta">
+                        {row.date} · {fmt(row.range[0])} to {fmt(row.range[1])} µs
+                      </span>
+                      <span class="bar" style={`--w:${((row.us / maxUs) * 100).toFixed(2)}%`}>
+                        <span class="bar-fill" />
+                      </span>
+                    </th>
+                    <td class="num">{fmt(row.us)}</td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <p class="sec-foot" data-reveal>
+        {ev.movementNote}{" "}
+        <a href={ev.links.performance}>Read the full performance report</a>
+      </p>
+
+      <aside class="experience-value" aria-labelledby="value-perf" data-reveal>
+        <div class="experience-value-head">
+          <p class="experience-value-label"><span>Value</span>Performance</p>
+          <h3 class="experience-value-claim" id="value-perf">Speed is a requirement.</h3>
+        </div>
+        <div class="experience-value-body">
+          <p>
+            Every design decision is judged by what it costs in the update loop. Components are unmanaged structs in
+            dense, aligned, structure of arrays tables outside the managed heap, one table per archetype. The generator
+            emits direct calls, with no reflection, boxing, delegates, or lookup by type at run time.
+          </p>
+          <p>
+            Qualifying <code>[Each]</code> methods compile to SIMD kernels. Warmed, fixed-capacity updates allocate
+            zero managed bytes. Parallel execution is opt-in, bounded, and partitionable.
+          </p>
+          <p class="experience-value-limit">
+            <span>Not there yet</span>
+            Write-then-scan and <code>Get&lt;T&gt;</code> still trail Bevy, and some callbacks keep the per-entity
+            loop. They are the next work, listed below with their causes.
+          </p>
+        </div>
+      </aside>
+
+      <div class="experience-work">
+        <div class="experience-work-col" data-reveal>
+          <h3 class="experience-work-title">How a performance change gets in</h3>
+          <ol class="experience-process">
+            {ev.perfProcess.map((rule) => <li>{rule}</li>)}
+          </ol>
+          <p class="experience-work-foot">
+            <a href={ev.links.roundOne}>Read the round one report</a>
+            <a href={ev.links.roundTwo}>Read the round two report</a>
+          </p>
+        </div>
+        <div class="experience-work-col" data-reveal>
+          <h3 class="experience-work-title">The known work</h3>
+          <ul class="experience-gaps">
+            {
+              ev.gaps.map((gap) => (
+                <li>
+                  <p class="experience-gap-case">
+                    {segments(gap.case).map(({ code, part }) => (code ? <code>{part}</code> : part))}
+                  </p>
+                  <p class="experience-gap-numbers">
+                    <span>
+                      Archevolt <b>{gap.now}</b>
+                    </span>
+                    {gap.bevy && (
+                      <span>
+                        Bevy 0.20 <b>{gap.bevy}</b>
+                      </span>
+                    )}
+                  </p>
+                  <p class="experience-gap-note">{gap.note}</p>
+                </li>
+              ))
+            }
+          </ul>
+          <p class="experience-work-foot">
+            Archevolt numbers are from 5 November, with the machine in use. Bevy 0.20 numbers are from 2 November, on
+            the same machine while idle. One machine, not a ranking.{" "}
+            <a href={ev.links.whatRemains}>Read what remains, with each cause</a>
+          </p>
+        </div>
+      </div>
+
+      <div class="experience-rerun" data-reveal>
+        <p>Run the benchmark suite on your own machine.</p>
+        <InstallCommand command={ev.rerunBenchmarks} />
+      </div>
+    </div>
+  </section>
+
+  <!-- 03: the host -->
+  <section class="section" id="host" aria-labelledby="host-title">
+    <div class="frame">
+      <div class="sec-label" data-reveal><span>03</span>The host</div>
+      <div data-reveal>
+        <h2 class="sec-title" id="host-title">One simulation. Two hosts draw it.</h2>
+        <p class="sec-lede">{ev.sample.hosts}</p>
+      </div>
+
+      <div class="experience-hosts" data-reveal>
+        <div class="experience-host">
+          <p class="mono-label">Desktop host</p>
+          <p class="experience-host-name">Silk.NET</p>
+          <ul>
+            <li>Window and keyboard</li>
+            <li>OpenGL renderer</li>
+          </ul>
+          <p class="experience-host-files">Program.cs · VectorRenderer.cs</p>
+        </div>
+        <div class="experience-host">
+          <p class="mono-label">Browser host</p>
+          <p class="experience-host-name">.NET WebAssembly</p>
+          <ul>
+            <li>Keyboard and focus in JavaScript</li>
+            <li>WebGPU renderer, Canvas 2D HUD</li>
+          </ul>
+          <p class="experience-host-files">Program.cs · main.js · renderer.js</p>
+        </div>
+        <div class="experience-host experience-host-shared">
+          <p class="mono-label">Shared source, linked into both</p>
+          <p class="experience-host-name">Game.cs · GameModel.cs · GameSystems.cs · FrameGeometry.cs</p>
+          <p class="experience-host-text">
+            One simulation implementation. Both hosts step it at 120 ticks per second and draw from an extracted frame.
+          </p>
+          <p class="experience-host-package"><span>Archevolt</span>one package, no runtime package dependencies</p>
+        </div>
+      </div>
+
+      <div class="targets" data-reveal data-story="targets">
+        <p class="targets-label">Runs under</p>
+        <p class="targets-row">
+          <span data-target-word>JIT</span><span class="targets-sep">/</span><span data-target-word>Trimmed</span><span class="targets-sep">/</span><span data-target-word>NativeAOT</span>
+        </p>
+        <p class="targets-note">{ev.facts.deployment}</p>
+      </div>
+
+      <div class="experience-field-row" data-reveal>
+        <div class="experience-field-copy">
+          <h3 class="experience-work-title">How a world stores entities</h3>
+          <p>
+            Each archetype, one combination of component types, gets its own table. An entity that gains or loses a
+            component moves to the table that matches. Inside systems, those changes go through <code>Commands</code>{" "}
+            and apply at schedule barriers.
+          </p>
+          <p class="experience-field-caption">
+            Illustration. This canvas runs no Archevolt code. It draws batches of entities moving between four tables.
+          </p>
+        </div>
+        <div class="hero-stage experience-field" aria-hidden="true">
+          <canvas class="hero-field" data-field></canvas>
+          <div class="hero-hud">
+            <span>entities <b data-hud-entities>0</b></span>
+            <span>archetypes <b>4</b></span>
+            <span>tick <b data-hud-tick>000000</b></span>
+          </div>
+        </div>
+      </div>
+
+      <aside class="experience-value" aria-labelledby="value-arch" data-reveal>
+        <div class="experience-value-head">
+          <p class="experience-value-label"><span>Value</span>Flexible architecture</p>
+          <h3 class="experience-value-claim" id="value-arch">A library, not an engine. Your program decides the shape.</h3>
+        </div>
+        <div class="experience-value-body">
+          <p>
+            Archevolt opens no window and reads no input. Modules collect systems and bundles. Schedules declare order
+            with <code>Order</code>, <code>Before</code>, <code>After</code>, stages, and sets, and{" "}
+            <code>BoundSchedule.Bind</code> composes them at run time.
+          </p>
+          <p>
+            Execution is serial by default, with an opt-in bounded worker pool. Resources, messages with independent
+            readers, and change tracking carry data between systems.
+          </p>
+          <p class="experience-value-limit">
+            <span>Where it stops</span>
+            {ev.facts.ownership}
+          </p>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- 04: what the build rejects -->
+  <section class="section" id="build" aria-labelledby="build-title">
+    <div class="frame">
+      <div class="sec-label" data-reveal><span>04</span>The build</div>
+      <div class="experience-build">
+        <div data-reveal>
+          <h2 class="sec-title" id="build-title">The build fails when the fast form is impossible</h2>
+          <p class="sec-lede">
+            The generator reports {ev.diagnostics.total} diagnostics, and {ev.diagnostics.errors} of them are errors.
+            The other one, <code>{ev.diagnostics.warning}</code>, warns that two conflicting systems have no explicit
+            order, and the planner supplies a conservative one.
+          </p>
+        </div>
+        <figure class="window experience-diag-window" data-reveal>
+          <div class="window-bar">
+            <span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+            <span class="window-file">dotnet build</span>
+            <span class="window-tag">three mistakes, real messages</span>
+          </div>
+          <ul class="experience-diag">
+            {
+              diagnosticRows.map((row) => (
+                <li>
+                  <span class="experience-diag-cause">{row.cause}</span>
+                  <code>
+                    <span class="experience-diag-severity">{row.severity} {row.code}</span>{" "}
+                    {row.message}
+                  </code>
+                </li>
+              ))
+            }
+          </ul>
+        </figure>
+      </div>
+
+      <aside class="experience-value" aria-labelledby="value-compile" data-reveal>
+        <div class="experience-value-head">
+          <p class="experience-value-label"><span>Behind all three</span>Compile time</p>
+          <h3 class="experience-value-claim" id="value-compile">The work moves to the compiler.</h3>
+        </div>
+        <div class="experience-value-body">
+          <p>
+            In .NET, an ECS usually trades readability for speed, or speed for readability. Archevolt's Roslyn source
+            generator writes the queries, the access plans, the schedule wiring, and the loops while you build. That is
+            why the API stays plain, why the update loop needs no reflection, and why the runtime can be trimmed or
+            compiled with NativeAOT.
+          </p>
+          <p>
+            A declaration that cannot compile to the generated form fails the build instead of falling back at run time.
+          </p>
+          <p class="experience-value-limit">
+            <span>Read more</span>
+            <a href={ev.links.diagnostics}>Every diagnostic and its fix</a>
+          </p>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- 05: the guides -->
+  <section class="section" id="guides" aria-labelledby="guides-title">
+    <div class="frame">
+      <div class="sec-label" data-reveal><span>05</span>The guides</div>
+      <h2 class="sec-title sec-title-wide" id="guides-title" data-reveal>{guides.length} guides, one per feature</h2>
+      <div class="bento" data-scene>
+        {
+          features.map((feature, index) => (
+            <a class:list={["bento-card", { "is-wide": feature.wide }]} href={feature.href} style={`--d:${index * 85}`}>
+              <div class="bento-visual">
+                {feature.key === "query" && <QueryVisual />}
+                {feature.key === "storage" && <StorageVisual />}
+                {feature.key === "schedule" && <ScheduleVisual />}
+                {feature.key === "exec" && <ExecutionVisual />}
+                {feature.key === "messages" && <MessagesVisual />}
+                {feature.key === "aot" && <AotVisual />}
+              </div>
+              <div class="bento-body">
+                <span class="mono-label">{feature.label}</span>
+                <h3>{feature.title}</h3>
+                <p>{segments(feature.body).map(({ code, part }) => (code ? <code>{part}</code> : part))}</p>
+                <span class="pill">
+                  {feature.cta}
+                  <Icon name="arrow-right" />
+                </span>
+              </div>
+            </a>
+          ))
+        }
+        <a class="bento-card bento-guides" href={ev.links.guides} style={`--d:${features.length * 85}`}>
+          <div class="bento-visual">
+            <div class="viz viz-guides" aria-hidden="true">
+              <div class="vg-list">
+                {
+                  [0, 1].map(() => (
+                    <ul>
+                      {guides.map((guide, index) => (
+                        <li>
+                          <span>{two(index)}</span>
+                          {guide}
+                        </li>
+                      ))}
+                    </ul>
+                  ))
+                }
+              </div>
+            </div>
+          </div>
+          <div class="bento-body">
+            <span class="mono-label">Guides</span>
+            <h3>The full list</h3>
+            <p>Components, modules, queries, schedules, resources, commands, and the rest.</p>
+            <span class="pill">
+              Explore the docs
+              <Icon name="arrow-right" />
+            </span>
+          </div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- 06: FAQ -->
+  <section class="section" id="faq" aria-labelledby="faq-title">
+    <div class="frame faq-layout">
+      <div>
+        <div class="sec-label" data-reveal><span>06</span>FAQ</div>
+        <h2 class="sec-title" id="faq-title" data-reveal>Questions before you start</h2>
+      </div>
+      <div class="faq" data-reveal>
+        {
+          faqs.map((faq, index) => (
+            <details class="faq-item">
+              <summary>
+                <span class="faq-num">{two(index)}</span>
+                <span class="faq-q">{faq.q}</span>
+                <span class="faq-icon">
+                  <Icon name="plus" />
+                </span>
+              </summary>
+              <p>{segments(faq.a).map(({ code, part }) => (code ? <code>{part}</code> : part))}</p>
+            </details>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- Final call to action -->
+  <section class="final" aria-labelledby="final-title">
+    <div class="frame">
+      <div class="final-panel" data-reveal>
+        <svg class="final-bolt" viewBox="0 0 120 220" aria-hidden="true">
+          <path d="M78 4 L18 128 H56 L40 216 L104 84 H64 Z" pathLength="1"></path>
+        </svg>
+        <p class="mono-label">Get started</p>
+        <h2 id="final-title">Run the program that prints 1</h2>
+        <p class="final-lede">
+          The quickstart is one 39-line file with two components, a bundle, a system, a module, a schedule, and a world.
+        </p>
+        <div class="hero-actions">
+          <a class="button" href={ev.links.quickstart}>
+            Read the quickstart
+            <Icon name="arrow-right" />
+          </a>
+          <InstallCommand command={ev.install} />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script type="application/ld+json" set:html={JSON.stringify(faqSchema)} />
+</AltLayout>
+
+<script>
+  /*
+   * Play on click. The poster stays until the visitor asks for the game, so the page never loads the
+   * WebAssembly build unprompted. Narrow and touch screens never see the button (CSS), and this guard
+   * keeps them out if it is reached anyway.
+   */
+  const noPlay = "(max-width: 767px), (hover: none) and (pointer: coarse)";
+
+  const onClick = (event: Event) => {
+    const target = event.target as Element | null;
+    const play = target?.closest<HTMLButtonElement>("[data-game-play]");
+    const stop = target?.closest<HTMLButtonElement>("[data-game-stop]");
+    const screen = (play ?? stop)?.closest<HTMLElement>("[data-game]");
+    const frame = screen?.querySelector<HTMLElement>("[data-game-frame]");
+    const status = screen?.querySelector<HTMLElement>("[data-game-status]");
+    if (!screen || !frame) return;
+
+    if (play) {
+      if (window.matchMedia(noPlay).matches) return;
+      if (!("gpu" in navigator)) {
+        if (status) status.textContent = "This browser does not expose WebGPU, so the game cannot start here. The desktop build draws with OpenGL instead.";
+        return;
+      }
+      const iframe = document.createElement("iframe");
+      iframe.src = screen.dataset.gameSrc ?? "";
+      iframe.title = "Archeoids, the playable browser build";
+      iframe.allow = "fullscreen";
+      iframe.className = "experience-game";
+      frame.append(iframe);
+      screen.dataset.state = "playing";
+      iframe.focus();
+      if (status) status.textContent = "Loading. Click the game to give it the keyboard.";
+      return;
+    }
+
+    frame.querySelector("iframe")?.remove();
+    screen.dataset.state = "poster";
+    if (status) status.textContent = "";
+    screen.querySelector<HTMLElement>("[data-game-play]")?.focus();
+  };
+
+  document.addEventListener("click", onClick);
+</script>

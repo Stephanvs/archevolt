@@ -1,0 +1,126 @@
+---
+/**
+ * "The readable version is the fast version", line by line. Each block names one part of Motion.Move.
+ * Picking it lights that part in your code and the lines it became in the generated file. Content after
+ * the comparison goes in the default slot, inside the same section.
+ */
+import { Code } from "astro:components";
+import data from "blume:data";
+import { linesWith, moveFile } from "../generated";
+import { markLines, segments, source } from "./code";
+
+interface Props {
+  n: string;
+  label: string;
+}
+
+const { n, label } = Astro.props;
+const codeTheme = data.config.codeThemes.dark;
+
+const parts = [
+  {
+    key: "each",
+    token: "[Each]",
+    title: "A loop over blocks",
+    body: "`[Each]` runs the method for every entity with these components. The generated code walks the matching rows one block at a time.",
+    src: linesWith(source.move, "[Each]"),
+    gen: linesWith(moveFile.code, "var cursor = _query0.Begin(run);", "while (cursor.Next(out var block))", "int count = block.Count;"),
+  },
+  {
+    key: "ref",
+    token: "ref Position",
+    title: "Write access",
+    body: "`ref` asks to write. The block hands over the Position column as a writable span.",
+    src: linesWith(source.move, "scoped ref Position"),
+    gen: linesWith(moveFile.code, "Span<Position> _column0;", "_column0 = block.Write<Position>(0);"),
+  },
+  {
+    key: "in",
+    token: "in Velocity",
+    title: "Read access",
+    body: "`in` asks to read. The Velocity column arrives as a read-only span.",
+    src: linesWith(source.move, "scoped in Velocity"),
+    gen: linesWith(moveFile.code, "ReadOnlySpan<Velocity> _column1;", "_column1 = block.Read<Velocity>(1);"),
+  },
+  {
+    key: "formula",
+    token: "position.X + velocity.X",
+    title: "Eight floats at a time",
+    body: "Every float `Move` writes gets the same formula, so a Release build compiles it into a `Vector256` loop. It writes the same bits as your method.",
+    src: linesWith(source.move, "position.X + velocity.X"),
+    gen: linesWith(moveFile.code, "var __load0 = Vector256.LoadUnsafe", "var __load1 = Vector256.LoadUnsafe", "Vector256.StoreUnsafe"),
+  },
+  {
+    key: "call",
+    token: "Move(…)",
+    title: "Your method stays",
+    body: "Without vector hardware, and in Debug builds, the loop calls `Move` once per row. Breakpoints in it are hit.",
+    src: linesWith(source.move, "public static void Move"),
+    gen: linesWith(moveFile.code, "for (int row = 0; row < count; row++)", "Move(ref _column0[row], in _column1[row]);"),
+  },
+];
+
+const initial = parts.find((part) => part.key === "formula")!;
+---
+
+<section class="section v2-anchor" id="speed" aria-labelledby="readable-title">
+  <div class="frame">
+    <div class="sec-label" data-reveal><span>{n}</span>{label}</div>
+    <div data-reveal>
+      <h2 class="sec-title sec-title-wide" id="readable-title">The readable version is the fast version</h2>
+      <p class="sec-lede">
+        You do not rewrite <code>Motion.Move</code> for speed. Select a part of it to see what the generator wrote for
+        that part.
+      </p>
+    </div>
+
+    <div class="v2-lines" data-compare data-reveal>
+      <div class="v2-lines-left">
+        <figure class="window">
+          <div class="window-bar">
+            <span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+            <span class="window-file">Motion.cs</span>
+            <span class="window-tag">you write</span>
+          </div>
+          <div class="code v2-lit-code v2-wrap" data-target="src">
+            <Code code={source.move} lang="csharp" theme={codeTheme} transformers={[markLines(initial.src)]} />
+          </div>
+        </figure>
+        <ul class="v2-parts" role="list" aria-label="Parts of Motion.Move">
+          {
+            parts.map((part) => (
+              <li>
+                <button
+                  type="button"
+                  class="v2-part"
+                  data-pick={part.key}
+                  data-lit={JSON.stringify({ src: part.src, gen: part.gen })}
+                  aria-pressed={String(part.key === initial.key)}
+                >
+                  <code class="v2-part-token">{part.token}</code>
+                  <span class="v2-part-title">{part.title}</span>
+                  <span class="v2-part-body">
+                    {segments(part.body).map(({ code, part: text }) => (code ? <code>{text}</code> : text))}
+                  </span>
+                </button>
+              </li>
+            ))
+          }
+        </ul>
+      </div>
+
+      <figure class="window v2-gen v2-lines-gen">
+        <div class="window-bar">
+          <span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+          <span class="window-file">{moveFile.name}</span>
+          <span class="window-tag">generated</span>
+        </div>
+        <div class="code v2-scroll v2-lit-code" data-target="gen" data-scroll tabindex="0" aria-label={`${moveFile.name}, generated code`}>
+          <Code code={moveFile.code} lang="csharp" theme={codeTheme} transformers={[markLines(initial.gen)]} />
+        </div>
+      </figure>
+    </div>
+
+    <slot />
+  </div>
+</section>
