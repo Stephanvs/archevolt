@@ -17,7 +17,11 @@ const { n, sub = false, heading = "Speed is a requirement", gaps = false } = Ast
 const Wrapper = sub ? "div" : "section";
 const Heading = sub ? "h3" : "h2";
 
-const maxUs = Math.max(...ev.movement.map((row) => row.us));
+// The current numbers only. The chart compares Archevolt today with the references, not with its own history.
+const rows = ev.movement
+  .filter((row) => !row.name.includes("before"))
+  .map((row) => ({ ...row, name: row.name.replace(", SIMD kernel", "") }));
+const maxUs = Math.max(...rows.map((row) => row.us));
 const tag = (row: ev.MovementRow) => (row.name.includes("handwritten") ? "no scheduler" : undefined);
 const nsPerEntity = (value: number) => (value / 100).toFixed(3);
 
@@ -46,8 +50,7 @@ const known = [
       <div class="perf-hero" data-reveal>
         <p class="perf-number v2-perf-number">{us(ev.perfFacts.kernel.after)}<small>µs</small></p>
         <p class="perf-caption">
-          to move 100,000 entities on one worker. The same <code>[Each]</code> method took {us(ev.perfFacts.kernel.before)} µs
-          before the generator emitted SIMD kernels.
+          to move 100,000 entities on one worker. Bevy 0.20 takes {us(ev.perfFacts.bevyParity.bevy)} µs on the same machine.
         </p>
         <dl class="perf-minis">
           <div>
@@ -75,7 +78,7 @@ const known = [
           </thead>
           <tbody>
             {
-              ev.movement.map((row) => (
+              rows.map((row) => (
                 <tr class:list={{ "is-baseline": row.kind !== "archevolt" }}>
                   <th scope="row">
                     <span class="bar-label">

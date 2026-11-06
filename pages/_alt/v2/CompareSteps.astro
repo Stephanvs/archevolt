@@ -25,7 +25,7 @@ const steps = [
     key: "write",
     title: "You write",
     short: "A method for one entity",
-    body: "A static method over two components. It reads like the update for a single entity.",
+    body: "This is all you write: a plain C# method that updates one entity.",
     file: "Motion.cs",
     tag: "you write",
     code: source.move,
@@ -55,15 +55,14 @@ const steps = [
 ];
 
 const kernelRow = ev.movement.find((row) => row.kind === "archevolt" && row.name.includes("SIMD"))!;
-const beforeRow = ev.movement.find((row) => row.kind === "archevolt" && row.name.includes("before"))!;
+const byName = (start: string) => ev.movement.find((row) => row.name.startsWith(start))!.us;
 const bars = [
-  { name: "`Motion.Move`, before kernels", us: beforeRow.us },
-  { name: "C# handwritten loop", us: ev.movement.find((row) => row.name.startsWith("C#"))!.us },
+  { name: "Rust handwritten loop", us: byName("Rust") },
+  { name: "Archevolt, `Motion.Move`", us: kernelRow.us, hot: true },
   { name: "Bevy 0.20 `for_each`", us: ev.perfFacts.bevyParity.bevy },
-  { name: "`Motion.Move`, with the kernel", us: kernelRow.us, hot: true },
+  { name: "C# handwritten loop", us: byName("C#") },
 ];
 const maxUs = Math.max(...bars.map((bar) => bar.us));
-const speedup = (beforeRow.us / kernelRow.us).toFixed(1);
 ---
 
 <section class="section v2-anchor" id="generated" aria-labelledby="generated-title">
@@ -134,11 +133,11 @@ const speedup = (beforeRow.us / kernelRow.us).toFixed(1);
               <>
                 <div class="v2-step-copy">
                   <p class="v2-step-big">
-                    {speedup}× <span>faster, same method</span>
+                    {us(kernelRow.us)} µs <span>to move 100,000 entities on one worker</span>
                   </p>
                   <p>
-                    Moving 100,000 entities on one worker. Archevolt's time includes schedule dispatch and query
-                    traversal. The handwritten loop has neither.
+                    Archevolt's time includes schedule dispatch and query traversal. The handwritten loops have
+                    neither.
                   </p>
                   <a class="v2-link" href={ev.links.performance}>
                     Read the performance report
