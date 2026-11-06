@@ -1,0 +1,87 @@
+---
+/**
+ * Layout for the landing page alternatives under /alt. It wraps Blume's PageLayout like pages/index.astro,
+ * keeps the alternatives out of search, adds a review bar, and mounts the shared home motion.
+ */
+import "@fontsource-variable/geist";
+import "@fontsource-variable/geist-mono";
+import "../_home/home.css";
+import "./alt.css";
+import PageLayout from "blume/components/layout/PageLayout.astro";
+import data from "blume:data";
+import { alternatives } from "./alternatives";
+
+interface Props {
+  /** The alternative's slug in alternatives.ts, or "index" for the overview. */
+  slug: string;
+  title: string;
+  description: string;
+}
+
+const { slug, title, description } = Astro.props;
+const { config } = data;
+
+const index = alternatives.findIndex((alternative) => alternative.slug === slug);
+const current = index >= 0 ? alternatives[index] : undefined;
+const previous = current ? alternatives[(index - 1 + alternatives.length) % alternatives.length] : undefined;
+const next = current ? alternatives[(index + 1) % alternatives.length] : undefined;
+---
+
+<PageLayout
+  site={{ title: config.title, description: config.description }}
+  logo={config.logo}
+  banner={config.banner}
+  analytics={config.analytics}
+  navigation={data.navigation}
+  favicon={config.favicon}
+  appleIcon={config.appleIcon}
+  fontCssVars={data.fontCssVars}
+  themeMode={config.theme.mode}
+  searchEnabled={config.search.enabled}
+  siteUrl={config.site}
+  ogEnabled={config.og.enabled}
+  structuredDataEnabled={config.structuredData}
+  lastModified="2026-11-05"
+  page={{ title, description }}
+  noindex={true}
+>
+  <div class="home" data-home>
+    <nav class="alt-review" aria-label="Landing page alternatives">
+      <div class="frame alt-review-inner">
+        <p class="alt-review-where">
+          <span class="alt-review-tag">Review build</span>
+          {
+            current ? (
+              <span>
+                {index + 1} of {alternatives.length} · <b>{current.name}</b> · {current.origin}
+              </span>
+            ) : (
+              <span>Landing page alternatives</span>
+            )
+          }
+        </p>
+        <p class="alt-review-links">
+          {previous && <a href={`/alt/${previous.slug}`}>← {previous.name}</a>}
+          <a href="/alt">All alternatives</a>
+          <a href="/">Current page</a>
+          {next && <a href={`/alt/${next.slug}`}>{next.name} →</a>}
+        </p>
+      </div>
+    </nav>
+    <slot />
+  </div>
+</PageLayout>
+
+<script>
+  import { mountHome } from "../_home/home";
+
+  let teardown: (() => void) | undefined;
+  document.addEventListener("astro:page-load", () => {
+    teardown?.();
+    teardown = mountHome();
+  });
+  document.addEventListener("astro:before-swap", () => {
+    teardown?.();
+    teardown = undefined;
+  });
+</script>

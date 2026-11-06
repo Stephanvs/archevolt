@@ -1,0 +1,665 @@
+/*
+ * judge-a: Judge A's structure. A hero and three value chapters.
+ * Every selector is scoped under .home .judge-a- and builds on pages/_home/home.css.
+ */
+
+/* Anchored chapters clear the sticky site header */
+
+.home .judge-a-chapter {
+  scroll-margin-top: 72px;
+}
+
+/* Shared pieces */
+
+.home .judge-a-block {
+  margin-top: 64px;
+}
+
+@media (min-width: 1024px) {
+  .home .judge-a-block {
+    margin-top: 80px;
+  }
+}
+
+.home .judge-a-h3 {
+  margin: 0;
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.home .judge-a-p {
+  max-width: 600px;
+  margin: 12px 0 0;
+  color: var(--h-muted);
+  font-size: 1rem;
+  line-height: 1.5rem;
+  text-wrap: pretty;
+}
+
+.home .judge-a-caption {
+  margin: 12px 0 0;
+  color: var(--h-muted);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  text-wrap: pretty;
+}
+
+.home .judge-a-tag {
+  margin-right: 8px;
+  color: var(--h-brand);
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.home .judge-a-textlink,
+.home .judge-a-caption a,
+.home .judge-a-links a,
+.home .judge-a-facts a {
+  color: var(--h-fg);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--h-brand);
+  text-underline-offset: 4px;
+}
+
+.home .judge-a-textlink:hover,
+.home .judge-a-caption a:hover,
+.home .judge-a-links a:hover,
+.home .judge-a-facts a:hover {
+  color: var(--h-brand);
+}
+
+.home .judge-a-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 20px 0 0;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+/* Hero */
+
+.home .judge-a-status {
+  display: grid;
+  margin: 40px 0 0;
+  border-block: 1px solid var(--h-line);
+}
+
+.home .judge-a-status > div {
+  display: grid;
+  gap: 4px;
+  padding: 12px 0;
+}
+
+.home .judge-a-status > div + div {
+  border-top: 1px solid var(--h-line);
+}
+
+@media (min-width: 640px) {
+  .home .judge-a-status > div {
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 16px;
+  }
+}
+
+.home .judge-a-status dt {
+  color: var(--h-brand);
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.home .judge-a-status dd {
+  margin: 0;
+  color: var(--h-muted);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  text-wrap: pretty;
+}
+
+.home .judge-a-values {
+  margin-top: 48px;
+}
+
+.home .judge-a-values ol {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border-block: 1px solid var(--h-line);
+  list-style: none;
+}
+
+.home .judge-a-values li + li {
+  border-top: 1px solid var(--h-line);
+}
+
+@media (min-width: 768px) {
+  .home .judge-a-values ol {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .home .judge-a-values li + li {
+    border-top: 0;
+    border-left: 1px solid var(--h-line);
+  }
+}
+
+.home .judge-a-values a {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  height: 100%;
+  padding: 20px 16px;
+  color: var(--h-fg);
+  text-decoration: none;
+  transition: background-color 300ms var(--ease);
+}
+
+.home .judge-a-values a:hover {
+  background: var(--h-line);
+}
+
+.home .judge-a-values-n {
+  color: var(--h-brand);
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1.5rem;
+}
+
+.home .judge-a-values-label {
+  font-size: 1.125rem;
+  line-height: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.home .judge-a-values a .icon {
+  align-self: center;
+  color: var(--h-muted);
+  transform: rotate(90deg);
+  transition:
+    transform 500ms var(--ease),
+    color 300ms var(--ease);
+}
+
+.home .judge-a-values a:hover .icon {
+  color: var(--h-brand);
+  transform: rotate(90deg) translateX(3px);
+}
+
+.home .judge-a-values-proof {
+  grid-column: 2 / 4;
+  color: var(--h-muted);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  text-wrap: pretty;
+}
+
+/* 01: optional depth, in the FAQ row style */
+
+.home .judge-a-pair {
+  margin-top: 64px;
+}
+
+@media (min-width: 640px) and (max-width: 1023px) {
+  .home .judge-a-pair .bento-card {
+    grid-column: span 2;
+  }
+}
+
+.home .judge-a-more {
+  margin-top: 64px;
+  border-bottom: 1px solid var(--h-line);
+}
+
+.home .judge-a-more .faq-item summary {
+  grid-template-columns: auto minmax(0, 1fr) 24px;
+}
+
+.home .judge-a-more-kicker {
+  color: var(--h-brand);
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.home .judge-a-more-body {
+  padding: 8px 0 40px;
+}
+
+.home .judge-a-split {
+  display: grid;
+  gap: 40px;
+}
+
+@media (min-width: 1024px) {
+  .home .judge-a-split {
+    grid-template-columns: minmax(0, 6fr) minmax(0, 6fr);
+    gap: 48px;
+    align-items: start;
+  }
+}
+
+.home .judge-a-split > * {
+  min-width: 0;
+}
+
+.home .judge-a-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.home .judge-a-table th,
+.home .judge-a-table td {
+  padding: 12px 12px 12px 0;
+  border-top: 1px solid var(--h-line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.home .judge-a-table thead th {
+  border-top: 0;
+  color: var(--h-fg);
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.home .judge-a-table td {
+  color: var(--h-muted);
+}
+
+.home .judge-a-buildline {
+  margin: 0;
+  padding: 16px 24px;
+  border-top: 1px solid var(--i-line);
+  background: var(--i-deep);
+  color: var(--i-amber);
+  font-family: var(--h-mono);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+}
+
+.home .judge-a-buildline code {
+  padding: 0;
+  background: none;
+  color: inherit;
+  font-size: inherit;
+}
+
+.home .judge-a-asks {
+  margin-top: 24px;
+}
+
+.home .judge-a-more .steps {
+  margin-top: 8px;
+}
+
+.home .judge-a-more .step:first-child {
+  border-top: 0;
+}
+
+/* 02: the kernel result */
+
+.home .judge-a-kernel {
+  display: grid;
+  gap: 48px;
+  margin-top: 64px;
+}
+
+@media (min-width: 1024px) {
+  .home .judge-a-kernel {
+    grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
+    gap: 64px;
+    align-items: start;
+    margin-top: 80px;
+  }
+}
+
+.home .judge-a-kernel > * {
+  min-width: 0;
+}
+
+.home .judge-a-dated {
+  margin: 0 0 16px;
+  color: var(--h-brand);
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.home .judge-a-unit {
+  margin-left: 0.12em;
+  color: var(--h-muted);
+  font-size: 0.3em;
+  letter-spacing: 0;
+}
+
+.home .judge-a-parity {
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid var(--h-line);
+}
+
+.home .judge-a-parity-claim {
+  margin: 0;
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.home .judge-a-parity .judge-a-caption {
+  margin-top: 12px;
+}
+
+.home .judge-a-parity-times {
+  margin-top: 16px;
+}
+
+.home .judge-a-gap-times dt code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--h-line);
+}
+
+.home .judge-a-kernel-intro {
+  margin: 0 0 16px;
+  color: var(--h-muted);
+  font-size: 1rem;
+  line-height: 1.5rem;
+  text-wrap: pretty;
+}
+
+.home .judge-a-kernel-code .code pre.astro-code {
+  padding: 20px 16px;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+}
+
+.home .judge-a-scope {
+  margin: 24px 0 0;
+}
+
+.home .judge-a-scope li {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+/* 02: the movement chart */
+
+.home .judge-a-chart {
+  margin-top: 64px;
+}
+
+@media (min-width: 1024px) {
+  .home .judge-a-chart {
+    margin-top: 80px;
+  }
+}
+
+.home .judge-a-chart .judge-a-row-reference .bar-fill {
+  background: var(--f-2);
+}
+
+.home .judge-a-chart tr:nth-child(6) .bar-fill {
+  transition-delay: 400ms;
+}
+
+.home .judge-a-chart .bar-tag {
+  white-space: nowrap;
+}
+
+.home .judge-a-chart-note {
+  margin: 16px 0 0;
+  color: var(--h-muted);
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  text-wrap: pretty;
+}
+
+/* 02: process and costs */
+
+.home .judge-a-proc {
+  display: grid;
+  gap: 64px;
+}
+
+@media (min-width: 1024px) {
+  .home .judge-a-proc {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 64px;
+    align-items: start;
+  }
+}
+
+.home .judge-a-proc > * {
+  min-width: 0;
+}
+
+.home .judge-a-gate {
+  margin: 24px 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: judge-a-gate;
+}
+
+.home .judge-a-gate li {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid var(--h-line);
+  color: var(--h-muted);
+  font-size: 1rem;
+  line-height: 1.5rem;
+  counter-increment: judge-a-gate;
+}
+
+.home .judge-a-gate li::before {
+  content: counter(judge-a-gate, decimal-leading-zero);
+  color: var(--h-brand);
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1.5rem;
+}
+
+.home .judge-a-rerun {
+  margin: 24px 0 12px;
+  color: var(--h-muted);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.home .judge-a-minis {
+  margin-top: 24px;
+}
+
+/* 02: the known work */
+
+.home .judge-a-gaps {
+  display: grid;
+  gap: 16px;
+  margin: 32px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 1024px) {
+  .home .judge-a-gaps {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.home .judge-a-gaps > li {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid var(--h-line);
+  border-radius: 16px;
+  background: var(--h-surface);
+}
+
+.home .judge-a-gap-case {
+  margin: 0;
+  color: var(--h-fg);
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 600;
+  text-wrap: pretty;
+}
+
+.home .judge-a-gap-times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 32px;
+  margin: 0;
+}
+
+.home .judge-a-gap-times > div {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+}
+
+.home .judge-a-gap-times dt {
+  color: var(--h-muted);
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  letter-spacing: 0.04em;
+}
+
+.home .judge-a-gap-times dd {
+  margin: 0;
+  font-family: var(--h-mono);
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.home .judge-a-gap-note {
+  margin: 0;
+  color: var(--h-muted);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  text-wrap: pretty;
+}
+
+/* 03: sample, fit facts, questions */
+
+.home .judge-a-revision {
+  display: grid;
+  gap: 4px;
+  padding: 12px 16px;
+  border: 1px solid var(--i-line);
+  border-radius: 8px;
+  background: var(--i-panel);
+}
+
+.home .arcade-copy .judge-a-revision {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.home .judge-a-revision span {
+  color: var(--i-amber);
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.home .arcade-copy .judge-a-desktop {
+  margin-bottom: -12px;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.home .judge-a-facts {
+  display: grid;
+  gap: 0 32px;
+  margin: 24px 0 0;
+}
+
+@media (min-width: 768px) {
+  .home .judge-a-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.home .judge-a-facts > div {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  padding: 16px 0;
+  border-top: 1px solid var(--h-line);
+}
+
+.home .judge-a-facts dt {
+  color: var(--h-fg);
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.home .judge-a-facts dd {
+  margin: 0;
+  color: var(--h-muted);
+  font-size: 1rem;
+  line-height: 1.5rem;
+  text-wrap: pretty;
+}
+
+.home .judge-a-facts dd code {
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: var(--h-line);
+}
+
+.home .judge-a-questions {
+  margin-top: 0;
+}
+
+@media (min-width: 1024px) {
+  .home .judge-a-questions .judge-a-h3 {
+    max-width: 320px;
+  }
+}
+
+/* Final panel */
+
+.home .judge-a-final-note {
+  position: relative;
+  max-width: 560px;
+  margin: 16px 0 0;
+  color: var(--i-text);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  text-wrap: pretty;
+}

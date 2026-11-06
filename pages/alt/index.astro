@@ -1,0 +1,55 @@
+---
+import AltLayout from "../_alt/AltLayout.astro";
+import { alternatives } from "../_alt/alternatives";
+import Icon from "../_home/Icon.astro";
+---
+
+<AltLayout
+  slug="index"
+  title="Landing page alternatives"
+  description="Six complete alternatives to the Archevolt landing page, built for review."
+>
+  <section class="alt-index" aria-labelledby="alt-index-title">
+    <div class="frame">
+      <p class="mono-label">Review build · not for publication</p>
+      <h1 class="sec-title sec-title-wide" id="alt-index-title">Six ways to tell the same story</h1>
+      <p class="sec-lede">
+        Every alternative keeps the current design and argues from the same three values: an ergonomic API,
+        performance, and a flexible architecture. They differ in structure and copy. Each page is complete,
+        and the review bar at the top moves between them.
+      </p>
+      <ol class="alt-index-list">
+        {
+          alternatives.map((alternative, index) => (
+            <li>
+              <a class="alt-index-card" href={`/alt/${alternative.slug}`}>
+                <span class="mono-label">
+                  {String(index + 1).padStart(2, "0")} · {alternative.origin}
+                </span>
+                <h2>{alternative.name}</h2>
+                <p class="alt-index-shape">{alternative.shape}</p>
+                <p>{alternative.summary}</p>
+                <span class="pill">
+                  Open
+                  <Icon name="arrow-right" />
+                </span>
+              </a>
+            </li>
+          ))
+        }
+      </ol>
+      <ul class="alt-index-notes">
+        <li>
+          Judge A's and judge B's structures refine the value spine and the question ladder. They are variations,
+          not new shapes. "One argument" is the new shape, built from your note that the detail should come from
+          the values.
+        </li>
+        <li>
+          Numbers come from one machine. The SIMD kernel figures were measured on 5 November on main, and the kernel
+          is not yet in a NuGet release.
+        </li>
+        <li>The <a href="/">current page</a> is unchanged. These pages are marked noindex.</li>
+      </ul>
+    </div>
+  </section>
+</AltLayout>

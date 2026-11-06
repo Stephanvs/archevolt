@@ -1,0 +1,495 @@
+/*
+ * The value spine alternative (/alt/spine). Builds on home.css; every selector is scoped under .home .spine-.
+ * Cards and code stay dark islands in both themes.
+ */
+
+/* Shared pieces */
+
+.home .spine-textlink {
+  color: var(--h-fg);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--h-brand);
+  text-underline-offset: 4px;
+  transition: color 300ms var(--ease);
+}
+
+.home .spine-textlink:hover {
+  color: var(--h-brand);
+}
+
+.home .spine-block {
+  margin-top: 64px;
+  padding-top: 48px;
+  border-top: 1px solid var(--h-line);
+}
+
+@media (min-width: 1024px) {
+  .home .spine-block {
+    margin-top: 96px;
+    padding-top: 64px;
+  }
+}
+
+.home .spine-h3 {
+  margin: 0;
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+@media (min-width: 1024px) {
+  .home .spine-h3 {
+    font-size: 1.875rem;
+    line-height: 2.25rem;
+  }
+}
+
+.home .spine-p {
+  max-width: 560px;
+  margin: 16px 0 0;
+  color: var(--h-muted);
+  font-size: 1rem;
+  line-height: 1.5rem;
+  text-wrap: pretty;
+}
+
+.home .spine-small {
+  margin: 0;
+  color: var(--h-muted);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  text-wrap: pretty;
+}
+
+.home .spine-lede.sec-lede {
+  margin: -24px 0 48px;
+}
+
+@media (min-width: 1024px) {
+  .home .spine-lede.sec-lede {
+    margin: -40px 0 64px;
+  }
+}
+
+/* Fact text in a .system-facts row. A block wrapper keeps inline code on the line, since the row is a grid. */
+.home .spine-fact {
+  text-wrap: pretty;
+}
+
+.home .spine-fact code {
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: var(--h-line);
+}
+
+/* A system row with the visual on the left on wide screens; the copy still comes first on phones. */
+@media (min-width: 1024px) {
+  .home .spine-flip.system {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  }
+
+  .home .spine-flip.system > :first-child {
+    order: 2;
+  }
+}
+
+/* Hero */
+
+.home .spine-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  max-width: 560px;
+  margin: 24px 0 0;
+  color: var(--h-muted);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  text-wrap: pretty;
+}
+
+.home .spine-status-tag {
+  padding: 0 6px;
+  border: 1px solid var(--h-line-strong);
+  border-radius: 4px;
+  color: var(--h-fg);
+  font-family: var(--h-mono);
+  font-size: 0.6875rem;
+  line-height: 1.125rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.home .spine-field-label {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  color: var(--h-muted);
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.home .spine-routes {
+  display: grid;
+  margin-top: 48px;
+  border-block: 1px solid var(--h-line);
+}
+
+@media (min-width: 768px) {
+  .home .spine-routes {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.home .spine-route {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  padding: 16px 0;
+  color: var(--h-fg);
+  text-decoration: none;
+}
+
+.home .spine-route + .spine-route {
+  border-top: 1px solid var(--h-line);
+}
+
+@media (min-width: 768px) {
+  .home .spine-route {
+    padding: 20px 24px;
+  }
+
+  .home .spine-route:first-child {
+    padding-left: 0;
+  }
+
+  .home .spine-route + .spine-route {
+    border-top: 0;
+    border-left: 1px solid var(--h-line);
+  }
+}
+
+.home .spine-route-num {
+  color: var(--h-brand);
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  letter-spacing: 0.14em;
+}
+
+.home .spine-route-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  transition: color 300ms var(--ease);
+}
+
+.home .spine-route-name .icon {
+  color: var(--h-brand);
+  transform: rotate(90deg);
+  transition: transform 500ms var(--ease);
+}
+
+.home .spine-route:hover .spine-route-name {
+  color: var(--h-brand);
+}
+
+.home .spine-route:hover .spine-route-name .icon {
+  transform: rotate(90deg) translateX(4px);
+}
+
+.home .spine-route-desc {
+  color: var(--h-muted);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  text-wrap: pretty;
+}
+
+/* Inset proofs: the home bento, resized to the cards each chapter holds */
+
+.home .spine-insets {
+  margin-top: 48px;
+}
+
+@media (min-width: 640px) and (max-width: 1023px) {
+  .home .spine-insets-2 .bento-card.is-wide {
+    grid-column: span 1;
+  }
+
+  .home .spine-insets-3 .bento-card:last-child {
+    grid-column: span 2;
+  }
+}
+
+.home .spine-insets-1.bento {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Build output */
+
+.home .spine-diag pre.astro-code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* 02 Performance */
+
+.home .spine-tag {
+  margin: 0 0 16px;
+  color: var(--h-muted);
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  letter-spacing: 0.04em;
+}
+
+.home .spine-unit {
+  font-size: 0.3em;
+  letter-spacing: 0;
+}
+
+.home .spine-chart .spine-is-ref .bar-fill {
+  background: color-mix(in oklab, var(--h-fg) 32%, transparent);
+}
+
+.home .spine-chart .spine-is-before .bar-fill {
+  background: color-mix(in oklab, var(--h-brand) 38%, transparent);
+}
+
+.home .spine-chart tbody tr:nth-child(6) .bar-fill {
+  transition-delay: 400ms;
+}
+
+.home .spine-range {
+  display: block;
+  margin-top: 2px;
+  color: var(--h-muted);
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.home .spine-split {
+  display: grid;
+  gap: 32px;
+}
+
+@media (min-width: 1024px) {
+  .home .spine-split {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: 64px;
+    align-items: start;
+  }
+}
+
+.home .spine-actions {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  margin-top: 32px;
+}
+
+.home .spine-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 24px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.home .spine-rules {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: spine-rule;
+  border-bottom: 1px solid var(--h-line);
+}
+
+.home .spine-rules li {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 16px;
+  padding: 16px 0;
+  border-top: 1px solid var(--h-line);
+  font-size: 1rem;
+  line-height: 1.5rem;
+  text-wrap: pretty;
+  counter-increment: spine-rule;
+}
+
+.home .spine-rules li::before {
+  content: counter(spine-rule, decimal-leading-zero);
+  color: var(--h-brand);
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1.5rem;
+}
+
+.home .spine-costs-title {
+  color: var(--h-fg);
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.home .spine-costs {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home .spine-costs li {
+  padding: 12px 0;
+  border-top: 1px solid var(--h-line);
+  color: var(--h-muted);
+  font-size: 1rem;
+  line-height: 1.5rem;
+  text-wrap: pretty;
+}
+
+.home .spine-costs li code {
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: var(--h-line);
+}
+
+.home .spine-gaps {
+  display: grid;
+  gap: 16px;
+  margin: 40px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 768px) {
+  .home .spine-gaps {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.home .spine-gap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid var(--i-cell);
+  border-radius: 16px;
+  background: var(--i-panel);
+  color: var(--i-bright);
+}
+
+.home .spine-gap h4 {
+  margin: 0;
+  font-size: 1.0625rem;
+  line-height: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.home .spine-gap h4 code {
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: var(--i-cell);
+}
+
+.home .spine-gap p {
+  margin: 0;
+  color: var(--i-text);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  text-wrap: pretty;
+}
+
+.home .spine-gap .spine-gap-nums {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+}
+
+.home .spine-gap-nums b {
+  color: var(--i-amber);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.home .spine-gap-nums span + span b {
+  color: var(--i-bright);
+}
+
+/* 03 Architecture */
+
+.home .spine-arcade .spine-h3 {
+  color: var(--i-bright);
+}
+
+.home .spine-note {
+  display: block;
+  margin-top: -12px;
+  color: var(--i-text);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.home .spine-fit {
+  display: grid;
+  gap: 48px;
+}
+
+@media (min-width: 1024px) {
+  .home .spine-fit {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 64px;
+  }
+}
+
+.home .spine-fit .system-facts {
+  margin-top: 24px;
+}
+
+.home .spine-faq.faq {
+  margin-top: 32px;
+}
+
+@media (min-width: 1024px) {
+  .home .spine-faq.faq {
+    margin-top: 0;
+  }
+}
+
+.home .spine-faq-body {
+  display: grid;
+  gap: 16px;
+  padding: 0 0 24px;
+}
+
+@media (min-width: 768px) {
+  .home .spine-faq-body {
+    padding-left: 56px;
+  }
+}
+
+.home .spine-faq-body .spine-small code {
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: var(--h-line);
+}
