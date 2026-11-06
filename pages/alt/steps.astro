@@ -1,0 +1,29 @@
+---
+/**
+ * Round 2, "Four steps": the shortest page. The comparison walks from Motion.Move to the generated loop, the
+ * kernel, and the measured result, so the numbers live in its last step. Then setup and headless.
+ */
+import AltLayout from "../_alt/AltLayout.astro";
+import "../_alt/v2/v2.css";
+import CompareSteps from "../_alt/v2/CompareSteps.astro";
+import Final from "../_alt/v2/Final.astro";
+import Headless from "../_alt/v2/Headless.astro";
+import Hero from "../_alt/v2/Hero.astro";
+import Wire from "../_alt/v2/Wire.astro";
+
+const title = "Archevolt: build fast simulations in plain C#";
+const description =
+  "Archevolt is an entity component system for .NET games and simulations. Write components as structs and systems as static methods. A source generator compiles them into direct calls at build time.";
+---
+
+<AltLayout slug="steps" title={title} description={description}>
+  <Hero />
+
+  <CompareSteps n="01" />
+
+  <Wire n="02" />
+
+  <Headless n="03" />
+
+  <Final />
+</AltLayout>

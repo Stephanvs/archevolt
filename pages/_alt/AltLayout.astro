@@ -21,10 +21,11 @@ interface Props {
 const { slug, title, description } = Astro.props;
 const { config } = data;
 
-const index = alternatives.findIndex((alternative) => alternative.slug === slug);
-const current = index >= 0 ? alternatives[index] : undefined;
-const previous = current ? alternatives[(index - 1 + alternatives.length) % alternatives.length] : undefined;
-const next = current ? alternatives[(index + 1) % alternatives.length] : undefined;
+const current = alternatives.find((alternative) => alternative.slug === slug);
+const round = current ? alternatives.filter((alternative) => alternative.round === current.round) : [];
+const index = current ? round.indexOf(current) : -1;
+const previous = current ? round[(index - 1 + round.length) % round.length] : undefined;
+const next = current ? round[(index + 1) % round.length] : undefined;
 ---
 
 <PageLayout
@@ -41,7 +42,7 @@ const next = current ? alternatives[(index + 1) % alternatives.length] : undefin
   siteUrl={config.site}
   ogEnabled={config.og.enabled}
   structuredDataEnabled={config.structuredData}
-  lastModified="2026-11-05"
+  lastModified="2026-11-06"
   page={{ title, description }}
   noindex={true}
 >
@@ -53,7 +54,7 @@ const next = current ? alternatives[(index + 1) % alternatives.length] : undefin
           {
             current ? (
               <span>
-                {index + 1} of {alternatives.length} · <b>{current.name}</b> · {current.origin}
+                Round {current.round} · {index + 1} of {round.length} · <b>{current.name}</b> · {current.origin}
               </span>
             ) : (
               <span>Landing page alternatives</span>
@@ -74,11 +75,17 @@ const next = current ? alternatives[(index + 1) % alternatives.length] : undefin
 
 <script>
   import { mountHome } from "../_home/home";
+  import { mountCompare } from "./v2/compare";
 
   let teardown: (() => void) | undefined;
   document.addEventListener("astro:page-load", () => {
     teardown?.();
-    teardown = mountHome();
+    const home = mountHome();
+    const compare = mountCompare();
+    teardown = () => {
+      home();
+      compare();
+    };
   });
   document.addEventListener("astro:before-swap", () => {
     teardown?.();

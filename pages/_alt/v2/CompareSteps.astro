@@ -1,0 +1,172 @@
+---
+/**
+ * "The readable version is the fast version", as four steps: the method you write, the loop and the kernel
+ * the generator writes for it, and the measured result. The steps are tabs.
+ */
+import { Code } from "astro:components";
+import data from "blume:data";
+import Icon from "../../_home/Icon.astro";
+import * as ev from "../evidence";
+import { linesWith, member, moveFile } from "../generated";
+import { markLines, segments, source, us } from "./code";
+
+interface Props {
+  n: string;
+}
+
+const { n } = Astro.props;
+const codeTheme = data.config.codeThemes.dark;
+
+const run = member(moveFile.code, "protected override void Run(SystemRun run)");
+const kernel = member(moveFile.code, "static void __Kernel(");
+
+const steps = [
+  {
+    key: "write",
+    title: "You write",
+    short: "A method for one entity",
+    body: "A static method over two components. It reads like the update for a single entity.",
+    file: "Motion.cs",
+    tag: "you write",
+    code: source.move,
+    lit: linesWith(source.move, "position.X + velocity.X"),
+  },
+  {
+    key: "loop",
+    title: "The loop",
+    short: "Spans over each block",
+    body: "The generator walks the matching rows one block at a time. `ref` becomes a writable span of Position, and `in` a read-only span of Velocity.",
+    file: moveFile.name,
+    tag: "generated",
+    code: run,
+    lit: linesWith(run, "while (cursor.Next(out var block))", "block.Write<Position>(0)", "block.Read<Velocity>(1)"),
+  },
+  {
+    key: "kernel",
+    title: "The kernel",
+    short: "Eight floats at a time",
+    body: "Every float `Move` writes gets the same formula, so a Release build compiles it into a `Vector256` loop. It writes the same bits as your method. Without vector hardware, the loop calls `Move` once per row.",
+    file: moveFile.name,
+    tag: "generated",
+    code: kernel,
+    lit: linesWith(kernel, "Vector256.LoadUnsafe", "Vector256.StoreUnsafe"),
+  },
+  { key: "result", title: "The result", short: `${us(ev.perfFacts.kernel.after)} µs per update` },
+];
+
+const kernelRow = ev.movement.find((row) => row.kind === "archevolt" && row.name.includes("SIMD"))!;
+const beforeRow = ev.movement.find((row) => row.kind === "archevolt" && row.name.includes("before"))!;
+const bars = [
+  { name: "`Motion.Move`, before kernels", us: beforeRow.us },
+  { name: "C# handwritten loop", us: ev.movement.find((row) => row.name.startsWith("C#"))!.us },
+  { name: "Bevy 0.20 `for_each`", us: ev.perfFacts.bevyParity.bevy },
+  { name: "`Motion.Move`, with the kernel", us: kernelRow.us, hot: true },
+];
+const maxUs = Math.max(...bars.map((bar) => bar.us));
+const speedup = (beforeRow.us / kernelRow.us).toFixed(1);
+---
+
+<section class="section v2-anchor" id="generated" aria-labelledby="generated-title">
+  <div class="frame">
+    <div class="sec-label" data-reveal><span>{n}</span>Generated code</div>
+    <div data-reveal>
+      <h2 class="sec-title sec-title-wide" id="generated-title">The readable version is the fast version</h2>
+      <p class="sec-lede">Follow one method from your code to the CPU.</p>
+    </div>
+
+    <div class="v2-steps" data-compare data-reveal>
+      <div class="v2-steps-tabs" role="tablist" aria-label="From your method to the measured update">
+        {
+          steps.map((step, index) => (
+            <button
+              type="button"
+              role="tab"
+              class="v2-step-tab"
+              id={`v2-step-tab-${step.key}`}
+              data-pick={step.key}
+              aria-selected={String(index === 0)}
+              aria-controls={`v2-step-${step.key}`}
+              tabindex={index === 0 ? 0 : -1}
+            >
+              <span class="v2-step-n">{String(index + 1).padStart(2, "0")}</span>
+              <span class="v2-step-title">{step.title}</span>
+              <span class="v2-step-short">{step.short}</span>
+            </button>
+          ))
+        }
+      </div>
+
+      {
+        steps.map((step, index) => (
+          <div
+            class="v2-step-panel"
+            role="tabpanel"
+            id={`v2-step-${step.key}`}
+            aria-labelledby={`v2-step-tab-${step.key}`}
+            data-panel={step.key}
+            hidden={index !== 0}
+          >
+            {step.code ? (
+              <>
+                <div class="v2-step-copy">
+                  <p>{segments(step.body!).map(({ code, part }) => (code ? <code>{part}</code> : part))}</p>
+                  <button type="button" class="v2-link" data-next={step.key}>
+                    Next: {steps[index + 1].title.toLowerCase()}
+                    <Icon name="arrow-right" />
+                  </button>
+                </div>
+                <figure class="window v2-gen">
+                  <div class="window-bar">
+                    <span class="window-dots" aria-hidden="true">
+                      <span />
+                      <span />
+                      <span />
+                    </span>
+                    <span class="window-file">{step.file}</span>
+                    <span class="window-tag">{step.tag}</span>
+                  </div>
+                  <div class="code v2-scroll" data-scroll tabindex="0" aria-label={`${step.file}, ${step.tag}`}>
+                    <Code code={step.code} lang="csharp" theme={codeTheme} transformers={[markLines(step.lit)]} />
+                  </div>
+                </figure>
+              </>
+            ) : (
+              <>
+                <div class="v2-step-copy">
+                  <p class="v2-step-big">
+                    {speedup}× <span>faster, same method</span>
+                  </p>
+                  <p>
+                    Moving 100,000 entities on one worker. Archevolt's time includes schedule dispatch and query
+                    traversal. The handwritten loop has neither.
+                  </p>
+                  <a class="v2-link" href={ev.links.performance}>
+                    Read the performance report
+                    <Icon name="arrow-right" />
+                  </a>
+                </div>
+                <div class="v2-bars">
+                  <p class="v2-bars-title">Median µs per update, lower is faster</p>
+                  <ul role="list">
+                    {bars.map((bar) => (
+                      <li class:list={{ "is-hot": bar.hot }}>
+                        <span class="v2-bars-name">
+                          {segments(bar.name).map(({ code, part }) => (code ? <code>{part}</code> : part))}
+                        </span>
+                        <span class="v2-bars-track" aria-hidden="true">
+                          <span style={`--w:${((bar.us / maxUs) * 100).toFixed(2)}%`} />
+                        </span>
+                        <span class="v2-bars-value">{us(bar.us)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p class="v2-bars-note">Medians of three process runs on one AMD Ryzen 9 5950X, Release builds.</p>
+                </div>
+              </>
+            )}
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</section>

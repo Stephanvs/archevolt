@@ -128,14 +128,70 @@
   color: var(--h-fg);
 }
 
-.home .alt-index-card .pill {
+.home .alt-index-card .v2-link {
   margin-top: auto;
-  align-self: flex-start;
+}
+
+.home .alt-index-card:hover .v2-link {
+  border-color: var(--h-brand);
+  color: var(--h-brand);
+}
+
+.home .alt-index-n {
+  margin: 0;
+  color: var(--h-brand);
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.home .alt-index-h2 {
+  margin: 4rem 0 0;
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.home .alt-index-round-one {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home .alt-index-round-one li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  align-items: baseline;
+}
+
+.home .alt-index-round-one a,
+.home .alt-index-foot a {
+  color: var(--h-fg);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--h-brand);
+  text-underline-offset: 4px;
+}
+
+.home .alt-index-round-one span {
+  color: var(--h-muted);
+  font-size: 0.875rem;
+}
+
+.home .alt-index-foot {
+  margin-top: 3rem;
+  color: var(--h-muted);
 }
 
 .home .alt-index-notes {
   max-width: 760px;
-  margin-top: 3rem;
+  margin-top: 1.5rem;
   color: var(--h-muted);
 }
 

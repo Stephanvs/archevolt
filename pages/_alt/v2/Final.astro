@@ -1,0 +1,26 @@
+---
+/** The closing call to action, in the current page's panel. */
+import Icon from "../../_home/Icon.astro";
+import InstallCommand from "../../_home/InstallCommand.astro";
+import * as ev from "../evidence";
+---
+
+<section class="final" aria-labelledby="final-title">
+  <div class="frame">
+    <div class="final-panel" data-reveal>
+      <svg class="final-bolt" viewBox="0 0 120 220" aria-hidden="true">
+        <path d="M78 4 L18 128 H56 L40 216 L104 84 H64 Z" pathLength="1"></path>
+      </svg>
+      <p class="mono-label">Get started</p>
+      <h2 id="final-title">Build your first simulation</h2>
+      <p class="final-lede">Two structs, one method, and a schedule.</p>
+      <div class="hero-actions">
+        <a class="button" href={ev.links.quickstart}>
+          Read the quickstart
+          <Icon name="arrow-right" />
+        </a>
+        <InstallCommand command={ev.install} />
+      </div>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,241 @@
+---
+/**
+ * Round 2, "Every declaration": the current page's order with the round 1 picks. Clickable declarations open
+ * the file the generator writes for each. Then setup, speed with the known gaps, headless, features, and FAQ.
+ */
+import AltLayout from "../_alt/AltLayout.astro";
+import "../_alt/v2/v2.css";
+import data from "blume:data";
+import Icon from "../_home/Icon.astro";
+import TaglineReveal from "../_home/TaglineReveal.astro";
+import AotVisual from "../_home/visuals/AotVisual.astro";
+import ExecutionVisual from "../_home/visuals/ExecutionVisual.astro";
+import MessagesVisual from "../_home/visuals/MessagesVisual.astro";
+import QueryVisual from "../_home/visuals/QueryVisual.astro";
+import ScheduleVisual from "../_home/visuals/ScheduleVisual.astro";
+import StorageVisual from "../_home/visuals/StorageVisual.astro";
+import * as ev from "../_alt/evidence";
+import CompareDeclarations from "../_alt/v2/CompareDeclarations.astro";
+import Final from "../_alt/v2/Final.astro";
+import Headless from "../_alt/v2/Headless.astro";
+import Hero from "../_alt/v2/Hero.astro";
+import Speed from "../_alt/v2/Speed.astro";
+import Wire from "../_alt/v2/Wire.astro";
+import { segments } from "../_alt/v2/code";
+
+const title = "Archevolt: build fast simulations in plain C#";
+const description =
+  "Archevolt is an entity component system for .NET games and simulations. Write components as structs and systems as static methods. A source generator compiles them into direct calls at build time.";
+
+// The current page's feature cards, unchanged.
+const features = [
+  {
+    key: "query",
+    wide: true,
+    label: "Queries",
+    title: "Typed rows, no lookups",
+    body: "Named queries produce concrete rows with `ref` and `ref readonly` access. Nothing is boxed or looked up by type at run time.",
+    href: ev.links.queries,
+    cta: "Queries guide",
+  },
+  {
+    key: "storage",
+    label: "Storage",
+    title: "Dense native tables",
+    body: "Components live in aligned, structure of arrays tables, one per archetype, outside the managed heap.",
+    href: ev.links.architecture,
+    cta: "Architecture",
+  },
+  {
+    key: "schedule",
+    label: "Schedules",
+    title: "Ordering you declare once",
+    body: "Order systems with `Order`, `Before`, `After`, stages, and sets. The planner adds conservative ordering where access conflicts.",
+    href: ev.links.schedules,
+    cta: "Schedules guide",
+  },
+  {
+    key: "exec",
+    wide: true,
+    label: "Execution",
+    title: "Parallel when you ask for it",
+    body: "Serial execution is the reference behavior. Enable a bounded worker pool and mark eligible systems as partitioned.",
+    href: ev.links.execution,
+    cta: "Execution guide",
+  },
+  {
+    key: "messages",
+    label: "Data flow",
+    title: "Changes, resources, messages",
+    body: "Track added and changed components, share resources, and send messages that each reader consumes at its own pace.",
+    href: ev.links.messages,
+    cta: "Messages guide",
+  },
+  {
+    key: "aot",
+    label: "Deployment",
+    title: "Ready for NativeAOT",
+    body: "The package runs under JIT, trimming, and NativeAOT. The runtime has no package dependencies.",
+    href: ev.links.installation,
+    cta: "Installation",
+  },
+];
+
+const guides = data.routes
+  .filter((route) => route.path.includes("/guides/") && route.indexable && !route.hidden)
+  .map((route) => route.title);
+
+// The current page's FAQ, without the sample and with the comparison answer pointing at the numbers above.
+const faqs = [
+  {
+    q: "Is Archevolt a game engine?",
+    a: "No. It is a headless ECS with no window, input, rendering, or audio. Pair it with a library such as Silk.NET, or use it to drive simulations without any graphics.",
+  },
+  {
+    q: "What do I need to install?",
+    a: "One package, `Archevolt`, which contains the runtime and the Roslyn source generator. The runtime depends only on the .NET base library. Your project needs .NET 11 and C# 15.",
+  },
+  {
+    q: "Does it allocate during an update?",
+    a: "Measured warmed, fixed capacity updates allocate zero managed bytes, with one worker or four. Spawning and other structural changes can grow storage and allocate.",
+  },
+  {
+    q: "Does it run systems in parallel?",
+    a: "Only when you opt in. Call `UseParallelExecution(maxConcurrency: 4)` on `WorldBuilder` and mark eligible systems with `[Each(Partitioned = true)]`. Small workloads can cost more to dispatch in parallel than to run serially, so measure first.",
+  },
+  {
+    q: "Does it work with NativeAOT and trimming?",
+    a: "Yes. The package is verified in clean consumers under JIT, trimming, and NativeAOT.",
+  },
+  {
+    q: "What does the generator change in my code?",
+    a: "It adds members to your declarations, so the types it touches must be `partial`. Generated code stays in the namespace and partial owner of the original declaration.",
+  },
+  {
+    q: "How do systems add or remove components?",
+    a: "Structural changes inside systems go through `Commands` and become visible at schedule barriers. Outside a schedule, mutate the world directly on its owner thread.",
+  },
+  {
+    q: "Is it free to use?",
+    a: "Yes. Archevolt is open source under the MIT license, and the source is on GitHub.",
+  },
+];
+
+const faqSchema = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: faqs.map((faq) => ({
+    "@type": "Question",
+    name: faq.q,
+    acceptedAnswer: { "@type": "Answer", text: faq.a.replaceAll("`", "") },
+  })),
+};
+
+const two = (index: number) => String(index + 1).padStart(2, "0");
+---
+
+<AltLayout slug="blocks" title={title} description={description}>
+  <Hero extra="proof" />
+
+  <CompareDeclarations n="01" />
+
+  <TaglineReveal lines={["Your components stay structs.", "Your systems stay methods.", "The generator writes the rest."]} />
+
+  <Wire n="02" />
+
+  <Speed n="03" gaps />
+
+  <Headless n="04" />
+
+  <section class="section" aria-labelledby="features-title">
+    <div class="frame">
+      <div class="sec-label" data-reveal><span>05</span>What you get</div>
+      <h2 class="sec-title sec-title-wide" id="features-title" data-reveal>
+        Everything a frame needs, generated at compile time
+      </h2>
+      <div class="bento" data-scene>
+        {
+          features.map((feature, index) => (
+            <a class:list={["bento-card", { "is-wide": feature.wide }]} href={feature.href} style={`--d:${index * 85}`}>
+              <div class="bento-visual">
+                {feature.key === "query" && <QueryVisual />}
+                {feature.key === "storage" && <StorageVisual />}
+                {feature.key === "schedule" && <ScheduleVisual />}
+                {feature.key === "exec" && <ExecutionVisual />}
+                {feature.key === "messages" && <MessagesVisual />}
+                {feature.key === "aot" && <AotVisual />}
+              </div>
+              <div class="bento-body">
+                <span class="mono-label">{feature.label}</span>
+                <h3>{feature.title}</h3>
+                <p>{segments(feature.body).map(({ code, part }) => (code ? <code>{part}</code> : part))}</p>
+                <span class="pill">
+                  {feature.cta}
+                  <Icon name="arrow-right" />
+                </span>
+              </div>
+            </a>
+          ))
+        }
+        <a class="bento-card bento-guides" href={ev.links.guides} style={`--d:${features.length * 85}`}>
+          <div class="bento-visual">
+            <div class="viz viz-guides" aria-hidden="true">
+              <div class="vg-list">
+                {
+                  [0, 1].map(() => (
+                    <ul>
+                      {guides.map((guide, index) => (
+                        <li>
+                          <span>{two(index)}</span>
+                          {guide}
+                        </li>
+                      ))}
+                    </ul>
+                  ))
+                }
+              </div>
+            </div>
+          </div>
+          <div class="bento-body">
+            <span class="mono-label">Guides</span>
+            <h3>{guides.length} guides, one per feature</h3>
+            <p>Components, modules, queries, schedules, resources, commands, and the rest, each with runnable code.</p>
+            <span class="pill">
+              Explore the docs
+              <Icon name="arrow-right" />
+            </span>
+          </div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="faq-title">
+    <div class="frame faq-layout">
+      <div>
+        <div class="sec-label" data-reveal><span>06</span>FAQ</div>
+        <h2 class="sec-title" id="faq-title" data-reveal>Questions before you start</h2>
+      </div>
+      <div class="faq" data-reveal>
+        {
+          faqs.map((faq, index) => (
+            <details class="faq-item">
+              <summary>
+                <span class="faq-num">{two(index)}</span>
+                <span class="faq-q">{faq.q}</span>
+                <span class="faq-icon">
+                  <Icon name="plus" />
+                </span>
+              </summary>
+              <p>{segments(faq.a).map(({ code, part }) => (code ? <code>{part}</code> : part))}</p>
+            </details>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <Final />
+
+  <script type="application/ld+json" set:html={JSON.stringify(faqSchema)} />
+</AltLayout>

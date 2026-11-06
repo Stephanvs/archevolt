@@ -1,0 +1,84 @@
+---
+/**
+ * "Then wire it into a program", the three setup steps from the experience alternative.
+ * As a numbered section, or with `sub` as the closing block of an enclosing section.
+ */
+import { Code } from "astro:components";
+import data from "blume:data";
+import InstallCommand from "../../_home/InstallCommand.astro";
+import * as ev from "../evidence";
+import { segments } from "./code";
+
+interface Props {
+  n?: string;
+  sub?: boolean;
+}
+
+const { n, sub = false } = Astro.props;
+const codeTheme = data.config.codeThemes.dark;
+const Wrapper = sub ? "div" : "section";
+const Heading = sub ? "h3" : "h2";
+const StepHeading = sub ? "h4" : "h3";
+
+const steps = [
+  {
+    title: "Add the package",
+    body: "One package holds the runtime and the source generator. Your project needs .NET 11 and C# 15.",
+    command: ev.install,
+  },
+  {
+    title: "Collect systems into a module",
+    body: "A module gathers systems and bundles. A schedule declares which systems run, in what order.",
+    code: ev.moduleCode,
+  },
+  {
+    title: "Build a world and run it",
+    body: "Spawn entities from bundles, bind the schedule to the world, and call `Run` once per update.",
+    code: ev.runCode,
+  },
+];
+---
+
+<Wrapper class={sub ? "v2-wire-sub" : "section"} aria-labelledby={sub ? undefined : "wire-title"}>
+  <div class:list={{ frame: !sub }}>
+    {
+      !sub && (
+        <div class="sec-label" data-reveal>
+          <span>{n}</span>Setup
+        </div>
+      )
+    }
+    <Heading class={sub ? "v2-sub" : "sec-title sec-title-wide"} id="wire-title" data-reveal>
+      Then wire it into a program
+    </Heading>
+    <ol class="steps">
+      {
+        steps.map((step, index) => (
+          <li class="step" data-reveal>
+            <span class="step-number" aria-hidden="true">
+              {String(index + 1).padStart(2, "0")}
+            </span>
+            <div class="step-copy">
+              <StepHeading class="v2-step-heading">{step.title}</StepHeading>
+              <p>{segments(step.body).map(({ code, part }) => (code ? <code>{part}</code> : part))}</p>
+            </div>
+            <div class="step-visual">
+              {step.command ? (
+                <InstallCommand command={step.command} typed />
+              ) : (
+                <div class="window">
+                  <div class="code">
+                    <Code code={step.code!} lang="csharp" theme={codeTheme} />
+                  </div>
+                </div>
+              )}
+            </div>
+          </li>
+        ))
+      }
+    </ol>
+    <p class="sec-foot" data-reveal>
+      The <a href={ev.links.quickstart}>quickstart</a> walks through the complete program.
+    </p>
+  </div>
+</Wrapper>

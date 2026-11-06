@@ -1,0 +1,135 @@
+---
+/**
+ * "Speed is a requirement": the movement benchmark and, with `gaps`, where Bevy is still faster.
+ * As a numbered section, or with `sub` as a block inside an enclosing section under `heading`.
+ */
+import * as ev from "../evidence";
+import { segments, us } from "./code";
+
+interface Props {
+  n?: string;
+  sub?: boolean;
+  heading?: string;
+  gaps?: boolean;
+}
+
+const { n, sub = false, heading = "Speed is a requirement", gaps = false } = Astro.props;
+const Wrapper = sub ? "div" : "section";
+const Heading = sub ? "h3" : "h2";
+
+const maxUs = Math.max(...ev.movement.map((row) => row.us));
+const tag = (row: ev.MovementRow) => (row.name.includes("handwritten") ? "no scheduler" : undefined);
+const nsPerEntity = (value: number) => (value / 100).toFixed(3);
+
+const known = [
+  { case: "Tracked write, 100,000 entities", archevolt: `${us(ev.perfFacts.trackedWrite.after)} µs`, bevy: `${ev.perfFacts.trackedWrite.bevy} µs` },
+  { case: ev.gaps[0].case.replace(" over 100,000 entities", ", 100,000 entities"), archevolt: ev.gaps[0].now, bevy: ev.gaps[0].bevy },
+  { case: ev.gaps[1].case.replace(" on 1,000 entities", ", 1,000 entities"), archevolt: ev.gaps[1].now.replace(" to ", "–"), bevy: ev.gaps[1].bevy },
+];
+---
+
+<Wrapper class={sub ? "v2-speed-sub" : "section v2-anchor"} id={sub ? undefined : "performance"} aria-labelledby="speed-title">
+  <div class:list={{ frame: !sub }}>
+    {
+      !sub && (
+        <div class="sec-label" data-reveal>
+          <span>{n}</span>Performance
+        </div>
+      )
+    }
+    <div data-reveal>
+      <Heading class={sub ? "v2-sub" : "sec-title"} id="speed-title">{heading}</Heading>
+      <p class="sec-lede">Every design decision is judged by its cost in the update loop.</p>
+    </div>
+
+    <div class="perf v2-perf">
+      <div class="perf-hero" data-reveal>
+        <p class="perf-number v2-perf-number">{us(ev.perfFacts.kernel.after)}<small>µs</small></p>
+        <p class="perf-caption">
+          to move 100,000 entities on one worker. The same <code>[Each]</code> method took {us(ev.perfFacts.kernel.before)} µs
+          before the generator emitted SIMD kernels.
+        </p>
+        <dl class="perf-minis">
+          <div>
+            <dt>allocated per warmed update, with one worker or four</dt>
+            <dd>{ev.perfFacts.allocation.value}</dd>
+          </div>
+          <div>
+            <dt>for a <code>Changed&lt;T&gt;</code> scan with nothing changed</dt>
+            <dd>{ev.perfFacts.unchangedScan.value} µs</dd>
+          </div>
+        </dl>
+      </div>
+      <div class="perf-chart" data-reveal data-bars>
+        <p class="perf-chart-title">
+          Moving 100,000 entities on one worker, median µs per update
+          <span>Archevolt's times include schedule dispatch, resource access, lease checks, and query traversal.</span>
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Case</th>
+              <th scope="col" class="num">Median µs</th>
+              <th scope="col" class="num">ns per entity</th>
+            </tr>
+          </thead>
+          <tbody>
+            {
+              ev.movement.map((row) => (
+                <tr class:list={{ "is-baseline": row.kind !== "archevolt" }}>
+                  <th scope="row">
+                    <span class="bar-label">
+                      {segments(row.name).map(({ code, part }) => (code ? <code>{part}</code> : part))}
+                      {tag(row) && <span class="bar-tag">{tag(row)}</span>}
+                    </span>
+                    <span class="bar" style={`--w:${((row.us / maxUs) * 100).toFixed(2)}%`}>
+                      <span class="bar-fill" />
+                    </span>
+                  </th>
+                  <td class="num">{us(row.us)}</td>
+                  <td class="num">{nsPerEntity(row.us)}</td>
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p class="sec-foot" data-reveal>
+      Medians of three process runs on one AMD Ryzen 9 5950X, Release builds.{" "}
+      <a href={ev.links.performance}>Read the full performance report</a>
+    </p>
+
+    {
+      gaps && (
+        <div class="v2-gaps" data-reveal>
+          <div>
+            <h3 class="v2-gaps-title">Next on the list</h3>
+            <p>
+              Bevy is still faster in these cases. The <a href={ev.links.whatRemains}>round two report</a> names the
+              cause of each.
+            </p>
+          </div>
+          <table class="v2-gaps-table">
+            <thead>
+              <tr>
+                <th scope="col">Case</th>
+                <th scope="col" class="num">Archevolt</th>
+                <th scope="col" class="num">Bevy 0.20</th>
+              </tr>
+            </thead>
+            <tbody>
+              {known.map((row) => (
+                <tr>
+                  <th scope="row">{segments(row.case).map(({ code, part }) => (code ? <code>{part}</code> : part))}</th>
+                  <td class="num">{row.archevolt}</td>
+                  <td class="num">{row.bevy}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )
+    }
+  </div>
+</Wrapper>
