@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/benchmarks/">
     <Project Path="benchmarks/Archevolt.Benchmarks/Archevolt.Benchmarks.csproj" />
+    <Project Path="benchmarks/Archevolt.EachShapes/Archevolt.EachShapes.csproj" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/Archeoids.Browser/Archeoids.Browser.csproj" />

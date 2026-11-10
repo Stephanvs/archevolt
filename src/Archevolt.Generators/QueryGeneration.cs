@@ -100,6 +100,7 @@ public sealed partial class ArchevoltGenerator
     }
 
     const string Inline = "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]";
+    const string NoInline = "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]";
     const string Unsafe = "global::System.Runtime.CompilerServices.Unsafe";
     const string BaseOf = "global::System.Runtime.InteropServices.MemoryMarshal.GetReference";
     static bool Stamped(TermModel term) => term.Mode == "Write" && term.Component.Tracked;

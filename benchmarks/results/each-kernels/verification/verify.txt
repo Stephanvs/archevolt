@@ -1,0 +1,11 @@
+PASS restore-build
+PASS test
+PASS archeoids-headless
+PASS pack
+PASS package-contents
+PASS consumer-jit
+PASS consumer-aot
+PASS sample-aot
+PASS performance-smoke
+C:\Users\stephanvs\scoop\persist\t3code\user\worktrees\archevolt\t3-38c174bd-f746433669e28f82\artifacts\packages\Archevolt.0.1.0.nupkg
+exit=0

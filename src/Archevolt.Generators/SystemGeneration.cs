@@ -174,11 +174,13 @@ public sealed partial class ArchevoltGenerator
     {
         var problems = new List<Problem>();
         var model = System(method, problems, cancellationToken);
-        if (model.Form == SystemForm.EachBlock)
+        if (model.Form is SystemForm.Each or SystemForm.EachBlock)
             model = model with { Parameters = model.Parameters.Select((parameter, index) => parameter with { Name = "__argument" + index }).ToList() };
         var kernel = problems.Count == 0 ? Kernel(model, method, semantics, syntax, cancellationToken) : null;
-        var text = Open(method.ContainingType);
+        var inlined = problems.Count == 0 ? Inlined(model, method, semantics, syntax, cancellationToken) : null;
+        var text = Open(method.ContainingType, unitUsings: inlined?.UnitUsings ?? "", namespaceUsings: inlined?.NamespaceUsings ?? "");
         text.Append("public const string ").Append(Escape("__Archevolt_" + method.Name + "_Access")).Append(" = ").Append(Literal(SystemManifest(model))).AppendLine(";");
+        text.Append(inlined?.Member);
         var bodyName = "__Archevolt_" + method.Name + "Body";
         text.Append("private sealed class ").Append(bodyName).AppendLine(model.Form == SystemForm.Condition ? " : global::Archevolt.ConditionBody\n{" : " : global::Archevolt.SystemBody\n{");
         for (int index = 0; index < model.Queries.Count; index++) text.Append("readonly global::Archevolt.QueryState _query").Append(index).AppendLine(";");
@@ -202,28 +204,50 @@ public sealed partial class ArchevoltGenerator
         foreach (var parameter in model.Parameters.Where(static parameter => parameter.Kind == "Commands")) text.Append("var ").Append(parameter.Name).AppendLine(" = _commands.Open(run);");
         foreach (var parameter in model.Parameters.Where(static parameter => parameter.Kind is "MessageReader" or "MessageWriter" or "RemovedComponents"))
             text.Append("var ").Append(parameter.Name).Append(" = _message").Append(parameter.Index).Append(parameter.Kind == "MessageWriter" ? ".Write(run);" : ".Read(run);").AppendLine();
+        var rows = new StringBuilder();
         if (model.Form == SystemForm.Each)
         {
+            var query = model.Queries[0];
             // Every visited row stamps each tracked writable column, so the column summary is raised once per block, or
             // once per passing row when a change filter may skip every row. TrackedColumn.Write would raise it per row.
-            var stamped = model.Queries[0].Where(Stamped).ToArray();
-            text.AppendLine("var cursor = _query0.Begin(run);");
-            if (stamped.Length != 0) text.AppendLine("ulong __now = run.Window.Now;");
-            var filters = model.Queries[0].Where(static term => term.Mode is "Added" or "Changed").ToArray();
-            text.Append("while (cursor.").Append(NextBlock(filters)).AppendLine("(out var block))\n{");
-            BindColumns(text, model.Queries[0], declarations: true);
-            for (int index = 0; index < filters.Length; index++) text.Append("var ticks").Append(index).Append(" = block.").Append(filters[index].Mode).Append('(').Append(filters[index].Index).AppendLine(");");
-            if (model.Parameters.Any(static parameter => parameter.Kind == "Entity")) text.AppendLine("var entities = block.Entities;");
+            var stamped = query.Where(Stamped).ToArray();
+            var filters = query.Where(static term => term.Mode is "Added" or "Changed").ToArray();
+            bool entity = model.Parameters.Any(static parameter => parameter.Kind == "Entity");
             var raise = string.Concat(stamped.Select(static term => $"if ({ColumnName(term)}.Summary < __now) {ColumnName(term)}.Summary = __now;\n"));
+            // Run declares each of these as a local and passes it to __Rows, which declares a local of the same name.
+            var inputs =query.Where(static term => term.Mode is "Read" or "Write" or "Optional").Select(static term => (Type: ColumnType(term), Name: ColumnName(term)))
+                .Concat(filters.Select(static (_, index) => (Type: "global::System.ReadOnlySpan<ulong>", Name: "ticks" + index))).ToList();
+            if (entity) inputs.Add(("global::Archevolt.EntityColumn", "entities"));
+            inputs.Add(("int", "count"));
+            if (filters.Length != 0) inputs.Add(("global::Archevolt.TickWindow", "__window"));
+            if (stamped.Length != 0) inputs.Add(("ulong", "__now"));
+            inputs.AddRange(model.Parameters.Where(static parameter => parameter.Kind is not ("Component" or "Entity")).Select(static parameter => (parameter.Type, parameter.Name)));
+
+            text.AppendLine("var cursor = _query0.Begin(run);");
+            if (filters.Length != 0) text.AppendLine("var __window = run.Window;");
+            if (stamped.Length != 0) text.AppendLine("ulong __now = run.Window.Now;");
+            text.Append("while (cursor.").Append(NextBlock(filters)).AppendLine("(out var block))\n{");
+            BindColumns(text, query, declarations: true);
+            for (int index = 0; index < filters.Length; index++) text.Append("var ticks").Append(index).Append(" = block.").Append(filters[index].Mode).Append('(').Append(filters[index].Index).AppendLine(");");
+            if (entity) text.AppendLine("var entities = block.Entities;");
             if (filters.Length == 0) text.Append(raise);
             text.AppendLine("int count = block.Count;");
-            if (kernel is not null) AppendKernelCall(text, kernel, model.Queries[0]);
-            text.AppendLine("for (int row = 0; row < count; row++)\n{");
-            if (filters.Length != 0) text.Append("if (!(").Append(string.Join(" && ", filters.Select((_, index) => $"cursor.Window.Contains(ticks{index}[row])"))).AppendLine(")) continue;").Append(raise);
-            foreach (var term in stamped) text.Append(ColumnName(term)).AppendLine(".Changed[row] = __now;");
-            text.Append(Escape(method.Name)).Append('(').Append(string.Join(", ", model.Parameters.Select(parameter => parameter.Kind switch
+            if (kernel is not null) AppendKernelCall(text, kernel, query);
+            text.Append("__Rows(").Append(string.Join(", ", inputs.Select(static input => input.Name))).AppendLine(");\n}");
+
+            // The row loop is a method of its own, which Run calls once per block. A system whose first runs see no rows
+            // reaches its final tier with a loop inside Run compiled as cold code, and Run is not compiled again.
+            // __Rows copies every parameter into a local. Windows x64 passes a struct wider than a register by
+            // reference, and the JIT then reads a span's pointer and length from memory on every row. It keeps the
+            // fields of a local in registers.
+            rows.AppendLine(NoInline).Append("static void __Rows(").Append(string.Join(", ", inputs.Select(static (input, index) => input.Type + " __input" + index))).AppendLine(")\n{");
+            rows.Append(string.Concat(inputs.Select(static (input, index) => $"var {input.Name} = __input{index};\n")));
+            rows.AppendLine("for (int row = 0; row < count; row++)\n{");
+            if (filters.Length != 0) rows.Append("if (!(").Append(string.Join(" && ", filters.Select((_, index) => $"__window.Contains(ticks{index}[row])"))).AppendLine(")) continue;").Append(raise);
+            foreach (var term in stamped) rows.Append(ColumnName(term)).AppendLine(".Changed[row] = __now;");
+            rows.Append(TypeName(method.ContainingType)).Append('.').Append(Escape(inlined?.Name ?? method.Name)).Append('(').Append(string.Join(", ", model.Parameters.Select(parameter => parameter.Kind switch
             {
-                "Component" => parameter.RefKind + " " + Element(model.Queries[0].First(term => term.Index == parameter.Index), "row"),
+                "Component" => parameter.RefKind + " " + Element(query.First(term => term.Index == parameter.Index), "row"),
                 "Entity" => "entities[row]", _ => parameter.Name
             }))).AppendLine(");\n}\n}");
         }
@@ -243,7 +267,7 @@ public sealed partial class ArchevoltGenerator
             if (model.Form == SystemForm.Condition) text.Append("return ");
             text.Append(Escape(method.Name)).Append('(').Append(string.Join(", ", model.Parameters.Select(static parameter => parameter.Name))).AppendLine(");");
         }
-        text.AppendLine("}\n}");
+        text.AppendLine("}").Append(rows.ToString()).AppendLine("}");
         text.Append("public static global::Archevolt.SystemDescriptor ").Append(Escape(method.Name + "_Descriptor")).Append(" { get; } = global::Archevolt.SystemDescriptor.Create(")
             .Append(Literal(method.ContainingType.ToDisplayString() + "." + method.Name)).Append(", static binder => new ").Append(bodyName).AppendLine("(binder))");
         for (int index = 0; index < model.Queries.Count; index++)

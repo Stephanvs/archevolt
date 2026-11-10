@@ -31,17 +31,61 @@ public static partial class MotionKernel
 - Membership and change-filter attributes apply to the method.
 - Components passed by value are rejected.
 
+### Optimized builds
+
+A Debug build calls the method once per entity, so a breakpoint in it is hit. An optimized build does not call the method. The generator copies its body into the loop over the entities, which removes the call whether or not the runtime would have inlined it. That includes NativeAOT, and a system that first ran while no entity matched.
+
+- An exception thrown in the body does not name your method in its stack trace. It names a generated method, such as `__Archevolt_<Method>_Inlined`.
+- The generator calls the method itself when a copy could behave differently. That is the case when the method contains a preprocessor directive, calls a method with a caller-information parameter such as `[CallerMemberName]`, or carries `[MethodImpl]` with `NoInlining`, `NoOptimization`, or `Synchronized`, or `[Conditional]`. It is also the case when the file declares a file-local type or an `extern alias`, or puts `using` directives on an outer namespace.
+
 ### SIMD kernels
 
-In an optimized build, the generator compiles some `[Each]` methods into a SIMD loop over the component columns instead of a call per entity. It does so when each float of the written component gets the same formula, over the same float of the other components. The method must:
+In an optimized build, the generator compiles some `[Each]` methods into a SIMD loop over the component columns. It does so when it can write every float of the written component as a formula over the floats of the same entity, resource values, and constants. The method must:
 
 - Write one component, and read only components with the same number of floats.
 - Take only component refs and `Res<T>` parameters, with no `Added<T>`, `Changed<T>`, or `Optional<T>` term.
-- Use only float `+`, `-`, `*`, `/`, and negation, the `+`, `-`, and `*` operators of `Vector2`, `Vector3`, and `Vector4`, constants, locals, fields and auto-properties of components and resources, positional record constructors, and `with` expressions.
+- Use only the operations in this table.
 
-`position = position with { Value = position.Value + velocity.Value * time.Value.DeltaSeconds }` qualifies. A method call, a branch, a conversion to `double`, or a formula that mixes `X` into `Y` keeps the call per entity.
+| Kind | Allowed |
+| --- | --- |
+| Arithmetic | Float `+`, `-`, `*`, `/`, and negation. The `+`, `-`, and `*` operators of `Vector2`, `Vector3`, and `Vector4`. |
+| Values | Constants, `static readonly` float and vector fields, locals, assignments to locals and to fields of the written component, fields and auto-properties of components and resources, positional record constructors, the constructors of `Vector2`, `Vector3`, and `Vector4`, and `with` expressions. |
+| Branches | `if`, `else`, and `?:`, with conditions that compare floats using `<`, `<=`, `>`, `>=`, `==`, or `!=`, combined with `&&`, `\|\|`, and `!`. |
+| Functions | `Abs`, `Sqrt`, `Min`, and `Max` of `MathF` or `float`, and the `float` overloads of `Math.Abs`, `Math.Min`, and `Math.Max`. |
+| Calls | Non-generic static methods of the same project that follow these rules. They may take the written component by `ref`. |
 
-The kernel performs the same IEEE operations in the same order as the method, so it writes the same bits. The exception is which NaN payload results when two NaN operands meet, which .NET does not define for scalar code either. Debug builds always call the method, so a breakpoint in it is hit. An optimized build does not call a qualifying method.
+Both of these methods run as kernels:
+
+```csharp
+[Each]
+public static void Wrap(scoped ref Position position, scoped in Velocity velocity, scoped Res<FrameTime> time)
+{
+    float x = position.X + velocity.X * time.Value.DeltaSeconds;
+    // Arena.Width is a const.
+    if (x >= Arena.Width) x -= Arena.Width;
+    position = position with { X = x };
+}
+
+[Each]
+public static void Spin(scoped ref Rotation rotation, scoped Res<FrameTime> time)
+    => rotation = rotation with { Angle = rotation.Angle + rotation.Speed * time.Value.DeltaSeconds };
+```
+
+A kernel computes both outcomes of a branch for every entity and keeps one. The result is the same as taking the branch, because a write made in one outcome reaches only the entities that take it.
+
+These keep the loop over the entities:
+
+- A loop, or a `return` before the end of the method.
+- `%`, a conversion to `double` or `int`, or any other method of `Math` and `MathF`.
+- A computed property, a static property such as `Vector3.Zero`, a recursive method, or a method from another assembly.
+- A call to a local function, a generic method, a `[Conditional]` method, or a method with an `out` parameter or a `ref` return.
+- A called method that writes through a `ref` parameter inside `?:` or on the right of `&&` or `||`, or that writes floats the same call also passes through `in`.
+- A `[Conditional]` `[Each]` method.
+- An `Entity` or `Commands` parameter.
+- Components with different numbers of floats, such as a `float` written from a `Vector2`.
+- A component of more than four floats whose floats get different formulas, where the CPU or the build has no 256-bit vectors. NativeAOT has none unless you raise its instruction set. A component of more than eight such floats always keeps the loop.
+
+The kernel performs the same IEEE operations in the same order as the method, so it writes the same bits. The exception is the sign and payload bits of a NaN result, which .NET does not define for scalar code either.
 
 ## `[EachBlock]`
 

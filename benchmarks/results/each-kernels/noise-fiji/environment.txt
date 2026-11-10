@@ -1,0 +1,8 @@
+UTC=2026-11-10T13:32:09.3684905Z
+Baseline=/b/baseline/shapes-linux-jit
+Candidate=/b/a0
+Launches=3
+Modes=populated,empty
+Rows=100000
+Remote=fiji
+Prefix=docker run --rm --cpuset-cpus=2,3 -v /home/stephanvs/archevolt-bench:/b:ro debian:trixie-slim

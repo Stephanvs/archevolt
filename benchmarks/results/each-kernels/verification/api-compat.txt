@@ -1,0 +1,9 @@
+Archevolt: unchanged
+Archeoids: unchanged
+Archeoids.Browser: unchanged
+CP0014: Cannot remove attribute 'System.Runtime.CompilerServices.NullableContextAttribute(1)' from 'Archevolt.Particles.MotionKernel'.
+CP0014: Cannot remove attribute 'System.Runtime.CompilerServices.NullableAttribute(0)' from 'Archevolt.Particles.MotionKernel'.
+CP0016: Cannot add attribute 'System.Runtime.CompilerServices.NullableAttribute(1)' to 'Archevolt.Particles.MotionKernel.__Archevolt_Integrate_Access'.
+CP0014: Cannot remove attribute 'System.Runtime.CompilerServices.NullableContextAttribute(0)' from 'Archevolt.Particles.MotionKernel.Integrate(ref Archevolt.Particles.Position, in Archevolt.Particles.Velocity, Archevolt.Res<Archevolt.Particles.FrameTime>)'.
+CP0016: Cannot add attribute 'System.Runtime.CompilerServices.NullableContextAttribute(1)' to 'Archevolt.Particles.MotionKernel.Integrate_Descriptor.get'.
+CP0016: Cannot add attribute 'System.Runtime.CompilerServices.NullableAttribute(1)' to 'Archevolt.Particles.MotionKernel.Integrate_Descriptor'.

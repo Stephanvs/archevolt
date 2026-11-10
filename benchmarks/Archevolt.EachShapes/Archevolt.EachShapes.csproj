@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <PublishAot Condition="'$(EachShapesAot)' == 'true'">true</PublishAot>
+    <OptimizationPreference Condition="'$(EachShapesAot)' == 'true'">Speed</OptimizationPreference>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Archevolt\Archevolt.csproj" />
+    <ProjectReference Include="..\..\src\Archevolt.Generators\Archevolt.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>
