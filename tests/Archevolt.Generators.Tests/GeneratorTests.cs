@@ -1289,6 +1289,349 @@ public sealed class GeneratorTests
         GeneratedSource(result.Output, ".Each.g.cs").Contains("__Kernel(").Should().Be(expected);
     }
 
+    [Theory]
+    [InlineData("block", "Move")]
+    [InlineData("cursor", "Move")]
+    [InlineData("run", "Move")]
+    [InlineData("count", "Move")]
+    [InlineData("row", "Move")]
+    [InlineData("entities", "Move")]
+    [InlineData("_column0", "Move")]
+    [InlineData("__input0", "Move")]
+    [InlineData("Move", "Move")]
+    [InlineData("__argument0", "Run")]
+    [InlineData("delta", "__Rows")]
+    public void Each_capability_names_do_not_collide_with_generated_locals(string parameterName, string methodName)
+    {
+        string source = $$"""
+            using Archevolt;
+            [Component] public readonly record struct Position(int Value);
+            [Resource] public readonly record struct Delta(int Value);
+            [Bundle] public readonly partial record struct Particle(Position Position);
+            public static partial class Systems
+            {
+                [Each] public static void {{methodName}}(Entity entity, scoped ref Position position, scoped Res<Delta> {{parameterName}})
+                    => position = new(position.Value + {{parameterName}}.Value.Value);
+            }
+            [EcsModule, IncludeSystems(typeof(Systems)), IncludeBundle<Particle>, IncludeResource<Delta>] public static partial class Game { }
+            [Schedule, Run(typeof(Systems), nameof(Systems.{{methodName}}))] public partial class Simulation { }
+            public static class Acceptance
+            {
+                public static int Run()
+                {
+                    using var world = new WorldBuilder().AddModule(Game.Module).Build();
+                    world.InsertResource(new Delta(5));
+                    var entity = world.Spawn(new Particle(new(7)));
+                    using var simulation = Simulation.Create(world);
+                    simulation.Run();
+                    return world.Get<Position>(entity).Value;
+                }
+            }
+            """;
+        foreach (var optimization in new[] { OptimizationLevel.Release, OptimizationLevel.Debug })
+        {
+            var result = GenerateCore([source], [], optimization);
+            result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+            Execute(LoadCompilation(result.Output)).Should().Be(12, optimization.ToString());
+        }
+    }
+
+    // The world starts with one entity at 7 and one at 200. Run returns the first value times 1000 plus the second.
+    static string CallbackConsumer(string prelude, string members, string modifiers = "", string postlude = "") => $$"""
+        {{prelude}}
+        [Archevolt.Component] public struct Position { public int Value; }
+        [Archevolt.Bundle] public readonly partial record struct Particle(Position Position);
+        public static {{modifiers}}partial class Systems
+        {
+        {{members}}
+        }
+        [Archevolt.EcsModule, Archevolt.IncludeSystems(typeof(Systems)), Archevolt.IncludeBundle<Particle>] public static partial class Game { }
+        [Archevolt.Schedule, Archevolt.Run(typeof(Systems), "Step")] public partial class Simulation { }
+        public static class Acceptance
+        {
+            public static int Run()
+            {
+                using var world = new Archevolt.WorldBuilder().AddModule(Game.Module).Build();
+                var low = world.Spawn(new Particle(new Position { Value = 7 }));
+                var high = world.Spawn(new Particle(new Position { Value = 200 }));
+                using var simulation = Simulation.Create(world);
+                simulation.Run();
+                return world.Get<Position>(low).Value * 1000 + world.Get<Position>(high).Value;
+            }
+        }
+        {{postlude}}
+        """;
+
+    public static TheoryData<string, string, int> CallbackBindingHazards => new()
+    {
+        {
+            "a using alias",
+            CallbackConsumer("using Archevolt;\nusing Place = Position;",
+                "[Each] public static void Step(scoped ref Place place) => place = new Place { Value = place.Value + 1 };"),
+            8201
+        },
+        {
+            "a using static",
+            CallbackConsumer("using Archevolt;\nusing static System.Math;",
+                "[Each] public static void Step(scoped ref Position position) => position.Value = Max(position.Value, 10) + Abs(-2);"),
+            12202
+        },
+        {
+            "usings inside a file-scoped namespace",
+            CallbackConsumer("namespace Arena;\nusing Archevolt;\nusing System.Numerics;",
+                "[Each] public static void Step(Entity entity, scoped ref Position position) => position.Value += (int)new Vector2(3, 4).Length();"),
+            12205
+        },
+        {
+            "siblings named Run and Equals",
+            CallbackConsumer("using Archevolt;", """
+                static int Run(int value) => value * 2;
+                static bool Equals(int left, int right) => left + 1 == right;
+                [Each] public static void Step(scoped ref Position position) => position.Value = Equals(position.Value, 8) ? Run(position.Value) : -1;
+                """),
+            13999
+        },
+        {
+            "a private nested type",
+            CallbackConsumer("using Archevolt;", """
+                private readonly struct Scale(int factor) { public int Apply(int value) => value * factor; }
+                [Each] public static void Step(scoped ref Position position) => position.Value = new Scale(3).Apply(position.Value);
+                """),
+            21600
+        },
+        {
+            "code that warns under nullable analysis in a file that disables it",
+            CallbackConsumer("#nullable disable\nusing Archevolt;", """
+                [Each] public static void Step(scoped ref Position position)
+                {
+                    string text = null;
+                    position.Value += text == null ? 2 : text.Length;
+                }
+                """),
+            9202
+        },
+        {
+            "an unsafe callback",
+            CallbackConsumer("using Archevolt;", """
+                [Each] public static unsafe void Step(scoped ref Position position)
+                {
+                    fixed (Position* pointer = &position) pointer->Value += 4;
+                }
+                """),
+            11204
+        },
+        {
+            "a callback in an unsafe type",
+            CallbackConsumer("using Archevolt;", """
+                [Each] public static void Step(scoped ref Position position)
+                {
+                    fixed (Position* pointer = &position) pointer->Value += 4;
+                }
+                """, modifiers: "unsafe "),
+            11204
+        },
+        {
+            "a local function and an early return",
+            CallbackConsumer("using Archevolt;", """
+                [Each] public static void Step(scoped ref Position position)
+                {
+                    if (position.Value > 100) return;
+                    position.Value = Twice(position.Value) + 1;
+                    static int Twice(int value) => value * 2;
+                }
+                """),
+            15200
+        }
+    };
+
+    [Theory]
+    [MemberData(nameof(CallbackBindingHazards))]
+    public void Inlined_Each_callbacks_bind_every_name_as_the_callback_does(string hazard, string source, int expected)
+    {
+        var assembly = CompileWithoutWarnings(source);
+        InlinedCopy(assembly).Should().NotBeNull(hazard);
+        Execute(assembly, Named(assembly, "Acceptance").FullName!).Should().Be(expected, hazard);
+    }
+
+    public static TheoryData<string, string, int> CallbacksWithoutAnInlinedCopy => new()
+    {
+        {
+            "a preprocessor directive that tests a symbol the file defines",
+            CallbackConsumer("#define DOUBLE\nusing Archevolt;", """
+                [Each] public static void Step(scoped ref Position position)
+                {
+                #if DOUBLE
+                    position.Value *= 2;
+                #else
+                    position.Value += 1;
+                #endif
+                }
+                """),
+            14400
+        },
+        {
+            "a file-local type",
+            CallbackConsumer("using Archevolt;\nfile static class Tuning { public const int Step = 3; }",
+                "[Each] public static void Step(scoped ref Position position) => position.Value += Tuning.Step;"),
+            10203
+        },
+        {
+            "a callback marked NoInlining",
+            CallbackConsumer("using Archevolt;\nusing System.Runtime.CompilerServices;",
+                "[Each, MethodImpl(MethodImplOptions.NoInlining)] public static void Step(scoped ref Position position) => position.Value += 1;"),
+            8201
+        },
+        {
+            "a conditional callback whose symbol is not defined",
+            CallbackConsumer("using Archevolt;",
+                "[Each, System.Diagnostics.Conditional(\"NEVER\")] public static void Step(scoped ref Position position) => position.Value += 1;"),
+            7200
+        },
+        {
+            "caller information",
+            CallbackConsumer("using Archevolt;", """
+                static int Length([System.Runtime.CompilerServices.CallerMemberName] string member = "") => member.Length;
+                [Each] public static void Step(scoped ref Position position) => position.Value += Length();
+                """),
+            11204
+        },
+        {
+            "usings on an outer namespace declaration",
+            CallbackConsumer("namespace Outer\n{\nusing Archevolt;\nnamespace Inner\n{",
+                "[Each] public static void Step(Entity entity, scoped ref Position position) => position.Value += 1;", postlude: "}\n}"),
+            8201
+        },
+        {
+            "an extern alias",
+            CallbackConsumer("extern alias Linq;\nusing Archevolt;",
+                "[Each] public static void Step(scoped ref Position position) => position.Value += Linq::System.Linq.Enumerable.Count(Linq::System.Linq.Enumerable.Range(0, 3));"),
+            10203
+        },
+        {
+            "an attribute on a partial declaration without a body",
+            CallbackConsumer("using Archevolt;", """
+                [Each] public static partial void Step(scoped ref Position position);
+                public static partial void Step(scoped ref Position position) => position.Value += 1;
+                """),
+            8201
+        }
+    };
+
+    [Theory]
+    [MemberData(nameof(CallbacksWithoutAnInlinedCopy))]
+    public void Each_callbacks_that_cannot_be_copied_exactly_run_as_written(string reason, string source, int expected)
+    {
+        var assembly = CompileWithoutWarnings(source, MetadataReference.CreateFromFile(typeof(Enumerable).Assembly.Location).WithAliases(new[] { "global", "Linq" }));
+        InlinedCopy(assembly).Should().BeNull(reason);
+        Execute(assembly, Named(assembly, "Acceptance").FullName!).Should().Be(expected, reason);
+    }
+
+    [Theory]
+    [InlineData(OptimizationLevel.Release, "__Archevolt_Step_Inlined")]
+    [InlineData(OptimizationLevel.Debug, "Step")]
+    public void Each_rows_run_in_their_own_method_and_call_the_inlined_copy_only_in_optimized_builds(OptimizationLevel optimization, string expectedCallback)
+    {
+        var result = GenerateCore(["""
+            using Archevolt;
+            using System.Diagnostics;
+            using System.Reflection;
+            [Component] public readonly record struct Position(int Value);
+            [Bundle] public readonly partial record struct Particle(Position Position);
+            public static partial class Systems
+            {
+                public static string Callback = "", Caller = "";
+                [Each] public static void Step(scoped ref Position position)
+                {
+                    Callback = MethodBase.GetCurrentMethod().Name;
+                    var caller = new StackFrame(1).GetMethod();
+                    Caller = caller.Name + " " + (caller.MethodImplementationFlags & MethodImplAttributes.NoInlining);
+                    position = new(position.Value + 1);
+                }
+            }
+            [EcsModule, IncludeSystems(typeof(Systems)), IncludeBundle<Particle>] public static partial class Game { }
+            [Schedule, Run(typeof(Systems), nameof(Systems.Step))] public partial class Simulation { }
+            public static class Acceptance
+            {
+                public static int Run()
+                {
+                    using var world = new WorldBuilder().AddModule(Game.Module).Build();
+                    var entity = world.Spawn(new Particle(new(7)));
+                    using var simulation = Simulation.Create(world);
+                    simulation.Run();
+                    return world.Get<Position>(entity).Value;
+                }
+            }
+            """], [], optimization);
+        result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+        var assembly = LoadCompilation(result.Output);
+        Execute(assembly).Should().Be(8);
+        // A method that calls GetCurrentMethod is never inlined, so the names are those of the methods that ran.
+        Named(assembly, "Systems").GetField("Callback")!.GetValue(null).Should().Be(expectedCallback);
+        Named(assembly, "Systems").GetField("Caller")!.GetValue(null).Should().Be("__Rows NoInlining");
+    }
+
+    [Theory]
+    [InlineData(OptimizationLevel.Release)]
+    [InlineData(OptimizationLevel.Debug)]
+    public void Change_filtered_Each_stamps_passing_rows_and_records_commands_for_their_entities(OptimizationLevel optimization)
+    {
+        var result = GenerateCore(["""
+            using Archevolt;
+            [Component, TrackChanges] public readonly record struct Health(int Value);
+            [Component, TrackChanges] public readonly record struct Damage(int Value);
+            [Bundle] public readonly partial record struct Unit(Health Health, Damage Damage);
+            public static partial class Systems
+            {
+                public static int Seen;
+                [Each, Changed<Damage>]
+                public static void Apply(Entity entity, scoped ref Health health, scoped in Damage damage, scoped Commands commands)
+                {
+                    health = new(health.Value - damage.Value);
+                    if (health.Value <= 0) commands.Despawn(entity);
+                }
+                [Each, Changed<Health>] public static void Observe(scoped in Health health) => Seen++;
+            }
+            [EcsModule, IncludeSystems(typeof(Systems)), IncludeBundle<Unit>] public static partial class Game { }
+            [Schedule, Run(typeof(Systems), nameof(Systems.Apply))] public partial class Simulation { }
+            [Schedule, Run(typeof(Systems), nameof(Systems.Observe))] public partial class Observer { }
+            public static class Acceptance
+            {
+                static int Observed(BoundSchedule observer) { Systems.Seen = 0; observer.Run(); return Systems.Seen; }
+                public static int Run()
+                {
+                    using var world = new WorldBuilder().AddModule(Game.Module).Build();
+                    var entities = new Entity[300];
+                    for (int i = 0; i < entities.Length; i++) entities[i] = world.Spawn(new Unit(new(10), new(i % 3 == 0 ? 10 : 1)));
+                    using var simulation = Simulation.Create(world); using var observer = Observer.Create(world);
+                    if (Observed(observer) != 300) return -1;
+                    simulation.Run();
+                    for (int i = 0; i < entities.Length; i++) if (world.Contains(entities[i]) == (i % 3 == 0)) return -2;
+                    if (Observed(observer) != 200) return -3;
+                    simulation.Run();
+                    if (Observed(observer) != 0) return -4;
+                    world.Insert(entities[1], new Damage(4));
+                    world.Insert(entities[2], new Damage(5));
+                    simulation.Run();
+                    if (Observed(observer) != 2) return -5;
+                    return world.Get<Health>(entities[1]).Value * 100 + world.Get<Health>(entities[2]).Value * 10 + world.Get<Health>(entities[4]).Value;
+                }
+            }
+            """], [], optimization);
+        result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+        Execute(LoadCompilation(result.Output)).Should().Be(549);
+    }
+
+    static Assembly CompileWithoutWarnings(string source, params MetadataReference[] references)
+    {
+        var result = GenerateCore([source], references, warnings: ReportDiagnostic.Error);
+        result.Diagnostics.Should().BeEmpty();
+        return LoadCompilation(result.Output);
+    }
+
+    static Type Named(Assembly assembly, string name) => assembly.GetTypes().Single(type => type.Name == name);
+
+    static MethodInfo? InlinedCopy(Assembly assembly) => Named(assembly, "Systems").GetMethod("__Archevolt_Step_Inlined", BindingFlags.NonPublic | BindingFlags.Static);
+
     static string GeneratedSource(Compilation output, string suffix) => output.SyntaxTrees.Single(tree => tree.FilePath.EndsWith(suffix, StringComparison.Ordinal)).ToString();
 
     static int Execute(Assembly assembly, string type = "Acceptance") => (int)assembly.GetType(type)!.GetMethod("Run")!.Invoke(null, null)!;
@@ -1313,13 +1656,13 @@ public sealed class GeneratorTests
     static (Compilation Output, IReadOnlyList<Diagnostic> Diagnostics, GeneratorDriver Driver, Compilation Input) Generate(params string[] sources) => GenerateCore(sources, []);
 
     static (Compilation Output, IReadOnlyList<Diagnostic> Diagnostics, GeneratorDriver Driver, Compilation Input) GenerateCore(string[] sources, MetadataReference[] additionalReferences,
-        OptimizationLevel optimization = OptimizationLevel.Release)
+        OptimizationLevel optimization = OptimizationLevel.Release, ReportDiagnostic warnings = ReportDiagnostic.Default)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var parseOptions = new CSharpParseOptions(LanguageVersion.CSharp14);
         var compilation = CSharpCompilation.Create("Consumer_" + Guid.NewGuid().ToString("N"),
             sources.Select(source => CSharpSyntaxTree.ParseText(source, parseOptions, cancellationToken: cancellationToken)), References().Concat(additionalReferences),
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optimizationLevel: optimization));
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optimizationLevel: optimization, allowUnsafe: true, generalDiagnosticOption: warnings));
         var driver = CSharpGeneratorDriver.Create([new ArchevoltGenerator().AsSourceGenerator()], parseOptions: parseOptions,
             driverOptions: new GeneratorDriverOptions(default, trackIncrementalGeneratorSteps: true))
             .RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics, cancellationToken);

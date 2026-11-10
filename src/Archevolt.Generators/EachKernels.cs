@@ -190,7 +190,7 @@ public sealed partial class ArchevoltGenerator
                     {
                         ("Component", var index) when index == _written => new Floats(_state.ToImmutableArray(), reference.Type!),
                         ("Component", var index) => Load(index, reference.Type!),
-                        ("Res", _) => new ResourcePath(Escape(reference.Parameter.Name), reference.Type!),
+                        ("Res", _) => new ResourcePath(model.Parameters[method.Parameters.IndexOf(reference.Parameter)].Name, reference.Type!),
                         _ => null
                     };
                 case IPropertyReferenceOperation property when property.Arguments.Length == 0 && property.Instance is { } instance:
