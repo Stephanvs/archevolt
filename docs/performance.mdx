@@ -13,7 +13,7 @@ The numbers come from one machine and one run of the suite. They are not a regre
 
 Every table was measured on 2 November 2026, at commit `8029e7f`, on an AMD Ryzen 9 5950X with Windows 11 Pro, .NET 11.0.0-rc.3, a Release build, and BenchmarkDotNet 0.16.0-preview.2 with its default job. The machine was otherwise idle. Each value is the median of three process runs in microseconds, with the fastest and slowest run in brackets.
 
-That source tree matches release `v0.5.5`. Later code runs single-work-item batches on the owner thread without waking idle workers. The [4 November dispatch and partitioning study](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/query-partition-threshold.md) measures that change separately. The tables here retain the earlier checkpoint and do not measure the updated dispatch path. Later still, worker threads spin briefly between batches instead of blocking at once. The [5 November report](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/performance-hill-climb-report.md) measures that change. Its [second round](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/performance-hill-climb-round-2.md) measures `[Each]` methods compiled into [SIMD kernels](/guides/systems#simd-kernels). It measured the movement `[Each]` from the table below at about 22 µs, against about 96 µs before that change on the same day.
+That source tree matches release `v0.5.5`. Later code runs single-work-item batches on the owner thread without waking idle workers. The [4 November dispatch and partitioning study](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/query-partition-threshold.md) measures that change separately. The tables here retain the earlier checkpoint and do not measure the updated dispatch path. Later still, worker threads spin briefly between batches instead of blocking at once. The [5 November report](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/performance-hill-climb-report.md) measures that change. Its [second round](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/performance-hill-climb-round-2.md) measures `[Each]` methods compiled into [SIMD kernels](/guides/systems#simd-kernels). It measured the movement `[Each]` from the table below at about 22 µs, against about 96 µs before that change on the same day. The [10 November report](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/each-kernels.md) measures kernels for methods with branches and helper calls, and a faster loop for methods that are not kernels. [`[Each]` methods by shape](#each-methods-by-shape) has its numbers.
 
 ## Dense movement at 100,000 entities
 
@@ -28,6 +28,24 @@ All cases use the same `Position` and `Velocity` structs, initial values, and pe
 | Named query, `foreach` over rows | 83.16 [82.48, 84.21] | 0.832 |
 
 A named query's time depends on how the JIT lays out its loop in each process. Over the [traversal matrix](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/results.md#traversal-matrix), the same 100,000-entity named query measured about 82 µs in some processes and about 94 µs in others.
+
+## `[Each]` methods by shape
+
+How an `[Each]` method is written decides whether it runs as a [SIMD kernel](/guides/systems#simd-kernels). These cases were measured on 10 November 2026 on a different machine from the other tables: an AMD Ryzen AI 9 HX 370 running Linux, with the process pinned to two cores that ran nothing else, .NET 11.0.0-rc.3, one worker, and 100,000 entities. Each value is the median of five process runs. The [report](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/each-kernels.md) has the ranges, a second machine, and NativeAOT.
+
+| Method | Runs as | ns per entity |
+| --- | --- | ---: |
+| Moves a position by a velocity | Kernel | 0.114 |
+| Moves a position and wraps it with `if` | Kernel | 0.113 |
+| Wraps through a helper method | Kernel | 0.113 |
+| Adds one field of a component to another | Kernel | 0.106 |
+| Clamps with `MathF.Min` and `MathF.Max` | Kernel | 0.106 |
+| Writes a `float` from a two-float component | Loop over the entities | 0.884 |
+| Takes an `Entity` and `Commands` | Loop over the entities | 0.911 |
+| The same wrap in an `[EachBlock]` indexed loop | Your loop | 0.589 |
+| The same wrap in a named query | `foreach` over rows | 0.772 |
+
+An `[Each]` system measures the same whether or not entities existed when it first ran. The named query does not. When its system first ran while no entity matched, the same `foreach` took 1.18 ns per entity, because the runtime had compiled the loop before the loop ever ran.
 
 ## Parallel execution
 
@@ -73,6 +91,7 @@ A `Changed<T>` scan with nothing changed takes about 0.16 µs at both sizes, bec
 - Structural churn moves rows between archetypes. An idle tag insert and remove costs about 87 ns per entity at 1,000 entities.
 - Small workloads can cost more to dispatch in parallel than to run serially, as the parallel table shows.
 - Workers spin for up to 50 µs after each parallel batch, so frequent small batches keep extra cores busy. A parallel batch that follows a single-item batch wakes blocked workers, which costs about as much as the dispatch in the parallel table.
+- A named query whose system first ran while no entity matched keeps a slower loop for the life of the process, 1.18 against 0.77 ns per entity in [one measurement](#each-methods-by-shape). `[Each]` and `[EachBlock]` do not.
 - Writable access stamps a change on [tracked components](/guides/change-tracking) even when the value is equal.
 - `Added<T>` and `Changed<T>` filters skip archetypes with no stamp since the system last ran, but read every row of an archetype that has one. Changes spread thinly across many archetypes cost more to scan than the same changes kept in a few.
 - The first command playback without preallocated command capacity allocated 160.12 KB for 1,000 tag round trips. With 65,536 initial command bytes, it allocated 232 B.

@@ -1,0 +1,8 @@
+UTC=2026-11-10T18:42:07.5325480Z
+Baseline=archevolt-bench/step1/shapes-linux-jit
+Candidate=archevolt-bench/step2/shapes-linux-jit
+Launches=3
+Modes=populated,empty
+Rows=100000
+Remote=mini
+Prefix=taskset -c 2,3
