@@ -31,7 +31,7 @@ A named query's time depends on how the JIT lays out its loop in each process. O
 
 ## `[Each]` methods by shape
 
-How an `[Each]` method is written decides whether it runs as a [SIMD kernel](/guides/systems#simd-kernels). These cases were measured on 10 November 2026 on a different machine from the other tables: an AMD Ryzen AI 9 HX 370 running Linux, with the process pinned to two cores that ran nothing else, .NET 11.0.0-rc.3, one worker, and 100,000 entities. Each value is the median of five process runs. The [report](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/each-kernels.md) has the ranges, a second machine, and NativeAOT.
+How an `[Each]` method is written decides whether it runs as a [SIMD kernel](/guides/systems#simd-kernels). These cases were measured on 10 November 2026 on a different machine from the other tables: an AMD Ryzen AI 9 HX 370 running Linux, with the process pinned to two cores, .NET 11.0.0-rc.3, one worker, and 100,000 entities. Each value is the median of five process runs. The [report](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/each-kernels.md) has the ranges, a second machine, and NativeAOT.
 
 | Method | Runs as | ns per entity |
 | --- | --- | ---: |
@@ -45,7 +45,7 @@ How an `[Each]` method is written decides whether it runs as a [SIMD kernel](/gu
 | The same wrap in an `[EachBlock]` indexed loop | Your loop | 0.589 |
 | The same wrap in a named query | `foreach` over rows | 0.772 |
 
-An `[Each]` system measures the same whether or not entities existed when it first ran. The named query does not. When its system first ran while no entity matched, the same `foreach` took 1.18 ns per entity, because the runtime had compiled the loop before the loop ever ran.
+An `[Each]` system measures within 6% of the same value whether or not entities existed when it first ran. The named query does not. When its system first ran while no entity matched, the same `foreach` took 1.18 ns per entity, because the runtime had compiled the loop before the loop ever ran.
 
 ## Parallel execution
 

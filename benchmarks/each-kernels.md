@@ -2,7 +2,7 @@
 
 After [round two](performance-hill-climb-round-2.md), an `[Each]` callback ran as a SIMD kernel only when every float of the written component shared one formula. A callback with a branch, a read of a second field, or a call into a helper kept the row loop. None of the three `[Each]` systems in Archeoids qualified.
 
-You asked what the next step should be, and then asked for both changes that the measurements pointed to:
+This round makes both changes that the earlier measurements pointed to:
 
 - Make the row loop fast in the two situations where it ran 3 to 7 times slower than it could.
 - Widen the kernels so that these callbacks leave the row loop.
@@ -33,7 +33,7 @@ Baseline `b7680be` against `45eb957` on `mini`, five processes per side, 100,000
 | `each-length` | Writes a `float` from a two-float component, so it stays a row loop | 0.994 to 0.889 | 0.888 to 0.884 |
 | `each-plain` | A kernel before this work | 0.115 to 0.114 | 0.113 to 0.114 |
 
-The first six cases now run as kernels, at the speed of the hand-written `Vector256` versions of the same loops (`vector-wrap` 0.113, `vector-spin` 0.107). `each-expire` and `each-length` stay row loops and gain from the first change alone. `each-plain`, the named query, and the two hand-written `[EachBlock]` cases overlap the baseline in both orders.
+The first six cases now run as kernels, at the speed of the hand-written `Vector256` versions of the same loops (`vector-wrap` 0.113, `vector-spin` 0.106 to 0.108). `each-expire` and `each-length` stay row loops and gain from the first change alone. `each-plain`, the named query, and the two hand-written `[EachBlock]` cases overlap the baseline in both orders.
 
 ## Conditions and method
 
@@ -47,7 +47,7 @@ The first six cases now run as kernels, at the speed of the hand-written `Vector
 
 `Archevolt.EachShapes` builds one world of 100,000 entities and runs 13 systems over it on one worker. It warms for 4.5 seconds, then takes 31 samples of 8 runs per case in rotating order and reports the median per process. `scripts/each-shapes.ps1` runs the two builds in alternating process order and reports the median of the process medians with their range. After timing, each process runs every case once over 1,027 rows whose values take both sides of every branch, and compares every entity bit for bit with a reference written without the ECS. It also checks that no case allocates managed memory.
 
-Identical builds measured against each other differ by at most 2% on `mini` in every case ([noise-mini](results/each-kernels/noise-mini/summary.md)). On `fiji` they differ by at most 5%, except `each-bounce` with a populated start at 17% ([noise-fiji](results/each-kernels/noise-fiji/summary.md)). `mini` is the primary host for that reason.
+Identical builds measured against each other differ by at most 2% on `mini`, except `block-wrap` with a populated start at 5% ([noise-mini](results/each-kernels/noise-mini/summary.md)). On `fiji` they differ by at most 5%, except `each-bounce` with a populated start at 17% ([noise-fiji](results/each-kernels/noise-fiji/summary.md)). `mini` is the primary host for that reason.
 
 Each change was compared with the build before it on `mini`, three processes per side, and the final state was compared with the baseline again, five processes per side. `fiji` repeated the step 1 comparison and the final one.
 
@@ -122,7 +122,16 @@ The final state on the other hosts, baseline to `45eb957`, median ns per row ([f
 
 The workstation was in use. Its hand-written `vector-wrap` and `vector-spin` cases, whose code is the same on both sides, measured 0.84 and 0.88 times the baseline, so differences below about 16% mean nothing there.
 
-Generator tests compile ten new shapes and run each kernel against its callback bit for bit, with the data of round two: 2,051 entities over two archetypes, four workers with partitions, three steps, and values that include NaN, infinities, signed zero, and denormals. The shapes cover a read across fields, `if` and `else if` with locals on a three-float row, `?:` with `||`, `&&`, `!`, `==`, and `!=`, the four functions, helper calls by value and by `ref`, a rotation of the three lanes of a `Vector3`, a five-float row, a row with a constant lane and a resource lane, and `static readonly` fields. Eleven shapes outside the subset are checked to keep the row loop, including a loop, an early `return`, `%`, a recursive helper, and a call that passes the written component by `ref` and by `in`.
+Generator tests compile eleven new shapes and run each kernel against its callback bit for bit, with the data of round two: 2,051 entities over two archetypes, four workers with partitions, three steps, and values that include NaN, infinities, signed zero, and denormals. The shapes cover a read across fields, `if` and `else if` with locals on a three-float row, `?:` with `||`, `&&`, `!`, `==`, and `!=`, the four functions, helper calls by value and by `ref`, a rotation of the three lanes of a `Vector3`, a five-float row, a row with a constant lane and a resource lane, `static readonly` fields, a helper that writes through `ref` and returns the component, and a helper with a local that both outcomes of a `?:` call. Sixteen shapes outside the subset are checked to keep the row loop, including a loop, an early `return`, `%`, a recursive helper, and a call that passes the written component by `ref` and by `in`.
+
+A review of the analysis found callbacks that the first version compiled into a kernel with a different result. Each one calls a helper that writes through a `ref` parameter:
+
+- The helper is called in one outcome of a `?:`, or on the right of `&&` or `||`. The callback skips the write for some rows, and the kernel made it for every row.
+- The helper writes floats that the same call also passes through `in`, in a nested argument or behind a `ref` return. The callee sees the write, and the kernel had bound the parameter to the earlier value.
+- The helper is the instance of a member access, such as `Advance(ref position).Value.X`. The analysis evaluated the call twice.
+- The helper or the callback is `[Conditional]`. The compiler removes the call, and the kernel still made it.
+
+The first, second, and fourth now keep the row loop, and the third is evaluated once. Each has a test that fails on the first version. The generated code of the benchmark harness and of Archeoids is byte for byte the same before and after, so the measurements above stand.
 
 ## Guards
 
@@ -137,7 +146,7 @@ ApiCompat in strict mode reports no change in `Archevolt.dll`, `Archeoids.dll`, 
 - **`Archevolt.Particles.dll`.** The compiler moved its `NullableContext` and `Nullable` attributes between `MotionKernel` and its members, because the type gained the private inlined copy. No member was added, removed, or retyped.
 - **`Archevolt.Benchmarks.dll` and `Archevolt.Tests.dll`.** The `[Benchmark]` and `[Fact]` attributes record source paths and lines. The baseline was built in another directory, and tests were added.
 
-An exception thrown in a callback now names `__Archevolt_<Method>_Inlined` in its stack trace in an optimized build.
+An exception thrown in a callback no longer names the callback in its stack trace in an optimized build. It names a generated method.
 
 ## Verification
 
