@@ -1134,7 +1134,7 @@ public sealed class GeneratorTests
             .Select(static item => item.Id).Should().Contain(diagnostic);
     }
 
-    public static TheoryData<string, string, string> LaneUniformCallbacks => new()
+    public static TheoryData<string, string, string> KernelCallbacks => new()
     {
         {
             "[Component] public readonly record struct Position(float X, float Y, float Z); [Component] public readonly record struct Velocity(float X, float Y, float Z);",
@@ -1217,11 +1217,27 @@ public sealed class GeneratorTests
             """,
             "",
             "Vector2 next = position.Value + Limits.Scale * velocity.Value; next.X -= 3f; if (next.Y > next.X) next.Y = next.X; position = new(new Vector2(next.X > Limits.Top ? Limits.Bottom : next.X, next.Y));"
+        },
+        {
+            """
+            [Component] public readonly record struct Position(Vector2 Value); [Component] public readonly record struct Velocity(Vector2 Value);
+            public static class Steps { public static Position Advance(ref Position position, in Velocity velocity) { position = new(position.Value + velocity.Value); return position; } }
+            """,
+            "",
+            "float x = Steps.Advance(ref position, in velocity).Value.X; position = new(new Vector2(position.Value.X, position.Value.Y + x));"
+        },
+        {
+            """
+            [Component] public readonly record struct Position(Vector2 Value); [Component] public readonly record struct Velocity(Vector2 Value);
+            public static class Steps { public static float Half(float value) { float half = value * 0.5f; if (half < 1f) half = 1f; return half; } }
+            """,
+            "",
+            "position = new(new Vector2(Steps.Half(position.Value.X), position.Value.Y > 0f ? Steps.Half(velocity.Value.Y) : Steps.Half(position.Value.Y)));"
         }
     };
 
     [Theory]
-    [MemberData(nameof(LaneUniformCallbacks))]
+    [MemberData(nameof(KernelCallbacks))]
     public void Each_callbacks_with_a_formula_per_float_run_as_kernels_that_match_the_callback_bit_for_bit(string components, string observer, string body)
     {
         var assembly = CompileAndLoad($$"""
@@ -1273,7 +1289,8 @@ public sealed class GeneratorTests
                 public static int Run()
                 {
                     var kernel = typeof(Systems).GetNestedType("__Archevolt_MoveBody", BindingFlags.NonPublic)!.GetField("__kernel", BindingFlags.NonPublic | BindingFlags.Static)!;
-                    // A row wider than four floats is a kernel only where 256-bit vectors are accelerated.
+                    // A row kernel over more than four floats needs 256-bit vectors. Without them the system keeps the row
+                    // loop and there is nothing to compare.
                     if (!(bool)kernel.GetValue(null)!) return Unsafe.SizeOf<Position>() > 16 && !System.Runtime.Intrinsics.Vector256.IsHardwareAccelerated ? 0 : -1;
                     using var world = new WorldBuilder().UseParallelExecution(4).AddModule(Game.Module).Build();
                     var entities = new Entity[2051];
@@ -1315,6 +1332,11 @@ public sealed class GeneratorTests
     [InlineData("position = new(position.Value / time.Value.Delta);")]
     [InlineData("position = new(position.Value + velocity.Value * (float)(time.Value.Delta * 0.5));")]
     [InlineData("position = new(position.Value + velocity.Value * time.Value.Scaled);")]
+    [InlineData("float x = position.Value.X > 0f ? Bump(ref position) : 0f; position = new(position.Value + new Vector3(x));")]
+    [InlineData("if (position.Value.X > 0f && Check(ref position)) position = new(position.Value + velocity.Value);")]
+    [InlineData("float x = Sum(in position, Bump(ref position)); position = new(position.Value + new Vector3(x));")]
+    [InlineData("position = new(position.Value + Pick(in velocity).Value);")]
+    [InlineData("Reset(ref position); position = new(position.Value + velocity.Value);")]
     public void Each_callbacks_outside_the_kernel_subset_keep_the_row_loop(string body)
     {
         var result = Generate($$"""
@@ -1328,8 +1350,31 @@ public sealed class GeneratorTests
             {
                 static Vector3 Wrap(Vector3 value) { while (value.X > 1f) value.X -= 1f; return value; }
                 static float Twice(float value) => value > 100f ? value : Twice(value * 2f);
-                static void Mix(ref Position target, in Position source) { target = new(target.Value + Vector3.One); target = new(target.Value + source.Value); }
+                static void Mix(ref Position target, in Position source) { target = new(target.Value + new Vector3(1f)); target = new(target.Value + source.Value); }
+                static float Bump(ref Position target) { target = new(target.Value + new Vector3(1f)); return 1f; }
+                static bool Check(ref Position target) { target = new(target.Value + new Vector3(1f)); return target.Value.Y > 0f; }
+                static float Sum(in Position source, float extra) => source.Value.X + extra;
+                static ref readonly Velocity Pick(in Velocity source) => ref source;
+                [System.Diagnostics.Conditional("NEVER_DEFINED")] static void Reset(ref Position target) => target = new(new Vector3(0f));
                 [Each] public static void Move(scoped ref Position position, scoped in Velocity velocity, scoped Res<FrameTime> time) { {{body}} }
+            }
+            """);
+        result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+        GeneratedSource(result.Output, ".Each.g.cs").Should().NotContain("__Kernel(");
+    }
+
+    [Fact]
+    public void Conditional_Each_callbacks_keep_the_row_loop()
+    {
+        var result = Generate("""
+            using Archevolt;
+            using System.Numerics;
+            [Component] public readonly record struct Position(Vector3 Value);
+            [Component] public readonly record struct Velocity(Vector3 Value);
+            public static partial class Systems
+            {
+                [Each, System.Diagnostics.Conditional("NEVER_DEFINED")]
+                public static void Move(scoped ref Position position, scoped in Velocity velocity) => position = new(position.Value + velocity.Value);
             }
             """);
         result.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).Should().BeEmpty();

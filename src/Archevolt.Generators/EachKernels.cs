@@ -106,11 +106,16 @@ public sealed partial class ArchevoltGenerator
         if (model.Form != SystemForm.Each || semantics.Compilation.Options.OptimizationLevel != OptimizationLevel.Release) return null;
         if (model.Queries[0].Any(static term => term.Mode is "Added" or "Changed" or "Optional")) return null;
         if (model.Parameters.Any(static parameter => parameter.Kind is not ("Component" or "Res"))) return null;
+        // A [Conditional] callback is compiled away where its symbol is not defined. A kernel would still run.
+        if (Conditional(method)) return null;
         var written = model.Parameters.Where(static parameter => parameter.Kind == "Component" && parameter.RefKind == "ref").ToArray();
         if (written.Length != 1 || syntax is not MethodDeclarationSyntax declaration) return null;
         if (semantics.GetOperation(declaration, cancellationToken) is not IMethodBodyOperation body) return null;
         return new KernelAnalysis(model, method, semantics.Compilation, cancellationToken).Run(body, written[0].Index);
     }
+
+    static bool Conditional(IMethodSymbol method) =>
+        method.GetAttributes().Any(static attribute => attribute.AttributeClass?.ToDisplayString() == "System.Diagnostics.ConditionalAttribute");
 
     sealed class KernelAnalysis(SystemModel model, IMethodSymbol method, Compilation compilation, CancellationToken cancellationToken)
     {
@@ -122,6 +127,9 @@ public sealed partial class ArchevoltGenerator
         readonly Dictionary<int, ITypeSymbol> _columns = [];
         readonly HashSet<IMethodSymbol> _calls = new(SymbolEqualityComparer.Default);
         Dictionary<ISymbol, Binding> _bindings = new(SymbolEqualityComparer.Default);
+        // Floats that an in parameter of a call in progress refers to. The callee reads them by reference, so a write to
+        // them during the call would show through a parameter that the analysis bound to a value.
+        readonly List<Target> _frozen = [];
         Lane[] _state = [];
         int _written;
 
@@ -179,7 +187,7 @@ public sealed partial class ArchevoltGenerator
             return (body.BlockBody ?? body.ExpressionBody) is { } block && Statements(block.Operations, top: true, ref result);
         }
 
-        // A value is returned only by the last statement of a method, so no statement runs after a return.
+        // A return is accepted only as the last top-level statement of a method, so no statement runs after one.
         bool Statements(ImmutableArray<IOperation> statements, bool top, ref Symbolic? result)
         {
             for (int index = 0; index < statements.Length; index++)
@@ -243,7 +251,7 @@ public sealed partial class ArchevoltGenerator
         }
 
         // Both outcomes are computed from the state before the branch. Each float that differs afterwards becomes a
-        // select on the condition. That is the value the callback computes, because nothing here has a side effect.
+        // select on the condition, so a write made in one outcome reaches only the rows that take it.
         bool Branch(IConditionalOperation conditional)
         {
             if (Evaluate(conditional.Condition) is not Condition condition) return false;
@@ -315,6 +323,8 @@ public sealed partial class ArchevoltGenerator
         bool Write(Target target, ImmutableArray<Lane> lanes)
         {
             if (lanes.Length != target.Count) return false;
+            if (_frozen.Any(held => SymbolEqualityComparer.Default.Equals(held.Slot, target.Slot)
+                && held.Start < target.Start + target.Count && target.Start < held.Start + held.Count)) return false;
             if (target.Slot is null) lanes.CopyTo(_state, target.Start);
             else
             {
@@ -347,21 +357,23 @@ public sealed partial class ArchevoltGenerator
                         _ => null
                     } : null;
                 case IPropertyReferenceOperation property when property.Arguments.Length == 0 && property.Instance is { } instance:
-                    if (Evaluate(instance) is ResourcePath resource)
+                    var owner = Evaluate(instance);
+                    if (owner is ResourcePath resource)
                     {
                         if (resource.Type is INamedTypeSymbol { Name: "Res", Arity: 1 } wrapper && wrapper.ContainingNamespace.ToDisplayString() == "Archevolt" && property.Property.Name == "Value")
                             return new ResourcePath(resource.Path + ".Value", wrapper.TypeArguments[0]);
                         return PlainProperty(property.Property) ? new ResourcePath(resource.Path + "." + Escape(property.Property.Name), property.Type!) : null;
                     }
-                    return Slice(Evaluate(instance), property.Property, property.Type!);
+                    return Slice(owner, property.Property, property.Type!);
                 // A static readonly field cannot change after its type is initialized, so the kernel reads it once per block.
                 case IFieldReferenceOperation { Field: { IsStatic: true, IsReadOnly: true } shared } when
                     (shared.Type.SpecialType == SpecialType.System_Single || VectorLanes(shared.Type) is not null) && compilation.IsSymbolAccessibleWithin(shared, method.ContainingType):
                     return new ResourcePath(TypeName(shared.ContainingType) + "." + Escape(shared.Name), shared.Type);
                 case IFieldReferenceOperation field when !field.Field.IsStatic && field.Instance is { } instance:
-                    if (Evaluate(instance) is ResourcePath fieldResource)
+                    var holder = Evaluate(instance);
+                    if (holder is ResourcePath fieldResource)
                         return new ResourcePath(fieldResource.Path + "." + Escape(field.Field.Name), field.Type!);
-                    return Slice(Evaluate(instance), field.Field, field.Type!);
+                    return Slice(holder, field.Field, field.Type!);
                 case IUnaryOperation { OperatorKind: UnaryOperatorKind.Plus, OperatorMethod: null } plus when plus.Type?.SpecialType == SpecialType.System_Single:
                     return Materialize(Evaluate(plus.Operand));
                 case IUnaryOperation { OperatorKind: UnaryOperatorKind.Minus, OperatorMethod: null, IsLifted: false } minus when minus.Type?.SpecialType == SpecialType.System_Single:
@@ -371,12 +383,13 @@ public sealed partial class ArchevoltGenerator
                 case IBinaryOperation { OperatorMethod: null, IsLifted: false } binary when Comparison(binary.OperatorKind) is { } comparison:
                     return Scalar(binary.LeftOperand) is { } smaller && Scalar(binary.RightOperand) is { } larger ? new Condition(new CompareLane(comparison, smaller, larger)) : null;
                 case IBinaryOperation { OperatorMethod: null, IsLifted: false } binary when Logic(binary) is { } logic:
-                    return Evaluate(binary.LeftOperand) is Condition first && Evaluate(binary.RightOperand) is Condition second
+                    return Evaluate(binary.LeftOperand) is Condition first
+                        && (binary.OperatorKind is BinaryOperatorKind.ConditionalAnd or BinaryOperatorKind.ConditionalOr ? Skippable(binary.RightOperand) : Evaluate(binary.RightOperand)) is Condition second
                         ? new Condition(new LogicLane(logic, first.Mask, second.Mask)) : null;
                 case IBinaryOperation binary:
                     return Combine(binary.OperatorKind, binary.OperatorMethod, Evaluate(binary.LeftOperand), Evaluate(binary.RightOperand), binary.Type!, binary.IsLifted);
                 case IConditionalOperation { IsRef: false } conditional:
-                    return Evaluate(conditional.Condition) is Condition condition && Evaluate(conditional.WhenTrue) is { } whenTrue && Evaluate(conditional.WhenFalse) is { } whenFalse
+                    return Evaluate(conditional.Condition) is Condition condition && Skippable(conditional.WhenTrue) is { } whenTrue && Skippable(conditional.WhenFalse) is { } whenFalse
                         ? Select(condition.Mask, Materialize(whenTrue) ?? whenTrue, Materialize(whenFalse) ?? whenFalse) : null;
                 case IObjectCreationOperation creation when creation.Initializer is null && creation.Constructor is { } constructor:
                     return Construct(constructor, creation.Arguments, creation.Type!);
@@ -388,6 +401,21 @@ public sealed partial class ArchevoltGenerator
                     return null;
             }
         }
+
+        // Evaluates an expression that the callback skips for some rows: an outcome of ?:, or the right operand of && or
+        // ||. The kernel evaluates it for every row, which gives the same result only when the expression writes nothing.
+        // A called method can write through a ref parameter.
+        Symbolic? Skippable(IOperation? operation)
+        {
+            var state = (Lane[])_state.Clone();
+            var bindings = new Dictionary<ISymbol, Binding>(_bindings, SymbolEqualityComparer.Default);
+            var value = Evaluate(operation);
+            return value is not null && state.SequenceEqual(_state)
+                && bindings.All(entry => _bindings.TryGetValue(entry.Key, out var current) && Unchanged(entry.Value, current)) ? value : null;
+        }
+
+        static bool Unchanged(Binding before, Binding after) => before.Equals(after)
+            || before is ValueBinding { Value: Floats held } && after is ValueBinding { Value: Floats kept } && held.Lanes.SequenceEqual(kept.Lanes);
 
         Lane? Scalar(IOperation operand) =>
             operand.Type?.SpecialType == SpecialType.System_Single && Materialize(Evaluate(operand)) is { Lanes.Length: 1 } value ? value.Lanes[0] : null;
@@ -403,7 +431,7 @@ public sealed partial class ArchevoltGenerator
             _ => null
         };
 
-        // The kernel evaluates both operands of && and ||. Both are comparisons of floats, which cannot fail.
+        // The kernel evaluates both operands of && and ||. Both are built from comparisons of floats, which cannot fail.
         static char? Logic(IBinaryOperation binary) => binary.Type?.SpecialType != SpecialType.System_Boolean ? null : binary.OperatorKind switch
         {
             BinaryOperatorKind.ConditionalAnd or BinaryOperatorKind.And => '&',
@@ -413,7 +441,8 @@ public sealed partial class ArchevoltGenerator
 
         // A call either names one of the float functions that have an identical vector form, or it is followed into a
         // static method of this compilation. By-value and in arguments bind the callee's parameters to values. A ref
-        // argument binds the parameter to the caller's floats.
+        // argument binds the parameter to the caller's floats. A [Conditional] method is not followed, because the
+        // compiler removes the call where its symbol is not defined.
         bool Call(IInvocationOperation invocation, out Symbolic? result)
         {
             result = null;
@@ -424,34 +453,33 @@ public sealed partial class ArchevoltGenerator
                 return true;
             }
             if (!callee.IsStatic || callee.MethodKind != MethodKind.Ordinary || callee.IsGenericMethod || callee.IsExtern || callee.IsAsync
-                || callee.DeclaringSyntaxReferences.Length != 1 || _calls.Count >= MaximumCallDepth) return false;
+                || callee.ReturnsByRef || callee.ReturnsByRefReadonly || Conditional(callee) || callee.DeclaringSyntaxReferences.Length != 1 || _calls.Count >= MaximumCallDepth) return false;
             if (callee.DeclaringSyntaxReferences[0].GetSyntax(cancellationToken) is not MethodDeclarationSyntax declaration
                 || compilation.GetSemanticModel(declaration.SyntaxTree).GetOperation(declaration, cancellationToken) is not IMethodBodyOperation body) return false;
             var arguments = new List<(IParameterSymbol Parameter, Binding Binding)>();
-            var aliases = new List<Target>();
+            int frozen = _frozen.Count;
             foreach (var argument in invocation.Arguments)
             {
                 if (argument.Parameter is not { } parameter || argument.ArgumentKind is not (ArgumentKind.Explicit or ArgumentKind.DefaultValue)) return false;
                 if (parameter.RefKind == RefKind.Ref)
                 {
                     if (Resolve(argument.Value) is not { } target) return false;
-                    aliases.Add(target);
                     arguments.Add((parameter, new AliasBinding(target)));
                 }
                 else if (parameter.RefKind is RefKind.None or RefKind.In or RefKind.RefReadOnlyParameter)
                 {
                     if (Evaluate(argument.Value) is not { } value) return false;
                     arguments.Add((parameter, new ValueBinding(Materialize(value) ?? value)));
+                    if (parameter.RefKind != RefKind.None && Resolve(argument.Value) is { } read) _frozen.Add(read);
                 }
                 else return false;
             }
-            // An in argument that names floats a ref argument also names would see the callee's writes. A value does not.
-            foreach (var argument in invocation.Arguments.Where(static argument => argument.Parameter!.RefKind is RefKind.In or RefKind.RefReadOnlyParameter))
-                if (Resolve(argument.Value) is { } read && aliases.Any(alias => SymbolEqualityComparer.Default.Equals(alias.Slot, read.Slot))) return false;
             if (!_calls.Add(callee)) return false;
             foreach (var (parameter, binding) in arguments) _bindings[parameter] = binding;
             bool completed = Body(body, out result) && (callee.ReturnsVoid || result is not null);
-            foreach (var (parameter, _) in arguments) _bindings.Remove(parameter);
+            // The callee's parameters and locals go out of scope, so a later call of the same method starts without them.
+            foreach (var symbol in _bindings.Keys.Where(symbol => SymbolEqualityComparer.Default.Equals(symbol.ContainingSymbol, callee)).ToArray()) _bindings.Remove(symbol);
+            _frozen.RemoveRange(frozen, _frozen.Count - frozen);
             _calls.Remove(callee);
             return completed;
         }
@@ -640,7 +668,7 @@ public sealed partial class ArchevoltGenerator
         }
     }
 
-    static int? VectorLanes(ITypeSymbol type) => type is INamedTypeSymbol { IsGenericType: false } named && named.ContainingNamespace.ToDisplayString() == "System.Numerics"
+    static int? VectorLanes(ITypeSymbol type) => type is INamedTypeSymbol { IsGenericType: false, DeclaringSyntaxReferences.Length: 0 } named && named.ContainingNamespace.ToDisplayString() == "System.Numerics"
         ? named.Name switch { "Vector2" => 2, "Vector3" => 3, "Vector4" => 4, _ => null } : null;
 
     static int Bits(float value) => BitConverter.ToInt32(BitConverter.GetBytes(value), 0);

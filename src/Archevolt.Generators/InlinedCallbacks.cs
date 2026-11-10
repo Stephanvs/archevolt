@@ -6,9 +6,9 @@ using Microsoft.CodeAnalysis.Operations;
 
 namespace Archevolt.Generators;
 
-// In an optimized build the row loop of an [Each] system calls a copy of the callback that is always inlined. The JIT
-// inlines the callback itself only when a profile shows the call is hot. A system whose first runs saw no rows has no
-// such profile, and NativeAOT has none at all.
+// In an optimized build the row loop of an [Each] system calls a copy of the callback marked AggressiveInlining. Without
+// it the JIT inlines all but very small callbacks only when a profile shows the call is hot. A system whose first runs
+// saw no rows has no such profile, and NativeAOT has none at all.
 public sealed partial class ArchevoltGenerator
 {
     sealed record InlinedCallback(string Name, string Member, string UnitUsings, string NamespaceUsings);
@@ -30,10 +30,10 @@ public sealed partial class ArchevoltGenerator
         // A file-local type can reach the body without its name appearing there, through an extension method or a
         // using static, so one anywhere in the file rules the copy out.
         if (DeclaresFileLocalType(unit)) return null;
-        // The copy carries no attributes. It would run where a [Conditional] callback is compiled away, would not take
+        // The copy carries none of the callback's attributes. It would run where a [Conditional] callback is compiled away, would not take
         // the lock of a Synchronized one, and would be inlined against NoInlining or NoOptimization.
         if ((method.MethodImplementationFlags & (MethodImplAttributes.NoInlining | MethodImplAttributes.NoOptimization | MethodImplAttributes.Synchronized)) != 0
-            || method.GetAttributes().Any(static attribute => attribute.AttributeClass?.ToDisplayString() == "System.Diagnostics.ConditionalAttribute")) return null;
+            || Conditional(method)) return null;
         // Caller information would name the copy and the generated file.
         if (semantics.GetOperation(declaration, cancellationToken) is not { } operation || operation.Descendants().OfType<IArgumentOperation>().Any(CallerInformation)) return null;
         bool unsafeContext = declaration.Modifiers.Any(SyntaxKind.UnsafeKeyword)
