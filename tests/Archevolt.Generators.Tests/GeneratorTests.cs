@@ -1160,12 +1160,69 @@ public sealed class GeneratorTests
             "[Component] public readonly record struct Position(Vector2 Value); [Component] public readonly record struct Velocity(Vector2 Value);",
             "",
             "position = new(position.Value - 0.5f * velocity.Value * time.Value.Delta);"
+        },
+        {
+            "[Component] public readonly record struct Position(float Angle, float Speed); [Component] public readonly record struct Velocity(float X, float Y);",
+            "",
+            "position = position with { Angle = position.Angle + position.Speed * time.Value.Delta };"
+        },
+        {
+            "[Component] public readonly record struct Position(float X, float Y, float Z); [Component] public readonly record struct Velocity(float X, float Y, float Z);",
+            "",
+            "float x = position.X + velocity.X * time.Value.Delta; float y = position.Y + velocity.Y; if (x >= 100f) x -= 100f; if (y < -50f) { y += 50f; } else if (y > 50f) y -= 50f; position = new Position(x, y, position.Z);"
+        },
+        {
+            "[Component] public readonly record struct Position(float X, float Y); [Component] public readonly record struct Velocity(float X, float Y);",
+            "",
+            "position = new Position(position.X < 0f || position.X >= 640f ? -velocity.X : velocity.X, !(position.Y <= velocity.Y) && position.Y != 3f ? position.Y - velocity.Y : position.Y == velocity.Y ? 1f : position.Y);"
+        },
+        {
+            "[Component] public readonly record struct Position(float X, float Y, float Z, float W); [Component] public readonly record struct Velocity(float X, float Y, float Z, float W);",
+            "",
+            "position = new Position(MathF.Max(-10f, MathF.Min(10f, position.X + velocity.X)), MathF.Abs(position.Y) + MathF.Sqrt(MathF.Abs(velocity.Y)), Math.Max(position.Z, velocity.Z), float.Min(position.W, velocity.W * time.Value.Delta));"
+        },
+        {
+            """
+            [Component] public readonly record struct Position(float X, float Y); [Component] public readonly record struct Velocity(float X, float Y);
+            public static class Helpers
+            {
+                public static float Wrap(float value, float size) => value >= size ? value - size : value;
+                public static float Decay(float value, float rate) { value *= rate; if (value < 0.001f) value = 0f; return value; }
+                public static void Step(ref Position position, in Velocity velocity, float delta)
+                    => position = new Position(Wrap(position.X + velocity.X * delta, 100f), Decay(Wrap(position.Y + velocity.Y * delta, 50f), 0.5f));
+            }
+            """,
+            "",
+            "Helpers.Step(ref position, in velocity, time.Value.Delta);"
+        },
+        {
+            "[Component] public readonly record struct Position(Vector3 Value); [Component] public readonly record struct Velocity(Vector3 Value);",
+            "",
+            "position = new(new Vector3(position.Value.Y, position.Value.Z + velocity.Value.X, position.Value.X));"
+        },
+        {
+            "[Component] public struct Position { public float A; public float B; public float C; public float D; public float E; } [Component] public struct Velocity { public float A; public float B; public float C; public float D; public float E; }",
+            "",
+            "position.A = position.B + velocity.A; position.E = -position.A; position.C *= 2f;"
+        },
+        {
+            "[Component] public readonly record struct Position(float X, float Y, float Z); [Component] public readonly record struct Velocity(float X, float Y, float Z);",
+            "",
+            "position = position with { X = 1.5f, Y = time.Value.Delta };"
+        },
+        {
+            """
+            [Component] public readonly record struct Position(Vector2 Value); [Component] public readonly record struct Velocity(Vector2 Value);
+            public static class Limits { public static readonly float Top = 10f; public const float Bottom = -10f; public static readonly Vector2 Scale = new(1f, 2f); }
+            """,
+            "",
+            "Vector2 next = position.Value + Limits.Scale * velocity.Value; next.X -= 3f; if (next.Y > next.X) next.Y = next.X; position = new(new Vector2(next.X > Limits.Top ? Limits.Bottom : next.X, next.Y));"
         }
     };
 
     [Theory]
     [MemberData(nameof(LaneUniformCallbacks))]
-    public void Lane_uniform_Each_callbacks_run_as_kernels_that_match_the_callback_bit_for_bit(string components, string observer, string body)
+    public void Each_callbacks_with_a_formula_per_float_run_as_kernels_that_match_the_callback_bit_for_bit(string components, string observer, string body)
     {
         var assembly = CompileAndLoad($$"""
             using Archevolt;
@@ -1247,14 +1304,20 @@ public sealed class GeneratorTests
 
     [Theory]
     [InlineData("position = new(Wrap(position.Value + velocity.Value * time.Value.Delta));")]
-    [InlineData("position = new(new Vector3(position.Value.Y, position.Value.Z, position.Value.X));")]
-    [InlineData("position = position with { Value = new Vector3(position.Value.X + velocity.Value.X, position.Value.Y, position.Value.Z) };")]
+    [InlineData("position = new(new Vector3(Twice(position.Value.X), position.Value.Y, position.Value.Z));")]
+    [InlineData("Mix(ref position, in position);")]
+    [InlineData("position = new(new Vector3(position.Value.X % 3f, position.Value.Y, position.Value.Z));")]
+    [InlineData("position = new(new Vector3(MathF.Sin(position.Value.X), position.Value.Y, position.Value.Z));")]
+    [InlineData("position = new(new Vector3((int)position.Value.X, position.Value.Y, position.Value.Z));")]
+    [InlineData("if (position.Value.X < 0f) return; position = new(position.Value + velocity.Value);")]
+    [InlineData("for (int step = 0; step < 2; step++) position = new(position.Value + velocity.Value);")]
     [InlineData("position = new(position.Value / time.Value.Delta);")]
     [InlineData("position = new(position.Value + velocity.Value * (float)(time.Value.Delta * 0.5));")]
     [InlineData("position = new(position.Value + velocity.Value * time.Value.Scaled);")]
-    public void Each_callbacks_that_are_not_lane_uniform_keep_the_scalar_loop(string body)
+    public void Each_callbacks_outside_the_kernel_subset_keep_the_row_loop(string body)
     {
         var result = Generate($$"""
+            using System;
             using Archevolt;
             using System.Numerics;
             [Component] public readonly record struct Position(Vector3 Value);
@@ -1262,7 +1325,9 @@ public sealed class GeneratorTests
             [Resource] public readonly record struct FrameTime(float Delta) { public float Scaled => Delta * 2; }
             public static partial class Systems
             {
-                static Vector3 Wrap(Vector3 value) => value;
+                static Vector3 Wrap(Vector3 value) { while (value.X > 1f) value.X -= 1f; return value; }
+                static float Twice(float value) => value > 100f ? value : Twice(value * 2f);
+                static void Mix(ref Position target, in Position source) { target = new(target.Value + Vector3.One); target = new(target.Value + source.Value); }
                 [Each] public static void Move(scoped ref Position position, scoped in Velocity velocity, scoped Res<FrameTime> time) { {{body}} }
             }
             """);
