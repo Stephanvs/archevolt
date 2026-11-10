@@ -1273,7 +1273,8 @@ public sealed class GeneratorTests
                 public static int Run()
                 {
                     var kernel = typeof(Systems).GetNestedType("__Archevolt_MoveBody", BindingFlags.NonPublic)!.GetField("__kernel", BindingFlags.NonPublic | BindingFlags.Static)!;
-                    if (!(bool)kernel.GetValue(null)!) return -1;
+                    // A row wider than four floats is a kernel only where 256-bit vectors are accelerated.
+                    if (!(bool)kernel.GetValue(null)!) return Unsafe.SizeOf<Position>() > 16 && !System.Runtime.Intrinsics.Vector256.IsHardwareAccelerated ? 0 : -1;
                     using var world = new WorldBuilder().UseParallelExecution(4).AddModule(Game.Module).Build();
                     var entities = new Entity[2051];
                     var expected = new Position[entities.Length];
