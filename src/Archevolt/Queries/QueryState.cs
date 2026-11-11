@@ -245,6 +245,11 @@ public readonly ref struct BlockView
         return true;
     }
 
+    // The column accessors share this check. Without a profile, as in a NativeAOT image, the compiler inlines the
+    // accessors into a system but left this as a call per column. The accessors are not marked themselves. A forced
+    // inline at a call site that the profile calls cold made the named-query loop of a system that first ran on an
+    // empty world 38% slower.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private int Column<T>(int term, QueryAccess access) where T : unmanaged
     {
         Validate();
