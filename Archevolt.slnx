@@ -2,6 +2,7 @@
   <Folder Name="/benchmarks/">
     <Project Path="benchmarks/Archevolt.Benchmarks/Archevolt.Benchmarks.csproj" />
     <Project Path="benchmarks/Archevolt.EachShapes/Archevolt.EachShapes.csproj" />
+    <Project Path="benchmarks/Archevolt.SystemOverhead/Archevolt.SystemOverhead.csproj" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/Archeoids.Browser/Archeoids.Browser.csproj" />
