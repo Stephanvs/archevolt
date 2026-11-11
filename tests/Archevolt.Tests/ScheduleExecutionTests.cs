@@ -406,6 +406,46 @@ public sealed class ScheduleExecutionTests
         Assert.False(schedule.IsFaulted);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_serial_batch_stops_at_the_first_failure_or_cancellation(bool cancel)
+    {
+        using var world = new WorldBuilder().Build();
+        using var cancellation = new CancellationTokenSource();
+        var ran = new List<string>();
+        bool disturb = true;
+        SystemDescriptor System(string name, bool disturbs) => ActionSystem(name, _ =>
+        {
+            ran.Add(name);
+            if (!disturbs || !disturb) return;
+            if (cancel) cancellation.Cancel();
+            else throw new MarkerException();
+        });
+        using var schedule = BoundSchedule.Bind(world, System("first", false), System("second", true), System("third", false));
+        Assert.Equal([3], schedule.Plan.Steps.Where(s => s.Kind == StepKind.Batch).Select(s => s.Count));
+
+        if (cancel)
+        {
+            var failure = Assert.Throws<OperationCanceledException>(() => schedule.Run(cancellation.Token));
+            Assert.Equal(cancellation.Token, failure.CancellationToken);
+        }
+        else
+        {
+            var failure = Assert.Throws<AggregateException>(() => schedule.Run(cancellation.Token));
+            var systemFailure = Assert.IsType<SystemExecutionException>(Assert.Single(failure.InnerExceptions));
+            Assert.Equal("second", systemFailure.InstanceKey);
+            Assert.IsType<MarkerException>(systemFailure.InnerException);
+        }
+        Assert.Equal(["first", "second"], ran);
+        Assert.True(schedule.IsFaulted);
+
+        disturb = false;
+        schedule.Reset();
+        schedule.Run(TestContext.Current.CancellationToken);
+        Assert.Equal(["first", "second", "first", "second", "third"], ran);
+    }
+
     [Fact]
     public void Failed_bodies_keep_their_previous_change_window_until_a_successful_run()
     {
