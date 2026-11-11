@@ -354,7 +354,9 @@ public sealed class BoundSchedule : IDisposable
         finally
         {
             if (timed) Interlocked.Add(ref _timingAccumulators[work.Node].BodyElapsedTicks, Stopwatch.GetTimestamp() - started);
-            Interlocked.Decrement(ref _remaining[work.Node]);
+            // Only a partitioned system has several work items, which can finish on different threads at once.
+            if (work.RowCount == int.MaxValue) _remaining[work.Node]--;
+            else Interlocked.Decrement(ref _remaining[work.Node]);
         }
     }
 
