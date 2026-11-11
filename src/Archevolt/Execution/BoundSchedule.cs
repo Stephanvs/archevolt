@@ -19,8 +19,9 @@ public sealed class BoundSchedule : IDisposable
     private readonly NodeTraits[] _traits;
     private readonly WorkItem[] _work;
     private readonly WorkItem[] _ownerWork;
+    // The work items of each system that have not yet run to their end. A system whose count is zero after its
+    // batch has succeeded. An item that fails or never starts leaves the count above zero.
     private readonly int[] _remaining;
-    private readonly int[] _failed;
     private readonly bool[] _begun;
     private readonly Action<int> _execute;
     private readonly Action _executeOwners;
@@ -46,7 +47,6 @@ public sealed class BoundSchedule : IDisposable
         _work = new WorkItem[checked(instances.Length * world.MaxConcurrency)];
         _ownerWork = new WorkItem[instances.Length];
         _remaining = new int[instances.Length];
-        _failed = new int[instances.Length];
         _begun = new bool[instances.Length];
         _execute = Execute;
         _executeOwners = ExecuteOwners;
@@ -231,7 +231,6 @@ public sealed class BoundSchedule : IDisposable
             {
                 int node = _batchNodes[ordinal];
                 var instance = _instances[node];
-                _failed[node] = 0;
                 _remaining[node] = 0;
                 if (_conditions[node] is { } condition && !Evaluate(node, condition))
                 {
@@ -276,7 +275,7 @@ public sealed class BoundSchedule : IDisposable
             {
                 int node = _batchNodes[ordinal];
                 if (!_begun[node]) continue;
-                _instances[node].Complete(_remaining[node] == 0 && _failed[node] == 0);
+                _instances[node].Complete(_remaining[node] == 0);
                 _begun[node] = false;
             }
         }
@@ -343,20 +342,19 @@ public sealed class BoundSchedule : IDisposable
         try
         {
             instance.Body.Execute(new SystemRun(instance, work.FirstRow, work.RowCount));
+            // Only a partitioned system has several work items, which can finish on different threads at once.
+            if (work.RowCount == int.MaxValue) _remaining[work.Node]--;
+            else Interlocked.Decrement(ref _remaining[work.Node]);
         }
         catch (Exception exception)
         {
             if (timed) Interlocked.Increment(ref _timingAccumulators[work.Node].BodyFailures);
-            Interlocked.Exchange(ref _failed[work.Node], 1);
             Interlocked.Exchange(ref _batchFailed, 1);
             throw new SystemExecutionException(instance.Key, instance.Descriptor.Name, work.FirstRow, work.RowCount, exception);
         }
         finally
         {
             if (timed) Interlocked.Add(ref _timingAccumulators[work.Node].BodyElapsedTicks, Stopwatch.GetTimestamp() - started);
-            // Only a partitioned system has several work items, which can finish on different threads at once.
-            if (work.RowCount == int.MaxValue) _remaining[work.Node]--;
-            else Interlocked.Decrement(ref _remaining[work.Node]);
         }
     }
 
