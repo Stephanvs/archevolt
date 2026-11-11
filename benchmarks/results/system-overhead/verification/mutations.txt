@@ -1,0 +1,40 @@
+commit=e93c062bcebbdafb041d02fa606c115ec0eb4ae3
+utc=2026-11-11T22:24:06Z
+control, no mutation: built=True; failed=0; Archevolt.Tests  Total: 119, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,409s
+
+mutation: no query refresh after a flush (step 1, src/Archevolt/Execution/BoundSchedule.cs)
+  built=True; failed test cases=2; Archevolt.Tests  Total: 119, Errors: 0, Failed: 2, Skipped: 0, Not Run: 0, Time: 0,416s
+  expected to fail: An_archetype_created_by_a_flush_is_visible_to_later_systems_and_other_schedules: FAILED AS EXPECTED
+  failing test methods: An_archetype_created_by_a_flush_is_visible_to_later_systems_and_other_schedules
+
+mutation: removal count recorded before the resource check (step 1, src/Archevolt/Execution/BoundSchedule.cs)
+  built=True; failed test cases=4; Archevolt.Tests  Total: 119, Errors: 0, Failed: 4, Skipped: 0, Not Run: 0, Time: 0,410s
+  expected to fail: A_removed_resource_fails_every_run_until_it_returns: FAILED AS EXPECTED
+  failing test methods: A_removed_resource_fails_every_run_until_it_returns
+
+mutation: flush range ends one system early (step 2, src/Archevolt/Execution/BoundSchedule.cs)
+  built=True; failed test cases=14; Archevolt.Tests  Total: 119, Errors: 0, Failed: 14, Skipped: 0, Not Run: 0, Time: 0,417s
+  expected to fail: Each_flush_applies_the_commands_recorded_since_the_flush_before_it: FAILED AS EXPECTED
+  failing test methods: An_archetype_created_by_a_flush_is_visible_to_later_systems_and_other_schedules, Bundle_insertion_replaces_members_and_preserves_unrelated_values_and_added_ticks, Cancelled_singleton_producer_discards_commands_preserves_failures_and_can_run_after_reset, Deferred_spawn_is_visible_through_transitive_skipped_dependency_and_next_producer_window, Each_flush_applies_the_commands_recorded_since_the_flush_before_it, Failed_producer_discards_commands_and_invalidates_its_reservation, Parallel_producers_claim_free_slots_before_fresh_ones_and_discarded_claims_return_them, Parallel_producers_reserve_unique_handles_across_entity_page_growth, Playback_failure_keeps_completed_writes_and_cancels_the_unapplied_spawn, Try_commands_allow_absent_targets_while_strict_duplicate_despawn_fails
+
+mutation: owner batch ignores cancellation between work items (step 4, src/Archevolt/Execution/BoundSchedule.cs)
+  built=True; failed test cases=1; Archevolt.Tests  Total: 119, Errors: 0, Failed: 1, Skipped: 0, Not Run: 0, Time: 0,410s
+  expected to fail: A_serial_batch_stops_at_the_first_failure_or_cancellation: FAILED AS EXPECTED
+  failing test methods: A_serial_batch_stops_at_the_first_failure_or_cancellation
+
+mutation: whole-system work item does not count as finished (step 5, src/Archevolt/Execution/BoundSchedule.cs)
+  built=True; failed test cases=10; Archevolt.Tests  Total: 119, Errors: 0, Failed: 10, Skipped: 0, Not Run: 0, Time: 0,426s
+  expected to fail: Every_system_of_a_shared_batch_advances_its_change_window_after_a_successful_run: FAILED AS EXPECTED
+  failing test methods: A_false_condition_preserves_the_skipped_bodys_change_cursor, Bundle_insertion_replaces_members_and_preserves_unrelated_values_and_added_ticks, Change_filters_skip_tables_without_a_stamp_since_the_last_run, Deferred_spawn_is_visible_through_transitive_skipped_dependency_and_next_producer_window, Every_system_of_a_shared_batch_advances_its_change_window_after_a_successful_run, Failed_bodies_keep_their_previous_change_window_until_a_successful_run, Table_growth_preserves_values_and_change_ticks_of_existing_rows, Tracking_observes_equal_writes_preserves_added_and_ignores_structural_migration
+
+mutation: no cancellation check before the body of a single-system batch (step 7, src/Archevolt/Execution/BoundSchedule.cs)
+  built=True; failed test cases=2; Archevolt.Tests  Total: 119, Errors: 0, Failed: 2, Skipped: 0, Not Run: 0, Time: 0,447s
+  expected to fail: A_condition_that_cancels_the_run_stops_its_body: FAILED AS EXPECTED
+  failing test methods: A_condition_that_cancels_the_run_stops_its_body
+
+mutation: default block is not rejected (step 8, src/Archevolt/Queries/QueryState.cs)
+  built=True; failed test cases=1; Archevolt.Tests  Total: 119, Errors: 0, Failed: 1, Skipped: 0, Not Run: 0, Time: 0,433s
+  expected to fail: Execution_capabilities_reject_undeclared_access_and_immediate_mutation: FAILED AS EXPECTED
+  failing test methods: Execution_capabilities_reject_undeclared_access_and_immediate_mutation
+
+every mutation caught by its test: true

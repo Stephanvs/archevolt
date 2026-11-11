@@ -1,0 +1,10 @@
+UTC=2026-11-11T20:32:14.6586962Z
+Baseline=archevolt-bench/overhead2/e7/Archevolt.EachShapes
+Candidate=archevolt-bench/overhead2/r7/Archevolt.EachShapes
+Launches=3
+Modes=populated,empty
+Rows=100000
+Remote=mini
+Prefix=taskset -c 2,3
+Harness=Archevolt.EachShapes
+Metric=median_ns_per_row

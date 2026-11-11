@@ -1,0 +1,10 @@
+UTC=2026-11-11T20:55:24.8697162Z
+Baseline=archevolt-bench/overhead2/r9/Archevolt.SystemOverhead
+Candidate=archevolt-bench/overhead2/r9/Archevolt.SystemOverhead
+Launches=5
+Modes=parallel
+Rows=16
+Remote=mini
+Prefix=taskset -c 0-3
+Harness=Archevolt.SystemOverhead
+Metric=median_ns_per_system

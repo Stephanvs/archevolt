@@ -1,0 +1,26 @@
+commit=e93c062bcebbdafb041d02fa606c115ec0eb4ae3, output of the performance-smoke stage of scripts/verify.ps1
+> dotnet run --project benchmarks/Archevolt.Benchmarks -c Release -p:Version=0.1.0 -p:ArchevoltPackageVersion=0.1.0 -- --quick
+runtime=.NET 11.0.0-rc.3.26522.148
+os=Microsoft Windows 10.0.26300
+architecture=X64
+processors=32
+maxConcurrency=1
+entities=100000;warmup=32;repetitions=64
+method,ns_per_entity,owner_bytes,total_managed_bytes
+handwritten,1.352,0,0
+generated-each,0.422,0,0
+generated-query,1.241,0,0
+generated-block,1.252,0,0
+generated-block-vector,0.411,0,0
+runtime=.NET 11.0.0-rc.3.26522.148
+os=Microsoft Windows 10.0.26300
+architecture=X64
+processors=32
+maxConcurrency=4
+entities=100000;warmup=32;repetitions=64
+method,ns_per_entity,owner_bytes,total_managed_bytes
+handwritten,1.579,0,0
+generated-each,0.402,0,0
+generated-query,1.537,0,0
+generated-block,0.887,0,0
+generated-block-vector,0.350,0,0

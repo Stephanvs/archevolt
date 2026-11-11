@@ -1,0 +1,10 @@
+UTC=2026-11-11T21:32:17.5583716Z
+Baseline=/b/overhead2/base/Archevolt.SystemOverhead
+Candidate=/b/overhead2/f1/Archevolt.SystemOverhead
+Launches=5
+Modes=serial
+Rows=16
+Remote=fiji
+Prefix=docker run --rm --cpuset-cpus=2,3 -v /home/stephanvs/archevolt-bench:/b:ro debian:trixie-slim
+Harness=Archevolt.SystemOverhead
+Metric=median_ns_per_system
