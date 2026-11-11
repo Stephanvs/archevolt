@@ -304,8 +304,10 @@ public sealed class BoundSchedule : IDisposable
         _remaining[node] = 1;
         try
         {
-            _cancellation.ThrowIfCancellationRequested();
+            // The first use of Workers starts the pool's threads, which takes long enough for a cancellation to
+            // arrive. So the check comes after it.
             if (_world.MaxConcurrency > 1) _world.Workers.Park();
+            _cancellation.ThrowIfCancellationRequested();
             try { Execute(new WorkItem(node, 0, int.MaxValue)); }
             catch (Exception failure)
             {
