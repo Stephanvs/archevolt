@@ -19,6 +19,10 @@ public sealed class BoundSchedule : IDisposable
     private readonly TimingAccumulator[] _timingAccumulators;
     private readonly SystemTiming[] _timings;
     private bool _timingEnabled;
+    // The world's ResourceRemovals and archetype count when this schedule last checked its required resources and
+    // refreshed its queries. A run repeats either pass only when the world has moved past the recorded value.
+    private long _checkedRemovals = -1;
+    private int _matchedArchetypes;
     private CancellationToken _cancellation;
     private int _ownerCount;
     private int _batchFailed;
@@ -148,10 +152,13 @@ public sealed class BoundSchedule : IDisposable
         try
         {
             cancellation.ThrowIfCancellationRequested();
-            foreach (var instance in _instances)
-                instance.Prepare();
-            foreach (var condition in _conditions)
-                condition?.Prepare();
+            if (_checkedRemovals != _world.ResourceRemovals)
+            {
+                foreach (var instance in _instances) instance.ValidateResources();
+                foreach (var condition in _conditions) condition?.ValidateResources();
+                _checkedRemovals = _world.ResourceRemovals;
+            }
+            RefreshQueries();
             for (int i = 0; i < Plan.Steps.Count; i++)
             {
                 var step = Plan.Steps[i];
@@ -161,8 +168,7 @@ public sealed class BoundSchedule : IDisposable
                 else
                 {
                     _world.FlushCommands(_instances, Plan.NodeOrder, _world.NextTick());
-                    foreach (var instance in _instances) instance.Prepare();
-                    foreach (var condition in _conditions) condition?.Prepare();
+                    RefreshQueries();
                 }
             }
             _state = ScheduleState.Idle;
@@ -179,6 +185,16 @@ public sealed class BoundSchedule : IDisposable
             _world.ExitRun();
             _cancellation = default;
         }
+    }
+
+    // A query falls behind only when the world gains an archetype, between runs or in a command flush.
+    private void RefreshQueries()
+    {
+        int archetypes = _world.Archetypes.Count;
+        if (archetypes == _matchedArchetypes) return;
+        foreach (var instance in _instances) instance.Refresh();
+        foreach (var condition in _conditions) condition?.Refresh();
+        _matchedArchetypes = archetypes;
     }
 
     private void RunBatch(PlanStep step)
