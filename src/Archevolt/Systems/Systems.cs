@@ -236,7 +236,7 @@ internal sealed partial class SystemInstance
             Queries[i] = new QueryState(this, descriptor.Queries[i]);
         Locals = descriptor.Locals.Select(l => l.Create()).ToArray();
         if (descriptor.EmitsCommands)
-            Commands = new CommandBuffer(world.CommandCapacity);
+            Commands = new CommandBuffer(world.CommandCapacity, key);
         ValidateResources();
         Binding = true;
         try { Body = descriptor.Factory(new SystemBinder(this)) ?? throw new InvalidOperationException("System factory returned null."); }

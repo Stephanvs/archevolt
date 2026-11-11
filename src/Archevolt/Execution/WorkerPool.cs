@@ -72,6 +72,8 @@ internal sealed class WorkerPool : IDisposable
     internal void Run(int count, Action<int> execute, CancellationToken cancellation = default)
         => Run(count, execute, null, cancellation);
 
+    // Wakes every worker. A schedule calls this only for a batch in which two items can run at once, and runs
+    // every other batch itself after Park.
     internal void Run(int count, Action<int> execute, Action? ownerWork, CancellationToken cancellation = default)
     {
         AssertOwner();
@@ -82,11 +84,8 @@ internal sealed class WorkerPool : IDisposable
         if (_state != PoolState.Idle)
             throw new InvalidOperationException("The worker pool is already running.");
         cancellation.ThrowIfCancellationRequested();
-        if (count == 0 && ownerWork is null)
-            return;
 
-        bool runParallel = _workers.Length != 0 && count != 0 && (count > 1 || ownerWork is not null);
-        var epoch = runParallel ? checked(_signal.Epoch + 1) : _signal.Epoch;
+        var epoch = checked(_signal.Epoch + 1);
         if (_errors.Length < count)
             Array.Resize(ref _errors, count);
         Array.Clear(_errors, 0, count);
@@ -96,19 +95,12 @@ internal sealed class WorkerPool : IDisposable
         _next = -1;
         _failed = 0;
         _state = PoolState.Running;
-        if (runParallel)
+        lock (_gate)
         {
-            lock (_gate)
-            {
-                _pending = _workers.Length;
-                _signal.Parked = false;
-                _signal.Epoch = epoch;
-                Monitor.PulseAll(_gate);
-            }
-        }
-        else
-        {
-            Park();
+            _pending = _workers.Length;
+            _signal.Parked = false;
+            _signal.Epoch = epoch;
+            Monitor.PulseAll(_gate);
         }
 
         Exception? ownerFailure = null;
@@ -128,18 +120,15 @@ internal sealed class WorkerPool : IDisposable
         }
         finally
         {
-            if (runParallel)
+            if (Volatile.Read(ref _pending) != 0)
             {
-                if (Volatile.Read(ref _pending) != 0)
-                {
-                    for (long deadline = Stopwatch.GetTimestamp() + _spinTicks;
-                        Volatile.Read(ref _pending) != 0 && Stopwatch.GetTimestamp() < deadline;)
-                        Thread.SpinWait(1);
-                }
-                lock (_gate)
-                    while (_pending != 0)
-                        Monitor.Wait(_gate);
+                for (long deadline = Stopwatch.GetTimestamp() + _spinTicks;
+                    Volatile.Read(ref _pending) != 0 && Stopwatch.GetTimestamp() < deadline;)
+                    Thread.SpinWait(1);
             }
+            lock (_gate)
+                while (_pending != 0)
+                    Monitor.Wait(_gate);
             _execute = null;
             _state = PoolState.Idle;
         }
@@ -162,7 +151,6 @@ internal sealed class WorkerPool : IDisposable
         cancellation.ThrowIfCancellationRequested();
     }
 
-    // The owner is about to run work alone. Spinning workers see the flag and block at once.
     internal void Park()
     {
         if (!_signal.Parked)
