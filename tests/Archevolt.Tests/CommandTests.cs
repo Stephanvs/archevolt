@@ -122,6 +122,41 @@ public sealed class CommandTests
         Assert.Equal(1, otherSchedule);
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(4)]
+    public void Each_flush_applies_the_commands_recorded_since_the_flush_before_it(int concurrency)
+    {
+        using var world = new WorldBuilder().AddBundle<Particle>().UseParallelExecution(concurrency).Build();
+        var positions = QueryShape.Create("positions").Read<Position>(0).Build();
+        var sums = new List<int>();
+        Entity spawned = default;
+        ActionBody spawn = (_, commands, _) => spawned = commands.Spawn(new Particle(new Position(1)));
+        ActionBody update = (_, commands, _) => commands.Insert(spawned, new Position(2));
+        ActionBody despawn = (_, commands, _) => commands.Despawn(spawned);
+        QueryAction observe = (run, query) =>
+        {
+            int sum = 0;
+            var cursor = query.Begin(run);
+            while (cursor.Next(out var block))
+                foreach (var position in block.Read<Position>(0)) sum += position.Value;
+            sums.Add(sum);
+        };
+        SystemDescriptor Producer(string name, ActionBody action) => SystemDescriptor.Create(name, b => new CommandBody(b, action)).Commands().Build();
+        SystemDescriptor Observer(string name) => SystemDescriptor.Create(name, b => new QueryBody(b, observe)).Query(positions).Build();
+        using var schedule = BoundSchedule.Bind(world,
+            [Producer("spawn", spawn), Observer("after spawn"), Producer("update", update), Observer("after update"), Producer("despawn", despawn), Observer("after despawn")],
+            Enumerable.Range(0, 5).Select(i => new EdgeInput(i, i + 1)).ToArray());
+
+        schedule.Run(TestContext.Current.CancellationToken);
+        Assert.Equal([1, 2, 0], sums);
+        Entity first = spawned;
+        schedule.Run(TestContext.Current.CancellationToken);
+        Assert.Equal([1, 2, 0, 1, 2, 0], sums);
+        Assert.False(world.Contains(first));
+        Assert.False(world.Contains(spawned));
+    }
+
     [Fact]
     public void Playback_failure_keeps_completed_writes_and_cancels_the_unapplied_spawn()
     {

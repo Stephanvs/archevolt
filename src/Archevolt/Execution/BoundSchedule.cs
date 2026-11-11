@@ -8,6 +8,10 @@ public sealed class BoundSchedule : IDisposable
     private readonly World _world;
     private readonly SystemInstance[] _instances;
     private readonly SystemInstance?[] _conditions;
+    // The systems that declare commands, in plan order. A flush step applies the commands of those that ran since
+    // the flush before it, and _flushEnds holds where that range ends for each step. Every other buffer is empty.
+    private readonly SystemInstance[] _producers;
+    private readonly int[] _flushEnds;
     private readonly NodeTraits[] _traits;
     private readonly WorkItem[] _work;
     private readonly WorkItem[] _ownerWork;
@@ -44,6 +48,17 @@ public sealed class BoundSchedule : IDisposable
         _executeOwners = ExecuteOwners;
         _timingAccumulators = new TimingAccumulator[instances.Length];
         _timings = new SystemTiming[instances.Length];
+        var producers = new List<SystemInstance>();
+        _flushEnds = new int[plan.Steps.Count];
+        for (int i = 0; i < _flushEnds.Length; i++)
+        {
+            var step = plan.Steps[i];
+            for (int ordinal = step.First; ordinal < step.First + step.Count; ordinal++)
+                if (instances[plan.BatchNodes[ordinal]] is { Commands: not null } producer)
+                    producers.Add(producer);
+            _flushEnds[i] = producers.Count;
+        }
+        _producers = producers.ToArray();
         PublishTimings();
     }
 
@@ -159,6 +174,7 @@ public sealed class BoundSchedule : IDisposable
                 _checkedRemovals = _world.ResourceRemovals;
             }
             RefreshQueries();
+            int flushed = 0;
             for (int i = 0; i < Plan.Steps.Count; i++)
             {
                 var step = Plan.Steps[i];
@@ -167,7 +183,8 @@ public sealed class BoundSchedule : IDisposable
                     RunBatch(step);
                 else
                 {
-                    _world.FlushCommands(_instances, Plan.NodeOrder, _world.NextTick());
+                    _world.FlushCommands(_producers.AsSpan(flushed, _flushEnds[i] - flushed), _world.NextTick());
+                    flushed = _flushEnds[i];
                     RefreshQueries();
                 }
             }
@@ -176,7 +193,7 @@ public sealed class BoundSchedule : IDisposable
         catch
         {
             _state = ScheduleState.Faulted;
-            _world.DiscardCommands(_instances, Plan.NodeOrder);
+            _world.DiscardCommands(_producers);
             throw;
         }
         finally
@@ -326,7 +343,7 @@ public sealed class BoundSchedule : IDisposable
         if (_state == ScheduleState.Disposed) return;
         if (_state == ScheduleState.Running || _world.IsRunning)
             throw new InvalidOperationException("Cannot dispose a schedule while the world is running.");
-        _world.DiscardCommands(_instances, Plan.NodeOrder);
+        _world.DiscardCommands(_producers);
         _state = ScheduleState.Disposed;
         _world.Schedules.Remove(this);
     }
