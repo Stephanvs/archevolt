@@ -1,0 +1,29 @@
+code=e93c062 (e93c062bcebbdafb041d02fa606c115ec0eb4ae3); src and tests of the working tree equal that commit
+command=dotnet artifacts/bin/Archevolt.Tests/release/Archevolt.Tests.dll -trait Category=Scheduling
+utc=2026-11-11T22:24:44Z
+run 1: exit=0 Archevolt.Tests  Total: 72, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,392s
+run 2: exit=0 Archevolt.Tests  Total: 72, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,408s
+run 3: exit=0 Archevolt.Tests  Total: 72, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,392s
+run 4: exit=0 Archevolt.Tests  Total: 72, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,401s
+run 5: exit=0 Archevolt.Tests  Total: 72, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,405s
+run 6: exit=0 Archevolt.Tests  Total: 72, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,402s
+run 7: exit=0 Archevolt.Tests  Total: 72, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,406s
+run 8: exit=0 Archevolt.Tests  Total: 72, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,397s
+run 9: exit=0 Archevolt.Tests  Total: 72, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,390s
+run 10: exit=0 Archevolt.Tests  Total: 72, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,387s
+run 11: exit=0 Archevolt.Tests  Total: 72, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,385s
+run 12: exit=0 Archevolt.Tests  Total: 72, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,386s
+run 13: exit=0 Archevolt.Tests  Total: 72, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,394s
+run 14: exit=0 Archevolt.Tests  Total: 72, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,394s
+run 15: exit=0 Archevolt.Tests  Total: 72, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,389s
+run 16: exit=0 Archevolt.Tests  Total: 72, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,406s
+run 17: exit=0 Archevolt.Tests  Total: 72, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,389s
+run 18: exit=0 Archevolt.Tests  Total: 72, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,416s
+run 19: exit=0 Archevolt.Tests  Total: 72, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,390s
+run 20: exit=0 Archevolt.Tests  Total: 72, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,387s
+run 21: exit=0 Archevolt.Tests  Total: 72, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,390s
+run 22: exit=0 Archevolt.Tests  Total: 72, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,395s
+run 23: exit=0 Archevolt.Tests  Total: 72, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,420s
+run 24: exit=0 Archevolt.Tests  Total: 72, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,377s
+run 25: exit=0 Archevolt.Tests  Total: 72, Errors: 0, Failed: 0, Skipped: 0, Not Run: 0, Time: 0,415s
+runs=25 failed_runs=0

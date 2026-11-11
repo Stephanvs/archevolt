@@ -1,0 +1,10 @@
+UTC=2026-11-11T21:32:17.5600336Z
+Baseline=artifacts/system-overhead/aot/base
+Candidate=artifacts/system-overhead/aot/f1
+Launches=9
+Modes=serial
+Rows=16
+Remote=
+Prefix=
+Harness=Archevolt.SystemOverhead
+Metric=median_ns_per_system

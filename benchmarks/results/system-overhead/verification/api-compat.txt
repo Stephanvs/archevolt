@@ -1,0 +1,153 @@
+commit=e93c062bcebbdafb041d02fa606c115ec0eb4ae3
+baseline=36dd22e, built from a separate checkout
+APICompat ran successfully without finding any breaking changes.
+Archevolt: unchanged
+Could not resolve reference 'System.Security.Permissions.dll' directly or transitively referenced by 'artifacts\system-overhead\base-src\artifacts\bin\Archevolt.Benchmarks\release\Archevolt.Benchmarks.dll' in any of the provided search directories.
+Could not resolve reference 'System.IO.Hashing.dll' directly or transitively referenced by 'artifacts\system-overhead\base-src\artifacts\bin\Archevolt.Benchmarks\release\Archevolt.Benchmarks.dll' in any of the provided search directories.
+Could not resolve reference 'Microsoft.Bcl.HashCode.dll' directly or transitively referenced by 'artifacts\system-overhead\base-src\artifacts\bin\Archevolt.Benchmarks\release\Archevolt.Benchmarks.dll' in any of the provided search directories.
+Could not resolve reference 'System.Security.Permissions.dll' directly or transitively referenced by 'artifacts\bin\Archevolt.Benchmarks\release\Archevolt.Benchmarks.dll' in any of the provided search directories.
+Could not resolve reference 'System.IO.Hashing.dll' directly or transitively referenced by 'artifacts\bin\Archevolt.Benchmarks\release\Archevolt.Benchmarks.dll' in any of the provided search directories.
+Could not resolve reference 'Microsoft.Bcl.HashCode.dll' directly or transitively referenced by 'artifacts\bin\Archevolt.Benchmarks\release\Archevolt.Benchmarks.dll' in any of the provided search directories.
+API compatibility errors between 'artifacts\system-overhead\base-src\artifacts\bin\Archevolt.Benchmarks\release\Archevolt.Benchmarks.dll' (left) and 'artifacts\bin\Archevolt.Benchmarks\release\Archevolt.Benchmarks.dll' (right):
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.EntityPopulationBenchmarks.Spawn()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.EntityPopulationBenchmarks.SpawnBatch()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.EntityPopulationBenchmarks.Despawn()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.EntityStorageBenchmarks.Get()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.EntityStorageBenchmarks.TagRoundTrip()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.EntityStorageBenchmarks.WideRoundTrip()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.MovementBenchmarks.Handwritten()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.MovementBenchmarks.GeneratedEach()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.MovementBenchmarks.GeneratedQuery()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.MovementBenchmarks.GeneratedBlock()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.MovementBenchmarks.GeneratedBlockVector()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.QueryPartitionBenchmarks.PartitionedEach()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.QueryPartitionBenchmarks.DirectEach()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.QueryPartitionBenchmarks.PartitionedBlock()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.QueryPartitionBenchmarks.DirectBlock()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.QueryPartitionBenchmarks.PartitionedVector()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.QueryPartitionBenchmarks.DirectVector()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.LargePartitionRegressionBenchmarks.PartitionedVector()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.ReferenceComparisonBenchmarks.Handwritten()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.ReferenceComparisonBenchmarks.GeneratedEach()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.ReferenceComparisonBenchmarks.GeneratedQuery()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.ReferenceComparisonBenchmarks.GeneratedBlock()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.ReferenceComparisonBenchmarks.GeneratedBlockVector()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.ReferenceComparisonBenchmarks.ArchInline()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.TraversalMatrixBenchmarks.GeneratedEach()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.TraversalMatrixBenchmarks.GeneratedQuery()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.FilterBenchmarks.TrackedWrite()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.FilterBenchmarks.ChangedNone()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.FilterBenchmarks.WriteThenChangedAll()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.FilterBenchmarks.OptionalHalfPresent()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.SparseChangeBenchmarks.SparseWriteThenChanged()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.LifecycleBenchmarks.CreateDisposeWorld()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.LifecycleBenchmarks.BindDisposeSchedule()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.LifecycleBenchmarks.BindFirstRefreshAndRun()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.QueryRefreshBenchmarks.FirstRefreshAndRun()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.StructuralChurnBenchmarks.IdleTagRoundTrip()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.StructuralChurnBenchmarks.DeferredTagRoundTrip()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.CommandCapacityBenchmarks.FirstPlayback()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.TickWidthBenchmarks.TrackedWrite64()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.TickWidthBenchmarks.TrackedWrite32()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.TickWidthBenchmarks.WriteThenChanged64()'.
+CP0015: Cannot change arguments of attribute 'BenchmarkDotNet.Attributes.BenchmarkAttribute' on 'Archevolt.Benchmarks.TickWidthBenchmarks.WriteThenChanged32()'.
+API breaking changes found. If those are intentional, the APICompat suppression file can be updated by specifying the '--generate-suppression-file' parameter.
+Archevolt.Benchmarks: CHANGED
+API compatibility errors between 'artifacts\system-overhead\base-src\artifacts\bin\Archevolt.Tests\release\Archevolt.Tests.dll' (left) and 'artifacts\bin\Archevolt.Tests\release\Archevolt.Tests.dll' (right):
+CP0015: Cannot change arguments of attribute 'Xunit.TheoryAttribute' on 'Archevolt.Tests.CommandTests.Deferred_spawn_is_visible_through_transitive_skipped_dependency_and_next_producer_window(int)'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.CommandTests.Playback_failure_keeps_completed_writes_and_cancels_the_unapplied_spawn()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.CommandTests.Failed_producer_discards_commands_and_invalidates_its_reservation()'.
+CP0015: Cannot change arguments of attribute 'Xunit.TheoryAttribute' on 'Archevolt.Tests.CommandTests.Cancelled_singleton_producer_discards_commands_preserves_failures_and_can_run_after_reset(bool)'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.CommandTests.Try_commands_allow_absent_targets_while_strict_duplicate_despawn_fails()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.CommandTests.Bundle_insertion_replaces_members_and_preserves_unrelated_values_and_added_ticks()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.CommandTests.Parallel_producers_reserve_unique_handles_across_entity_page_growth()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.CommandTests.Parallel_producers_claim_free_slots_before_fresh_ones_and_discarded_claims_return_them()'.
+CP0002: Member 'void Archevolt.Tests.CommandTests.An_archetype_created_by_a_flush_is_visible_to_later_systems_and_other_schedules(int)' exists on artifacts\bin\Archevolt.Tests\release\Archevolt.Tests.dll but not on artifacts\system-overhead\base-src\artifacts\bin\Archevolt.Tests\release\Archevolt.Tests.dll
+CP0002: Member 'void Archevolt.Tests.CommandTests.Each_flush_applies_the_commands_recorded_since_the_flush_before_it(int)' exists on artifacts\bin\Archevolt.Tests\release\Archevolt.Tests.dll but not on artifacts\system-overhead\base-src\artifacts\bin\Archevolt.Tests\release\Archevolt.Tests.dll
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.ComponentAttributeTests.Marks_a_record_struct_under_the_metadata_name_the_generator_matches()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.MessageTests.Readers_keep_independent_cursors_and_report_expired_messages()'.
+CP0015: Cannot change arguments of attribute 'Xunit.TheoryAttribute' on 'Archevolt.Tests.MessageTests.An_ordered_reader_observes_writes_in_the_same_run(int)'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.MessageTests.Removal_readers_observe_remove_and_despawn_with_retention()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.MessageTests.A_message_writer_cannot_alias_a_reader_in_one_system()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.QueryRuntimeTests.Bound_query_observes_new_archetypes_and_tag_membership_on_the_next_run()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.QueryRuntimeTests.Entity_lookup_follows_migration_swap_removal_and_reuse_across_directory_pages()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.QueryRuntimeTests.Tracking_observes_equal_writes_preserves_added_and_ignores_structural_migration()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.QueryRuntimeTests.Change_filters_skip_tables_without_a_stamp_since_the_last_run()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.QueryRuntimeTests.Optional_only_query_matches_absent_values_and_binds_presence_per_archetype()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.QueryRuntimeTests.Execution_capabilities_reject_undeclared_access_and_immediate_mutation()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.QueryRuntimeTests.Binding_rejects_aliasing_queries_and_accepts_supported_disjointness()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.QueryRuntimeTests.Missing_required_resource_is_checked_again_after_idle_removal()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.QueryRuntimeTests.Optional_resource_observes_idle_insertion_and_removal_without_rebinding()'.
+CP0015: Cannot change arguments of attribute 'Xunit.TheoryAttribute' on 'Archevolt.Tests.ScheduleExecutionTests.Timing_is_disabled_by_default_and_reports_only_the_latest_enabled_run(int)'.
+CP0015: Cannot change arguments of attribute 'Xunit.TheoryAttribute' on 'Archevolt.Tests.ScheduleExecutionTests.Timing_records_condition_skips_and_joined_body_or_condition_failures(int)'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.ScheduleExecutionTests.Timing_configuration_and_inspection_require_an_idle_owner_thread()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.ScheduleExecutionTests.World_disposal_requires_every_bound_schedule_to_release_its_borrow()'.
+CP0015: Cannot change arguments of attribute 'Xunit.TheoryAttribute' on 'Archevolt.Tests.ScheduleExecutionTests.Serial_and_parallel_execution_use_the_same_dependency_order_and_results(int)'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.ScheduleExecutionTests.Owner_thread_resource_work_overlaps_disjoint_worker_work_within_the_total_budget()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.ScheduleExecutionTests.Managed_resource_systems_execute_exclusively_on_the_owner()'.
+CP0015: Cannot change arguments of attribute 'Xunit.TheoryAttribute' on 'Archevolt.Tests.ScheduleExecutionTests.Partitioned_each_updates_every_entity_once_and_uses_one_tick_per_invocation(int)'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.ScheduleExecutionTests.Owner_failure_joins_active_workers_and_requires_reset_before_reuse()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.ScheduleExecutionTests.Cancellation_joins_started_work_and_a_reset_schedule_can_run_again()'.
+CP0015: Cannot change arguments of attribute 'Xunit.TheoryAttribute' on 'Archevolt.Tests.ScheduleExecutionTests.Cancellation_during_a_single_body_preserves_failures_and_allows_reset(bool, bool)'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.ScheduleExecutionTests.Failed_bodies_keep_their_previous_change_window_until_a_successful_run()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.ScheduleExecutionTests.Pre_cancellation_and_missing_resources_execute_no_bodies()'.
+CP0015: Cannot change arguments of attribute 'Xunit.TheoryAttribute' on 'Archevolt.Tests.ScheduleExecutionTests.Schedule_control_rejects_wrong_threads_reentrancy_and_running_disposal(int)'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.ScheduleExecutionTests.A_false_condition_preserves_the_skipped_bodys_change_cursor()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.ScheduleExecutionTests.Repeated_conditions_have_independent_local_state()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.ScheduleExecutionTests.Condition_reads_create_conflicts_and_evaluate_after_the_predecessor_body()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.ScheduleExecutionTests.False_conditions_advance_their_own_change_cursor()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.ScheduleExecutionTests.Condition_failures_preserve_their_change_window_and_require_reset()'.
+CP0015: Cannot change arguments of attribute 'Xunit.TheoryAttribute' on 'Archevolt.Tests.ScheduleExecutionTests.Conditions_reject_mutable_world_access(bool)'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.ScheduleExecutionTests.Repeated_method_registrations_have_independent_local_state_and_shared_world_pool()'.
+CP0002: Member 'void Archevolt.Tests.ScheduleExecutionTests.A_serial_batch_stops_at_the_first_failure_or_cancellation(bool)' exists on artifacts\bin\Archevolt.Tests\release\Archevolt.Tests.dll but not on artifacts\system-overhead\base-src\artifacts\bin\Archevolt.Tests\release\Archevolt.Tests.dll
+CP0002: Member 'void Archevolt.Tests.ScheduleExecutionTests.Every_system_of_a_shared_batch_advances_its_change_window_after_a_successful_run(int)' exists on artifacts\bin\Archevolt.Tests\release\Archevolt.Tests.dll but not on artifacts\system-overhead\base-src\artifacts\bin\Archevolt.Tests\release\Archevolt.Tests.dll
+CP0002: Member 'void Archevolt.Tests.ScheduleExecutionTests.A_condition_that_cancels_the_run_stops_its_body(int, bool)' exists on artifacts\bin\Archevolt.Tests\release\Archevolt.Tests.dll but not on artifacts\system-overhead\base-src\artifacts\bin\Archevolt.Tests\release\Archevolt.Tests.dll
+CP0002: Member 'void Archevolt.Tests.ScheduleExecutionTests.A_removed_resource_fails_every_run_until_it_returns(bool, bool)' exists on artifacts\bin\Archevolt.Tests\release\Archevolt.Tests.dll but not on artifacts\system-overhead\base-src\artifacts\bin\Archevolt.Tests\release\Archevolt.Tests.dll
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.SchedulePlannerTests.Ready_nodes_follow_declared_ordinals_in_a_shared_batch()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.SchedulePlannerTests.Conflicts_follow_the_explicit_topological_order_instead_of_creating_a_cycle()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.SchedulePlannerTests.Every_conflicting_clause_pair_needs_its_own_disjointness_proof()'.
+CP0015: Cannot change arguments of attribute 'Xunit.TheoryAttribute' on 'Archevolt.Tests.SchedulePlannerTests.Only_required_against_excluded_membership_proves_disjointness(bool, int)'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.SchedulePlannerTests.Optional_access_does_not_become_required_membership_for_disjointness()'.
+CP0015: Cannot change arguments of attribute 'Xunit.TheoryAttribute' on 'Archevolt.Tests.SchedulePlannerTests.Tick_metadata_reads_conflict_with_writes_and_share_with_reads(bool, int)'.
+CP0015: Cannot change arguments of attribute 'Xunit.TheoryAttribute' on 'Archevolt.Tests.SchedulePlannerTests.Resource_and_message_conflicts_remain_global_despite_disjoint_queries(bool)'.
+CP0015: Cannot change arguments of attribute 'Xunit.TheoryAttribute' on 'Archevolt.Tests.SchedulePlannerTests.Condition_reads_participate_in_conflict_planning(bool)'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.SchedulePlannerTests.Commands_flush_before_conditional_and_transitive_successors()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.SchedulePlannerTests.Owner_thread_nodes_share_disjoint_work_but_exclusive_nodes_have_their_own_batch()'.
+CP0015: Cannot change arguments of attribute 'Xunit.TheoryAttribute' on 'Archevolt.Tests.SchedulePlannerTests.Invalid_input_produces_AV007_and_no_executable_steps(string)'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.SchedulePlannerTests.Explicit_transitive_order_avoids_unordered_conflict_warnings()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.SchedulePlannerTests.Empty_schedules_still_have_a_completion_barrier()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.SchedulePlannerTests.Descriptors_snapshot_caller_arrays_and_plans_reject_mutation()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.SchedulePlannerTests.Generated_plans_copy_arrays_and_validate_execution_ranges()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.StorageTests.Table_growth_preserves_values_and_change_ticks_of_existing_rows()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.StorageTests.Emptied_table_retains_native_memory_until_trimmed()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.StorageTests.Warmed_structural_moves_allocate_no_managed_memory()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.StorageTests.Trimming_a_world_with_no_live_entities_releases_all_native_memory()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.StorageTests.Structural_trace_matches_dictionary_across_table_growth_migration_and_swap_removal()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.StorageTests.Stale_cross_world_and_default_handles_cannot_alias_a_live_entity()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.StorageTests.Get_throws_and_TryGet_resets_the_value_when_the_entity_or_component_is_missing()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.StorageTests.Despawning_the_last_generation_retires_the_slot_instead_of_reusing_it()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.StorageTests.Batch_spawn_reuses_free_slots_before_growing_the_directory_across_pages()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.StorageTests.Batch_spawn_that_fails_partway_leaves_no_row_or_reservation()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.StorageTests.Spawn_that_fails_partway_leaves_no_row_or_reservation()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.StorageTests.Bundle_write_cannot_spawn_into_the_world_it_is_writing_to()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.StorageTests.Bundle_insertion_over_members_already_present_overwrites_them_without_moving_other_rows()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.StorageTests.Membership_extends_beyond_one_machine_word()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.StorageTests.World_checks_owner_thread_and_rejects_operations_after_disposal()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.StorageTests.Conflicting_component_policies_are_rejected_before_a_world_is_created()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.StorageTests.Duplicate_modules_are_rejected_while_distinct_modules_can_share_components()'.
+CP0015: Cannot change arguments of attribute 'Xunit.FactAttribute' on 'Archevolt.Tests.StorageTests.Resource_ownership_replacement_take_and_failed_cleanup_preserve_single_ownership()'.
+CP0015: Cannot change arguments of attribute 'Xunit.TheoryAttribute' on 'Archevolt.Tests.WorkerPoolStressTests.Reused_public_schedules_execute_thousands_of_varied_batches_exactly_once(int)'.
+API breaking changes found. If those are intentional, the APICompat suppression file can be updated by specifying the '--generate-suppression-file' parameter.
+Archevolt.Tests: CHANGED
+APICompat ran successfully without finding any breaking changes.
+Archeoids: unchanged
+APICompat ran successfully without finding any breaking changes.
+Archeoids.Browser: unchanged
+APICompat ran successfully without finding any breaking changes.
+Archevolt.Particles: unchanged
+[31;1mException: [0mscripts\api-compat.ps1:43[0m
+[31;1m[0m[36;1mLine |[0m
+[31;1m[0m[36;1m[36;1m  43 | [0m if ($failed) { [36;1mthrow "Public API changed in: $($failed -join ', ')"[0m }[0m
+[31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m     | [31;1m                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[0m
+[31;1m[0m[36;1m[36;1m[0m[36;1m[0m[36;1m[31;1m[31;1m[36;1m     | [31;1mPublic API changed in: Archevolt.Benchmarks, Archevolt.Tests[0m
+exit=1

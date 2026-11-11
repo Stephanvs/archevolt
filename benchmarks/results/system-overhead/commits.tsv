@@ -1,0 +1,13 @@
+step	measured	commit	subject
+01	36dd22e	277468328e2628d2348a380a0e640a98452eedda	chore(benchmarks): add system overhead harness
+02	6b0b01c	b9611669ac71ba10ebaed2bf965159c5a465d496	perf(execution): prepare systems only when the world has changed
+03	6f4c71e	1f91a60eba4fece612abf10e2aa7805ee25b1311	perf(execution): flush only the systems that ran since the last flush
+04	9c4f3f4	0ef94f1cb4ba7c3678715b22c09ddc43e7ad6f85	perf(execution): read the plan's steps and batch nodes from arrays
+05	5a9d8bd	c7cce8ca691847d5c09a480c51d76114624df4e8	perf(execution): run a batch on the owner without the worker pool
+06	9eb4540	ebab5bf7f6df2dfc492ab3ba1fc233107b74e764	perf(execution): finish a work item without an interlocked decrement
+07	2b1621b	8dbb6a1cfaa9b8deffa0852a372098a28ae808ad	refactor(execution): let a failed work item leave its system unfinished
+08	74975d6	2998842ceb39e71a49c4dab96ad3ac1393349437	perf(execution): run a batch of one system without work lists
+09	ba4a131	668e401dadb5526bb30df3855502d70714177e6a	perf(queries): keep the tick window in cursors and blocks, not the run
+10	6d299a5	84f06cae75bc969e8e63da3ea3d649427bcfa5de	refactor(execution): drop the worker pool's serial path
+11	fc38a23	98de1e153f50415ad1c5391839bac84cba75881f	perf(queries): inline the column check of a block
+12	5995cbc	e93c062bcebbdafb041d02fa606c115ec0eb4ae3	fix(execution): check for cancellation after the worker pool exists

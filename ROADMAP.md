@@ -221,6 +221,8 @@ On 5 November, [a hill-climbing campaign](benchmarks/performance-hill-climb-repo
 
 On 10 November, [a third round](benchmarks/each-kernels.md) moved the `[Each]` row loop into a method of its own and gave it an inlined copy of the callback. With `DOTNET_TieredPGO=0` on the Intel host, that change alone took a wrap callback from 4.93 to 1.54 ns per entity. A callback that forwards to another method stayed at 4.9, and the final state was not measured without PGO. The same round widened the kernels to callbacks with branches, reads across fields, `Min`, `Max`, `Abs`, `Sqrt`, and calls into helpers. On a separate Linux host, a wrap callback over 100,000 entities fell from 2.63 to 0.11 ns per entity when its system first ran on an empty world, and from 0.59 to 0.11 otherwise.
 
+On 11 November, [a fourth round](benchmarks/system-overhead.md) measured what a schedule pays to run a system before the system visits a row. A run prepared every system again after every command flush, so the cost per system grew with the size of the schedule. On the same Linux host, a chain of 1,024 systems that all declare `Commands` fell from 7,074 to 50.5 ns per system per run, and a chain of 256 `[Each]` systems from 59.2 to 24.3 ns. A batch of small systems on several workers still claims its work items one at a time, which the report lists first under what remains.
+
 ## Amendments after step 4
 
 - `EntityEntry` now contains only generation, state, archetype ID, and table row. On the measured x64 runtime it shrank from 24 to 16 bytes and no longer contains managed references. The public 16-byte `Entity` handle still includes the world ID.
