@@ -12,6 +12,8 @@ public sealed class BoundSchedule : IDisposable
     // interface calls per element.
     private readonly PlanStep[] _steps;
     private readonly int[] _batchNodes;
+    // For each step, the system of a batch that holds one system which never splits into partitions, or -1.
+    private readonly int[] _soloNodes;
     // The systems that declare commands, in plan order. A flush step applies the commands of those that ran since
     // the flush before it, and _flushEnds holds where that range ends for each step. Every other buffer is empty.
     private readonly SystemInstance[] _producers;
@@ -56,9 +58,12 @@ public sealed class BoundSchedule : IDisposable
         _batchNodes = plan.BatchNodes.ToArray();
         var producers = new List<SystemInstance>();
         _flushEnds = new int[_steps.Length];
+        _soloNodes = new int[_steps.Length];
         for (int i = 0; i < _steps.Length; i++)
         {
             var step = _steps[i];
+            _soloNodes[i] = step.Kind == StepKind.Batch && step.Count == 1
+                && (world.MaxConcurrency == 1 || !instances[_batchNodes[step.First]].Descriptor.Partitionable) ? _batchNodes[step.First] : -1;
             for (int ordinal = step.First; ordinal < step.First + step.Count; ordinal++)
                 if (instances[_batchNodes[ordinal]] is { Commands: not null } producer)
                     producers.Add(producer);
@@ -185,7 +190,9 @@ public sealed class BoundSchedule : IDisposable
             {
                 var step = _steps[i];
                 cancellation.ThrowIfCancellationRequested();
-                if (step.Kind == StepKind.Batch)
+                if (_soloNodes[i] >= 0)
+                    RunSolo(_soloNodes[i]);
+                else if (step.Kind == StepKind.Batch)
                     RunBatch(step);
                 else
                 {
@@ -278,6 +285,34 @@ public sealed class BoundSchedule : IDisposable
                 _instances[node].Complete(_remaining[node] == 0);
                 _begun[node] = false;
             }
+        }
+    }
+
+    // A batch of one system that never partitions. It takes the steps of RunBatch and RunOnOwner in their order,
+    // without their work lists. Run checks for cancellation again before the step that follows.
+    private void RunSolo(int node)
+    {
+        if (_conditions[node] is { } condition && !Evaluate(node, condition))
+        {
+            if (_timingEnabled) _timingAccumulators[node].SkippedByCondition = true;
+            return;
+        }
+        var instance = _instances[node];
+        instance.Begin();
+        _remaining[node] = 1;
+        try
+        {
+            _cancellation.ThrowIfCancellationRequested();
+            if (_world.MaxConcurrency > 1) _world.Workers.Park();
+            Execute(new WorkItem(node, 0, int.MaxValue));
+        }
+        catch (SystemExecutionException failure)
+        {
+            throw new AggregateException("One or more Archevolt work items failed.", failure);
+        }
+        finally
+        {
+            instance.Complete(_remaining[node] == 0);
         }
     }
 

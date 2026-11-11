@@ -474,6 +474,38 @@ public sealed class ScheduleExecutionTests
         Assert.Equal(8, previous.Distinct().Count());
     }
 
+    [Theory]
+    [InlineData(1, false)]
+    [InlineData(1, true)]
+    [InlineData(4, false)]
+    [InlineData(4, true)]
+    public void A_condition_that_cancels_the_run_stops_its_body(int budget, bool shareBatch)
+    {
+        using var world = new WorldBuilder().UseParallelExecution(budget).Build();
+        using var cancellation = new CancellationTokenSource();
+        int calls = 0;
+        bool cancel = true;
+        var condition = SystemDescriptor.Create("condition", _ => new PredicateCondition(_ =>
+        {
+            if (cancel) cancellation.Cancel();
+            return true;
+        })).AsCondition().Build();
+        SystemDescriptor[] systems = shareBatch
+            ? [ActionSystem("body", _ => calls++), ActionSystem("other", _ => calls++)]
+            : [ActionSystem("body", _ => calls++)];
+        using var schedule = BoundSchedule.Bind(world, systems, [], conditions: shareBatch ? [condition, null] : [condition]);
+
+        var failure = Assert.Throws<OperationCanceledException>(() => schedule.Run(cancellation.Token));
+        Assert.Equal(cancellation.Token, failure.CancellationToken);
+        Assert.Equal(0, calls);
+        Assert.True(schedule.IsFaulted);
+
+        cancel = false;
+        schedule.Reset();
+        schedule.Run(TestContext.Current.CancellationToken);
+        Assert.Equal(systems.Length, calls);
+    }
+
     [Fact]
     public void Failed_bodies_keep_their_previous_change_window_until_a_successful_run()
     {
