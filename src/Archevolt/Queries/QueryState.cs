@@ -74,7 +74,7 @@ public sealed class QueryState
         foreach (var match in Matches)
             if (match.Archetype.Index == entry.ArchetypeId)
             {
-                block = new BlockView(this, match, 0, match.Archetype.Table.Count, run);
+                block = new BlockView(this, match, 0, match.Archetype.Table.Count, run.Window);
                 row = entry.Row;
                 return block.MatchesRow(row);
             }
@@ -110,31 +110,37 @@ internal sealed record QueryMatch(Archetype Archetype, int[] Columns)
     }
 }
 
+// QueryState.Begin checks the system's lease. A cursor and its blocks are ref structs, so they cannot outlive the
+// body that began the query, and the lease holds for as long as that body runs. They keep the tick window and the
+// row range of the run, not the run itself, and do not check the lease again.
 public ref struct QueryCursor
 {
     private readonly QueryState? _state;
-    private readonly SystemRun _run;
+    private readonly TickWindow _window;
+    private readonly long _first;
+    private readonly long _end;
     private int _match;
     private long _offset;
 
     internal QueryCursor(QueryState state, SystemRun run)
     {
         _state = state;
-        _run = run;
+        _window = run.Window;
+        _first = run.FirstRow;
+        _end = _first + run.RowCount;
         _match = 0;
         _offset = 0;
     }
 
-    public TickWindow Window => _run.Window;
+    public TickWindow Window => _window;
 
     public bool Next(out BlockView block)
     {
         block = default;
         if (_state is null)
             throw new InvalidOperationException("A default query has no active execution.");
-        _run.Require(_state.Owner);
-        long first = _run.FirstRow;
-        long end = first + _run.RowCount;
+        long first = _first;
+        long end = _end;
         while (_match < _state.Matches.Count)
         {
             var match = _state.Matches[_match++];
@@ -146,7 +152,7 @@ public ref struct QueryCursor
             long stop = Math.Min(end, _offset);
             if (start >= stop)
                 continue;
-            block = new BlockView(_state, match, (int)(start - tableStart), (int)(stop - start), _run);
+            block = new BlockView(_state, match, (int)(start - tableStart), (int)(stop - start), _window);
             return true;
         }
         return false;
@@ -170,16 +176,16 @@ public readonly ref struct BlockView
     private readonly QueryState? _state;
     private readonly QueryMatch? _match;
     private readonly Table? _table;
-    private readonly SystemRun _run;
+    private readonly TickWindow _window;
     private readonly int _start;
     private readonly int _count;
 
-    internal BlockView(QueryState state, QueryMatch match, int start, int count, SystemRun run)
+    internal BlockView(QueryState state, QueryMatch match, int start, int count, TickWindow window)
     {
         _state = state;
         _match = match;
         _table = match.Archetype.Table;
-        _run = run;
+        _window = window;
         _start = start;
         _count = count;
     }
@@ -215,7 +221,7 @@ public readonly ref struct BlockView
         if (!_table!.Components[column].Tracked)
             throw new InvalidOperationException("The component is not tracked.");
         return new TrackedColumn<T>(_table.Values<T>(column).Slice(_start, _count),
-            _table.Changed(column).Slice(_start, _count), ref _table.ChangedSummary[column], _run.Window.Now);
+            _table.Changed(column).Slice(_start, _count), ref _table.ChangedSummary[column], _window.Now);
     }
 
     public ReadOnlySpan<ulong> Added(int term) => Ticks(term, QueryAccess.Added);
@@ -231,9 +237,9 @@ public readonly ref struct BlockView
         {
             var access = _state.Shape.Terms[i].Access;
             int column = _match!.Columns[i];
-            if ((access & QueryAccess.Added) != 0 && !_run.Window.Contains(_table!.Added(column)[_start + row]))
+            if ((access & QueryAccess.Added) != 0 && !_window.Contains(_table!.Added(column)[_start + row]))
                 return false;
-            if ((access & QueryAccess.Changed) != 0 && !_run.Window.Contains(_table!.Changed(column)[_start + row]))
+            if ((access & QueryAccess.Changed) != 0 && !_window.Contains(_table!.Changed(column)[_start + row]))
                 return false;
         }
         return true;
@@ -259,13 +265,12 @@ public readonly ref struct BlockView
         return (kind == QueryAccess.Added ? _table!.Added(column) : _table!.Changed(column)).Slice(_start, _count);
     }
 
-    internal bool RulesOut() => _match!.RulesOut(_state!.Filters, _run.Window);
+    internal bool RulesOut() => _match!.RulesOut(_state!.Filters, _window);
 
     private void Validate()
     {
         if (_state is null)
             throw new InvalidOperationException("A default block has no active execution.");
-        _run.Require(_state.Owner);
     }
 }
 

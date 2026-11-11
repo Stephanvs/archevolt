@@ -294,12 +294,26 @@ public sealed class QueryRuntimeTests
         Assert.Equal(3, rejected);
         Assert.Equal(4, world.Get<Position>(entity).Value);
         Assert.Throws<InvalidOperationException>(EnumerateDefault);
+        Assert.Throws<InvalidOperationException>(ReadDefaultBlock);
+        Assert.Throws<InvalidOperationException>(ListDefaultBlockEntities);
     }
 
     private static void EnumerateDefault()
     {
         QueryCursor cursor = default;
         cursor.Next(out _);
+    }
+
+    private static void ReadDefaultBlock()
+    {
+        BlockView block = default;
+        block.Read<Position>(0);
+    }
+
+    private static void ListDefaultBlockEntities()
+    {
+        BlockView block = default;
+        _ = block.Entities.Length;
     }
 
     [Fact]
