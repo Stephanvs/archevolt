@@ -8,6 +8,10 @@ public sealed class BoundSchedule : IDisposable
     private readonly World _world;
     private readonly SystemInstance[] _instances;
     private readonly SystemInstance?[] _conditions;
+    // Plan.Steps and Plan.BatchNodes as arrays. The plan exposes read-only lists, and reading those costs two
+    // interface calls per element.
+    private readonly PlanStep[] _steps;
+    private readonly int[] _batchNodes;
     // The systems that declare commands, in plan order. A flush step applies the commands of those that ran since
     // the flush before it, and _flushEnds holds where that range ends for each step. Every other buffer is empty.
     private readonly SystemInstance[] _producers;
@@ -48,13 +52,15 @@ public sealed class BoundSchedule : IDisposable
         _executeOwners = ExecuteOwners;
         _timingAccumulators = new TimingAccumulator[instances.Length];
         _timings = new SystemTiming[instances.Length];
+        _steps = plan.Steps.ToArray();
+        _batchNodes = plan.BatchNodes.ToArray();
         var producers = new List<SystemInstance>();
-        _flushEnds = new int[plan.Steps.Count];
-        for (int i = 0; i < _flushEnds.Length; i++)
+        _flushEnds = new int[_steps.Length];
+        for (int i = 0; i < _steps.Length; i++)
         {
-            var step = plan.Steps[i];
+            var step = _steps[i];
             for (int ordinal = step.First; ordinal < step.First + step.Count; ordinal++)
-                if (instances[plan.BatchNodes[ordinal]] is { Commands: not null } producer)
+                if (instances[_batchNodes[ordinal]] is { Commands: not null } producer)
                     producers.Add(producer);
             _flushEnds[i] = producers.Count;
         }
@@ -175,9 +181,9 @@ public sealed class BoundSchedule : IDisposable
             }
             RefreshQueries();
             int flushed = 0;
-            for (int i = 0; i < Plan.Steps.Count; i++)
+            for (int i = 0; i < _steps.Length; i++)
             {
-                var step = Plan.Steps[i];
+                var step = _steps[i];
                 cancellation.ThrowIfCancellationRequested();
                 if (step.Kind == StepKind.Batch)
                     RunBatch(step);
@@ -223,7 +229,7 @@ public sealed class BoundSchedule : IDisposable
         {
             for (int ordinal = step.First; ordinal < step.First + step.Count; ordinal++)
             {
-                int node = Plan.BatchNodes[ordinal];
+                int node = _batchNodes[ordinal];
                 var instance = _instances[node];
                 _failed[node] = 0;
                 _remaining[node] = 0;
@@ -263,7 +269,7 @@ public sealed class BoundSchedule : IDisposable
         {
             for (int ordinal = step.First; ordinal < step.First + step.Count; ordinal++)
             {
-                int node = Plan.BatchNodes[ordinal];
+                int node = _batchNodes[ordinal];
                 if (!_begun[node]) continue;
                 _instances[node].Complete(_remaining[node] == 0 && _failed[node] == 0);
                 _begun[node] = false;
