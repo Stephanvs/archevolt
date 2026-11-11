@@ -446,6 +446,34 @@ public sealed class ScheduleExecutionTests
         Assert.Equal(["first", "second", "first", "second", "third"], ran);
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(4)]
+    public void Every_system_of_a_shared_batch_advances_its_change_window_after_a_successful_run(int budget)
+    {
+        using var world = new WorldBuilder().UseParallelExecution(budget).Build();
+        var previous = new ulong[8];
+        var sawPrevious = new bool[8];
+        var systems = new SystemDescriptor[8];
+        for (int index = 0; index < systems.Length; index++)
+        {
+            int slot = index;
+            systems[index] = ActionSystem("system" + index, run =>
+            {
+                sawPrevious[slot] = run.Window.Contains(previous[slot]);
+                previous[slot] = run.Window.Now;
+            });
+        }
+        using var schedule = BoundSchedule.Bind(world, systems);
+        Assert.Equal([8], schedule.Plan.Steps.Where(s => s.Kind == StepKind.Batch).Select(s => s.Count));
+
+        schedule.Run(TestContext.Current.CancellationToken);
+        schedule.Run(TestContext.Current.CancellationToken);
+
+        Assert.Equal(new bool[8], sawPrevious);
+        Assert.Equal(8, previous.Distinct().Count());
+    }
+
     [Fact]
     public void Failed_bodies_keep_their_previous_change_window_until_a_successful_run()
     {
