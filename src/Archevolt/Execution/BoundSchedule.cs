@@ -263,7 +263,12 @@ public sealed class BoundSchedule : IDisposable
                     _remaining[node] = 1;
                 }
             }
-            _world.Workers.Run(workCount, _execute, _ownerCount == 0 ? null : _executeOwners, _cancellation);
+            // The pool hands work to its workers only when two items can run at once. It runs every other batch on
+            // this thread, and so does the schedule, without the pool's bookkeeping.
+            if (_world.MaxConcurrency == 1 || workCount == 0 || (workCount == 1 && _ownerCount == 0))
+                RunOnOwner(workCount);
+            else
+                _world.Workers.Run(workCount, _execute, _ownerCount == 0 ? null : _executeOwners, _cancellation);
         }
         finally
         {
@@ -275,6 +280,25 @@ public sealed class BoundSchedule : IDisposable
                 _begun[node] = false;
             }
         }
+    }
+
+    // Follows WorkerPool.Run for a batch that no worker takes part in: owner-thread systems first, then the others,
+    // until one fails or the run is cancelled.
+    private void RunOnOwner(int workCount)
+    {
+        _cancellation.ThrowIfCancellationRequested();
+        if (workCount == 0 && _ownerCount == 0) return;
+        if (_world.MaxConcurrency > 1) _world.Workers.Park();
+        try
+        {
+            for (int i = 0; i < _ownerCount && !_cancellation.IsCancellationRequested; i++) Execute(_ownerWork[i]);
+            for (int i = 0; i < workCount && !_cancellation.IsCancellationRequested; i++) Execute(_work[i]);
+        }
+        catch (Exception failure)
+        {
+            throw new AggregateException("One or more Archevolt work items failed.", failure);
+        }
+        _cancellation.ThrowIfCancellationRequested();
     }
 
     private void Execute(int index) => Execute(_work[index]);

@@ -106,9 +106,9 @@ internal sealed class WorkerPool : IDisposable
                 Monitor.PulseAll(_gate);
             }
         }
-        else if (!_signal.Parked)
+        else
         {
-            _signal.Parked = true;
+            Park();
         }
 
         Exception? ownerFailure = null;
@@ -160,6 +160,13 @@ internal sealed class WorkerPool : IDisposable
             throw new AggregateException("One or more Archevolt work items failed.", failures);
         }
         cancellation.ThrowIfCancellationRequested();
+    }
+
+    // The owner is about to run work alone. Spinning workers see the flag and block at once.
+    internal void Park()
+    {
+        if (!_signal.Parked)
+            _signal.Parked = true;
     }
 
     private void Work()
