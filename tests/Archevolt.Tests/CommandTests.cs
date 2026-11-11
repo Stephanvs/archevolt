@@ -92,6 +92,36 @@ public sealed class CommandTests
         Assert.Equal(2, handles.Count);
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(4)]
+    public void An_archetype_created_by_a_flush_is_visible_to_later_systems_and_other_schedules(int concurrency)
+    {
+        using var world = new WorldBuilder().AddBundle<Particle>().AddComponent<Velocity>().UseParallelExecution(concurrency).Build();
+        Entity entity = world.Spawn(new Particle(new Position(3)));
+        var moving = QueryShape.Create("moving").Read<Position>(0).Read<Velocity>(1).Build();
+        int sameRun = -1, otherSchedule = -1;
+        bool insert = false;
+        ActionBody produce = (_, commands, _) => { if (insert) commands.Insert(entity, new Velocity(5)); };
+        QueryAction consume = (run, query) => sameRun = Count(query.Begin(run));
+        QueryAction observe = (run, query) => otherSchedule = Count(query.Begin(run));
+        var producer = SystemDescriptor.Create("producer", b => new CommandBody(b, produce)).Commands().Build();
+        var consumer = SystemDescriptor.Create("consumer", b => new QueryBody(b, consume)).Query(moving).Build();
+        using var schedule = BoundSchedule.Bind(world, [producer, consumer], [new EdgeInput(0, 1)]);
+        using var observer = BoundSchedule.Bind(world, SystemDescriptor.Create("observer", b => new QueryBody(b, observe)).Query(moving).Build());
+
+        schedule.Run(TestContext.Current.CancellationToken);
+        observer.Run(TestContext.Current.CancellationToken);
+        Assert.Equal(0, sameRun);
+        Assert.Equal(0, otherSchedule);
+
+        insert = true;
+        schedule.Run(TestContext.Current.CancellationToken);
+        Assert.Equal(1, sameRun);
+        observer.Run(TestContext.Current.CancellationToken);
+        Assert.Equal(1, otherSchedule);
+    }
+
     [Fact]
     public void Playback_failure_keeps_completed_writes_and_cancels_the_unapplied_spawn()
     {

@@ -73,6 +73,9 @@ internal sealed class ResourceSlot<T> : ResourceSlot
 public sealed partial class World
 {
     private readonly Dictionary<int, ResourceSlot> _resources = [];
+    // Counts resources that left the world. A bound schedule checks its required resources again only when this
+    // has changed, because nothing else can make a present resource absent.
+    internal long ResourceRemovals;
 
     private void InitializeResources(IEnumerable<ResourceDescriptor> descriptors)
     {
@@ -125,6 +128,7 @@ public sealed partial class World
         if (!slot.Present)
             return false;
         NextTick();
+        ResourceRemovals++;
         slot.Clear(dispose: true);
         return true;
     }
@@ -136,6 +140,7 @@ public sealed partial class World
         if (!slot.Present)
             throw new InvalidOperationException("Resource is absent.");
         NextTick();
+        ResourceRemovals++;
         T value = slot.Value;
         slot.Clear(dispose: false);
         return value;

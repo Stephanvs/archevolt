@@ -455,6 +455,40 @@ public sealed class ScheduleExecutionTests
     }
 
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void A_removed_resource_fails_every_run_until_it_returns(bool take, bool readByCondition)
+    {
+        using var world = new WorldBuilder().AddResource<Gate>().Build();
+        world.InsertResource(new Gate(true));
+        int calls = 0;
+        var gate = SystemDescriptor.Create("gate", binder => new GateCondition(binder.Resource<Gate>(0))).Res<Gate>().AsCondition().Build();
+        var body = readByCondition
+            ? ActionSystem("body", _ => calls++)
+            : SystemDescriptor.Create("body", _ => new ActionBody(_ => calls++)).Res<Gate>().Build();
+        using var schedule = BoundSchedule.Bind(world, [body], [], conditions: [readByCondition ? gate : null]);
+        schedule.Run(TestContext.Current.CancellationToken);
+        Assert.Equal(1, calls);
+
+        if (take) Assert.Equal(new Gate(true), world.TakeResource<Gate>());
+        else Assert.True(world.RemoveResource<Gate>());
+        for (int attempt = 0; attempt < 2; attempt++)
+        {
+            Assert.Throws<InvalidOperationException>(() => schedule.Run(TestContext.Current.CancellationToken));
+            Assert.True(schedule.IsFaulted);
+            schedule.Reset();
+        }
+        Assert.Equal(1, calls);
+
+        world.InsertResource(new Gate(true));
+        schedule.Run(TestContext.Current.CancellationToken);
+        schedule.Run(TestContext.Current.CancellationToken);
+        Assert.Equal(3, calls);
+    }
+
+    [Theory]
     [InlineData(1)]
     [InlineData(4)]
     public void Schedule_control_rejects_wrong_threads_reentrancy_and_running_disposal(int budget)

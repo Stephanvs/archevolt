@@ -252,9 +252,8 @@ internal sealed partial class SystemInstance
                 throw new InvalidOperationException($"Required resource for system {Key} is absent.");
     }
 
-    internal void Prepare()
+    internal void Refresh()
     {
-        ValidateResources();
         foreach (var query in Queries)
             query?.Refresh();
     }
