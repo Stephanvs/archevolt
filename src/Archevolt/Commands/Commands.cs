@@ -12,8 +12,11 @@ internal sealed class CommandBuffer
     internal int Count { get; private set; }
     private int _length;
 
-    internal CommandBuffer(int capacity)
+    internal readonly string Producer;
+
+    internal CommandBuffer(int capacity, string producer)
     {
+        Producer = producer;
         _bytes = new byte[capacity];
         _records = new CommandRecord[Math.Max(4, capacity / 32)];
     }
@@ -147,33 +150,30 @@ public sealed partial class World
         _bundles.TryGetValue(TypeKey<TBundle>.Value, out var binding)
             ? binding : throw new InvalidOperationException($"Bundle {typeof(TBundle).Name} is not registered.");
 
-    // producers lists systems that declare commands, in the order their commands play back.
-    internal void FlushCommands(ReadOnlySpan<SystemInstance> producers, ulong tick)
+    internal void FlushCommands(ReadOnlySpan<CommandBuffer> buffers, ulong tick)
     {
         Entities.Flush();
-        foreach (var instance in producers)
+        foreach (var buffer in buffers)
         {
-            var buffer = instance.Commands!;
             for (int index = 0; index < buffer.Count; index++)
             {
                 var command = buffer.Record(index);
                 try { Apply(command, buffer.Payload(command), tick); }
                 catch (Exception exception)
                 {
-                    DiscardCommands(producers);
-                    throw new CommandPlaybackException(instance.Key, index, exception);
+                    DiscardCommands(buffers);
+                    throw new CommandPlaybackException(buffer.Producer, index, exception);
                 }
             }
             buffer.Clear();
         }
     }
 
-    internal void DiscardCommands(ReadOnlySpan<SystemInstance> producers)
+    internal void DiscardCommands(ReadOnlySpan<CommandBuffer> buffers)
     {
         Entities.Flush();
-        foreach (var instance in producers)
+        foreach (var buffer in buffers)
         {
-            var buffer = instance.Commands!;
             for (int i = 0; i < buffer.Count; i++)
             {
                 var command = buffer.Record(i);

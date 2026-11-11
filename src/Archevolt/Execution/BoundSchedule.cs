@@ -12,11 +12,11 @@ public sealed class BoundSchedule : IDisposable
     // interface calls per element.
     private readonly PlanStep[] _steps;
     private readonly int[] _batchNodes;
-    // For each step, the system of a batch that holds one system which never splits into partitions, or -1.
     private readonly int[] _soloNodes;
-    // The systems that declare commands, in plan order. A flush step applies the commands of those that ran since
-    // the flush before it, and _flushEnds holds where that range ends for each step. Every other buffer is empty.
-    private readonly SystemInstance[] _producers;
+    // The command buffers of the systems that declare commands, in plan order. A flush step applies those of the
+    // systems that ran since the flush before it, and _flushEnds holds where that range ends for each step. Every
+    // other buffer is empty.
+    private readonly CommandBuffer[] _producers;
     private readonly int[] _flushEnds;
     private readonly NodeTraits[] _traits;
     private readonly WorkItem[] _work;
@@ -30,8 +30,6 @@ public sealed class BoundSchedule : IDisposable
     private readonly TimingAccumulator[] _timingAccumulators;
     private readonly SystemTiming[] _timings;
     private bool _timingEnabled;
-    // The world's ResourceRemovals and archetype count when this schedule last checked its required resources and
-    // refreshed its queries. A run repeats either pass only when the world has moved past the recorded value.
     private long _checkedRemovals = -1;
     private int _matchedArchetypes;
     private CancellationToken _cancellation;
@@ -56,21 +54,25 @@ public sealed class BoundSchedule : IDisposable
         _timings = new SystemTiming[instances.Length];
         _steps = plan.Steps.ToArray();
         _batchNodes = plan.BatchNodes.ToArray();
-        var producers = new List<SystemInstance>();
+        var producers = new List<CommandBuffer>();
         _flushEnds = new int[_steps.Length];
         _soloNodes = new int[_steps.Length];
         for (int i = 0; i < _steps.Length; i++)
         {
             var step = _steps[i];
-            _soloNodes[i] = step.Kind == StepKind.Batch && step.Count == 1
-                && (world.MaxConcurrency == 1 || !instances[_batchNodes[step.First]].Descriptor.Partitionable) ? _batchNodes[step.First] : -1;
+            _soloNodes[i] = step.Kind == StepKind.Batch && step.Count == 1 && NeverPartitions(_batchNodes[step.First]) ? _batchNodes[step.First] : -1;
             for (int ordinal = step.First; ordinal < step.First + step.Count; ordinal++)
-                if (instances[_batchNodes[ordinal]] is { Commands: not null } producer)
-                    producers.Add(producer);
+                if (instances[_batchNodes[ordinal]].Commands is { } buffer)
+                    producers.Add(buffer);
             _flushEnds[i] = producers.Count;
         }
         _producers = producers.ToArray();
         PublishTimings();
+
+        // RunBatch gives such a system one work item: an owner-thread system, one that is not partitionable, and
+        // any system of a world without workers.
+        bool NeverPartitions(int node) => (traits[node] & (NodeTraits.OwnerThread | NodeTraits.Exclusive)) != 0
+            || !instances[node].Descriptor.Partitionable || world.MaxConcurrency == 1;
     }
 
     public SchedulePlan Plan { get; }
@@ -269,8 +271,8 @@ public sealed class BoundSchedule : IDisposable
                     _remaining[node] = 1;
                 }
             }
-            // The pool hands work to its workers only when two items can run at once. It runs every other batch on
-            // this thread, and so does the schedule, without the pool's bookkeeping.
+            // Workers help only when two items can run at once. The schedule runs every other batch on this
+            // thread, where the bookkeeping of the pool would be pure cost.
             if (_world.MaxConcurrency == 1 || workCount == 0 || (workCount == 1 && _ownerCount == 0))
                 RunOnOwner(workCount);
             else
@@ -304,11 +306,11 @@ public sealed class BoundSchedule : IDisposable
         {
             _cancellation.ThrowIfCancellationRequested();
             if (_world.MaxConcurrency > 1) _world.Workers.Park();
-            Execute(new WorkItem(node, 0, int.MaxValue));
-        }
-        catch (SystemExecutionException failure)
-        {
-            throw new AggregateException("One or more Archevolt work items failed.", failure);
+            try { Execute(new WorkItem(node, 0, int.MaxValue)); }
+            catch (Exception failure)
+            {
+                throw new AggregateException("One or more Archevolt work items failed.", failure);
+            }
         }
         finally
         {
@@ -316,8 +318,6 @@ public sealed class BoundSchedule : IDisposable
         }
     }
 
-    // Follows WorkerPool.Run for a batch that no worker takes part in: owner-thread systems first, then the others,
-    // until one fails or the run is cancelled.
     private void RunOnOwner(int workCount)
     {
         _cancellation.ThrowIfCancellationRequested();
