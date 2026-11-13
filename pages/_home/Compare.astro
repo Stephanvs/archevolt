@@ -1,0 +1,130 @@
+---
+/**
+ * The sample system beside the file the generator writes for it. Each button names one part of the sample.
+ * Picking it lights that part and the lines it became, and shows a note on what the generator did.
+ * home.ts mountCompare handles the picking. A line of the sample that belongs to a part can be clicked too.
+ */
+import { Code } from "astro:components";
+import data from "blume:data";
+import { generated, lightenComments, linesOf, markLines, segments, system } from "./sample";
+
+const codeTheme = data.config.codeThemes.dark;
+
+const parts = [
+  {
+    key: "columns",
+    token: "[Component]",
+    title: "Structs stored as columns",
+    note: "Archevolt stores each component type in a column of its own. `Position` is one float, so the generated code reads the whole column as floats.",
+    source: linesOf(system, "[Component]", "record struct Position", "[Component]", "record struct Velocity"),
+    generated: linesOf(generated.code, "__Kernel(MemoryMarshal.Cast<Position, float>"),
+  },
+  {
+    key: "each",
+    token: "[Each]",
+    title: "A loop over blocks",
+    note: "`[Each]` runs the method for every entity that has both components. The generated code walks those entities in blocks of rows.",
+    source: linesOf(system, "[Each]"),
+    generated: linesOf(generated.code, "var cursor = _query0.Begin(run);", "while (cursor.Next(out var block))"),
+  },
+  {
+    key: "access",
+    token: "ref, in",
+    title: "Access in the signature",
+    note: "`ref` asks to write and `in` asks to read. The block gives the loop the `Position` column as a writable span and the `Velocity` column as a read only span.",
+    source: linesOf(system, "public static void Move("),
+    generated: linesOf(
+      generated.code,
+      "Span<Position> _column0;",
+      "_column0 = block.Write<Position>(0);",
+      "ReadOnlySpan<Velocity> _column1;",
+      "_column1 = block.Read<Velocity>(1);",
+    ),
+  },
+  {
+    key: "formula",
+    token: "position.X + velocity.X",
+    title: "Eight floats at a time",
+    note: "A Release build compiles the formula into a SIMD loop: eight floats per step with 256 bit vectors, four with 128 bit ones. It does the same operations in the same order as your method, so the results match.",
+    source: linesOf(system, "position.X + velocity.X"),
+    generated: linesOf(
+      generated.code,
+      "var __load0 = Vector256.LoadUnsafe",
+      "var __load1 = Vector256.LoadUnsafe",
+      "var __t0 = (__load0 + __load1);",
+      "Vector256.StoreUnsafe(",
+    ),
+  },
+];
+
+const initial = parts.find((part) => part.key === "formula")!;
+const partOfLine = Object.fromEntries(parts.flatMap((part) => part.source.map((line) => [line, part.key])));
+---
+
+<div class="compare" data-compare data-reveal>
+  <div class="compare-source">
+    <figure class="window">
+      <div class="window-bar">
+        <span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+        <span class="window-file">Motion.cs</span>
+        <span class="window-tag">you write</span>
+      </div>
+      <div class="code compare-code" data-code="source">
+        <Code
+          code={system}
+          lang="csharp"
+          theme={codeTheme}
+          transformers={[markLines(system, initial.source, partOfLine), lightenComments]}
+        />
+      </div>
+    </figure>
+    <div class="compare-parts" role="group" aria-label="Parts of Motion.cs">
+      {
+        parts.map((part) => (
+          <button
+            type="button"
+            class="compare-part"
+            data-pick={part.key}
+            data-lit={JSON.stringify({ source: part.source, generated: part.generated })}
+            aria-pressed={String(part === initial)}
+          >
+            <code>{part.token}</code>
+            <span>{part.title}</span>
+          </button>
+        ))
+      }
+    </div>
+  </div>
+
+  <figure class="window compare-generated">
+    <div class="window-bar">
+      <span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
+      <span class="window-file">{generated.name}</span>
+      <span class="window-tag">generated</span>
+    </div>
+    <div class="compare-notes" aria-live="polite">
+      {
+        parts.map((part) => (
+          <p class="compare-note" data-panel={part.key} hidden={part !== initial}>
+            {segments(part.note).map(({ code, part: text }) => (code ? <code>{text}</code> : text))}
+          </p>
+        ))
+      }
+    </div>
+    <div
+      class="code compare-code compare-scroll"
+      data-code="generated"
+      data-scroll
+      tabindex="0"
+      role="region"
+      aria-label={`${generated.name}, the generated code`}
+    >
+      <Code
+        code={generated.code}
+        lang="csharp"
+        theme={codeTheme}
+        transformers={[markLines(generated.code, initial.generated), lightenComments]}
+      />
+    </div>
+  </figure>
+</div>

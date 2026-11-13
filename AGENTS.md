@@ -18,4 +18,5 @@ The site root (`/`) is a custom Astro page, `pages/index.astro`, with its pieces
 
 - In `docs/`, write links as if the docs were mounted at the root (`/guides/queries`). Blume adds `/docs`.
 - In `pages/`, Blume does not rewrite links, so write the full path (`/docs/guides/queries`).
+- `pages/_home/sample/Program.cs` is the program the page shows, and `Motion.Move.Each.g.cs` beside it is what the generator emits for it. After a change to the generator or to that program, rebuild the generated file with `node scripts/home-sample.mjs`. The page fails to build when a line it highlights no longer exists.
 - `public/_redirects` sends the URLs from before the move to their `/docs` locations. Blume prefixes every configured redirect with `basePath`, so these rules cannot live in `blume.config.ts`. Cloudflare rejects the deploy when the file holds more than 100 rules.

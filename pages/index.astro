@@ -7,9 +7,11 @@ import { Code } from "astro:components";
 import PageLayout from "blume/components/layout/PageLayout.astro";
 import data from "blume:data";
 import archeoids from "../docs/samples/archeoids.png";
+import Compare from "./_home/Compare.astro";
 import Icon from "./_home/Icon.astro";
 import InstallCommand from "./_home/InstallCommand.astro";
 import TaglineReveal from "./_home/TaglineReveal.astro";
+import { lightenComments, run, segments, wiring } from "./_home/sample";
 import AotVisual from "./_home/visuals/AotVisual.astro";
 import ExecutionVisual from "./_home/visuals/ExecutionVisual.astro";
 import MessagesVisual from "./_home/visuals/MessagesVisual.astro";
@@ -20,54 +22,79 @@ import StorageVisual from "./_home/visuals/StorageVisual.astro";
 const { config } = data;
 const codeTheme = config.codeThemes.dark;
 
-const title = "Archevolt: the archetype ECS for high performance .NET";
+const title = "Archevolt: fast ECS for .NET games and simulations";
 const description =
-  "Write components as structs and systems as C# methods. A source generator builds typed queries and schedules over native, archetype based component storage.";
+  "An entity component system (ECS) for .NET games and simulations. Write structs and plain C# methods. A source generator compiles them at build time.";
 
 const quickstart = "/docs/getting-started/quickstart";
 const install = "dotnet add package Archevolt";
+const browserGame = "https://stephanvs.github.io/archevolt/";
+const reports = "https://github.com/Stephanvs/archevolt/blob/main/benchmarks";
 
-const heroCode = `[Component]
-public readonly record struct Position(float X);
+/*
+ * Moving 100,000 entities on one thread, median µs per update, all on one AMD Ryzen 9 5950X. benchmarks/benchmark.md
+ * describes the workload: every case adds a velocity, scaled by a time step, to a position of three floats.
+ * Archevolt: benchmarks/performance-hill-climb-round-2.md, the slower of its two batches. The other measured 21.4.
+ * That report says the result matches Bevy's, so the page says "matches" and does not claim a win.
+ * The references: benchmarks/results.md. Each value keeps the precision of its report.
+ */
+const movement = [
+  { name: "Rust, handwritten loop", us: "20.50", tag: "no ECS" },
+  { name: "Archevolt `[Each]`", us: "22.0", archevolt: true },
+  { name: "Bevy 0.20 `for_each`", us: "23.70" },
+  { name: "C#, handwritten loop", us: "83.06", tag: "no ECS" },
+  { name: "Arch 2.1.0, inline query", us: "103.5", tag: "no scheduler" },
+];
+const maxUs = Math.max(...movement.map((row) => Number(row.us)));
 
-[Component]
-public readonly record struct Velocity(float X);
+/*
+ * docs/performance.mdx, and benchmarks/results.md for Bevy's scan. The system cost is 24.3 ns in the docs,
+ * measured on a second machine.
+ */
+const costs = [
+  { value: "0 B", label: "allocated per update after warm up, with one worker or four" },
+  { value: "24 ns", label: "to run one `[Each]` system, before it visits an entity" },
+  {
+    value: "0.16 µs",
+    label: "for a `Changed<T>` scan when nothing changed, at 1,000 or 100,000 entities. Bevy 0.20 takes 29 µs at 100,000.",
+  },
+];
 
-public static partial class Motion
-{
-    [Each]
-    public static void Move(scoped ref Position position, scoped in Velocity velocity)
-    {
-        position = position with { X = position.X + velocity.X };
-    }
-}`;
+const steps = [
+  {
+    title: "Add the package",
+    body: "One package holds the runtime and the source generator. Your project needs .NET 11 and C# 15.",
+    command: install,
+  },
+  {
+    title: "Collect systems into a module",
+    body: "A bundle lists the components an entity starts with. A module gathers systems and bundles, and a schedule declares which systems run, in what order. The generator writes `GameEcs.Module` and `Simulation.Create` from them.",
+    code: wiring,
+  },
+  {
+    title: "Build a world and run it",
+    body: "Spawn entities from bundles, bind the schedule to the world, and call `Run` once per update.",
+    code: run,
+  },
+];
 
-const moduleCode = `[Bundle]
-public readonly partial record struct Particle(Position Position, Velocity Velocity);
-
-[EcsModule, IncludeSystems(typeof(Motion)), IncludeBundle<Particle>]
-public static partial class GameEcs;
-
-[Schedule, Run(typeof(Motion), nameof(Motion.Move), Order = 0)]
-public sealed partial class Simulation;`;
-
-const runCode = `using var world = new WorldBuilder().AddModule(GameEcs.Module).Build();
-var entity = world.Spawn(new Particle(new Position(0), new Velocity(1)));
-
-using var simulation = Simulation.Create(world);
-simulation.Run();
-
-Console.WriteLine(world.Get<Position>(entity).X); // 1`;
-
-const ticker = [
-  "Zero allocations per warmed update",
-  "Source generated queries",
-  "Structure of arrays storage",
-  "NativeAOT and trimming",
-  "Bounded parallel execution",
-  "Change tracking",
-  "No package dependencies",
-  "MIT licensed",
+const hosting = [
+  {
+    key: "exec",
+    label: "Execution",
+    title: "Parallel when you ask for it",
+    body: "Systems run one at a time by default. Turn on the worker pool, and systems that do not conflict run together. A partitioned system also splits its rows across the workers.",
+    href: "/docs/guides/execution",
+    cta: "Execution guide",
+  },
+  {
+    key: "aot",
+    label: "Deployment",
+    title: "Ready for NativeAOT",
+    body: "The same package runs under the JIT, trimmed, or as a NativeAOT image.",
+    href: "/docs/getting-started/installation",
+    cta: "Installation",
+  },
 ];
 
 const features = [
@@ -97,15 +124,6 @@ const features = [
     cta: "Schedules guide",
   },
   {
-    key: "exec",
-    wide: true,
-    label: "Execution",
-    title: "Parallel when you ask for it",
-    body: "Serial execution is the reference behavior. Enable a bounded worker pool and mark eligible systems as partitioned.",
-    href: "/docs/guides/execution",
-    cta: "Execution guide",
-  },
-  {
     key: "messages",
     label: "Data flow",
     title: "Changes, resources, messages",
@@ -113,86 +131,48 @@ const features = [
     href: "/docs/guides/messages",
     cta: "Messages guide",
   },
-  {
-    key: "aot",
-    label: "Deployment",
-    title: "Ready for NativeAOT",
-    body: "The package runs under JIT, trimming, and NativeAOT. The runtime has no package dependencies.",
-    href: "/docs/getting-started/installation",
-    cta: "Installation",
-  },
 ];
 
 const guides = data.routes
   .filter((route) => route.path.includes("/guides/") && route.indexable && !route.hidden)
   .map((route) => route.title);
 
-const steps = [
-  {
-    title: "Add the package",
-    body: "One package holds the runtime and its source generator. Generated declarations stay in your namespace and your partial types.",
-    command: install,
-  },
-  {
-    title: "Collect systems into a module",
-    body: "A module gathers systems and bundles. A schedule declares which systems run and in what order.",
-    code: moduleCode,
-  },
-  {
-    title: "Build a world and run it",
-    body: "Spawn entities from bundles, bind the schedule to the world, and run it once per update.",
-    code: runCode,
-  },
-];
-
-const movement = [
-  { name: "Handwritten loop", us: 83.06, ns: "0.831", baseline: true },
-  { name: "Generated `[Each]`", us: 94.63, ns: "0.946" },
-  { name: "Generated `[EachBlock]`, indexed loop", us: 83.06, ns: "0.831" },
-  { name: "Named query, `foreach` over rows", us: 83.16, ns: "0.832" },
-  { name: "Generated `[EachBlock]`, `Vector256`", us: 20.96, ns: "0.210" },
-];
-const maxUs = Math.max(...movement.map((row) => row.us));
-
-const callouts = [
-  { label: "ship", x: 52.9, y: 46.7 },
-  { label: "rock", x: 55.5, y: 24.1 },
-  { label: "rock", x: 35.9, y: 57.5 },
-  { label: "8 entities", x: 91.5, y: 91.1, align: "end" },
-];
-
+/* Each answer adds something the sections above do not say. */
 const faqs = [
   {
     q: "Is Archevolt a game engine?",
-    a: "No. It is a headless ECS with no window, input, rendering, or audio. Pair it with a library such as Silk.NET, the way the Archeoids sample does, or use it to drive simulations without any graphics.",
+    a: "No. It is a library that runs your simulation inside your own program, on .NET 11. You bring the window, input, and rendering, for example with Silk.NET, or run with no graphics at all. It has no integration for a specific engine.",
   },
   {
-    q: "What do I need to install?",
-    a: "One package, `Archevolt`, which contains the runtime and the Roslyn source generator. The runtime depends only on the .NET base library. The installation guide lists the SDK and language version it targets.",
+    q: "Which methods do not become SIMD loops?",
+    a: "For example, a method that contains a loop, uses `%`, returns early, or takes an `Entity` or `Commands` parameter. Such a method still runs, as a plain loop that handles one entity at a time.",
+    more: { label: "Read the rules in the systems guide", href: "/docs/guides/systems#simd-kernels" },
+  },
+  {
+    q: "Can I step through a system in the debugger?",
+    a: "Yes. A Debug build calls your method once per entity, so a breakpoint in it is hit. An optimized build copies the body of the method into the generated loop.",
   },
   {
     q: "Does it allocate during an update?",
-    a: "Measured warmed, fixed capacity updates allocate zero managed bytes, with one worker or four. Spawning and other structural changes can grow storage and allocate.",
-  },
-  {
-    q: "Does it run systems in parallel?",
-    a: "Only when you opt in. Call `UseParallelExecution(maxConcurrency: 4)` on `WorldBuilder` and mark eligible systems with `[Each(Partitioned = true)]`. Small workloads can cost more to dispatch in parallel than to run serially, so measure first.",
-  },
-  {
-    q: "Does it work with NativeAOT and trimming?",
-    a: "Yes. The package is verified in clean consumers under JIT, trimming, and NativeAOT.",
+    a: "Not after the first updates, as long as storage does not grow. Spawning and other structural changes can grow storage, and that allocates.",
   },
   {
     q: "What does the generator change in my code?",
-    a: "It adds members to your declarations, so the types it touches must be `partial`. Generated code stays in the namespace and partial owner of the original declaration.",
+    a: "It adds members to your declarations, so the types it touches must be `partial`. Generated code stays in your namespace, inside the partial type it extends.",
+  },
+  {
+    q: "What happens when a declaration is wrong?",
+    a: "The generator reports it when you build, with a numbered diagnostic such as `AV006` for a change filter on a component that is not tracked. All but one of the diagnostics fail the build.",
+    more: { label: "See the diagnostics", href: "/docs/reference/diagnostics" },
   },
   {
     q: "How do systems add or remove components?",
-    a: "Structural changes inside systems go through `Commands` and become visible at schedule barriers. Outside a schedule, mutate the world directly on its owner thread.",
+    a: "Inside a system, record the change with `Commands`. The schedule applies it before the systems that depend on it run. Outside a schedule, change the world directly on its owner thread.",
   },
   {
     q: "How does it compare to other ECS libraries?",
-    a: "The benchmark suite records Bevy reference measurements beside its own, but the numbers come from one machine and are not a ranking. The performance page lists every case and what it measures.",
+    a: "On a test that moves 100,000 entities, Archevolt matches Bevy 0.20, and Arch 2.1.0 takes 103.5 µs against Archevolt's 22. In other tests Archevolt skips unchanged components faster than Bevy does, and is slower at `Get<T>` lookups and when it writes and then scans every tracked component. All of these ran on one machine.",
+    more: { label: "See the benchmark results", href: `${reports}/results.md` },
   },
   {
     q: "Is it free to use?",
@@ -210,8 +190,6 @@ const faqSchema = {
   })),
 };
 
-/** Split text on backticks so inline code renders as <code>. */
-const segments = (text: string) => text.split("`").map((part, index) => ({ code: index % 2 === 1, part }));
 const two = (index: number) => String(index + 1).padStart(2, "0");
 ---
 
@@ -229,7 +207,7 @@ const two = (index: number) => String(index + 1).padStart(2, "0");
   siteUrl={config.site}
   ogEnabled={config.og.enabled}
   structuredDataEnabled={config.structuredData}
-  lastModified="2026-11-04"
+  lastModified="2026-11-13"
   page={{ title, description }}
 >
   <div class="home" data-home>
@@ -238,31 +216,31 @@ const two = (index: number) => String(index + 1).padStart(2, "0");
       <div class="frame hero-inner">
         <p class="hero-badge" data-rise style="--d:0">
           <span class="pulse-dot"></span>
-          Headless archetype ECS · MIT
+          Headless ECS for .NET · MIT
         </p>
         <h1 class="hero-title" id="hero-title" data-rise style="--d:90">
-          The archetype ECS{" "}<br />
-          for high performance .NET
+          Blazing fast simulations{" "}<br />
+          in plain C#
         </h1>
         <div class="hero-grid">
           <div class="hero-left">
-        <p class="hero-lede" data-rise style="--d:180">
-          Write components as structs and systems as plain C# methods. A source generator turns them into typed
-          queries and schedules, and the runtime keeps every component in dense native tables.
-        </p>
-        <div class="hero-actions" data-rise style="--d:270">
-          <a class="button" href={quickstart}>
-            Read the quickstart
-            <Icon name="arrow-right" />
-          </a>
-          <InstallCommand command={install} />
-        </div>
-        <dl class="hero-proof" data-rise style="--d:360">
-          <div><dt>Dependencies</dt><dd>0</dd></div>
-          <div><dt>Allocations<sup aria-hidden="true">*</sup></dt><dd>0 B</dd></div>
-          <div><dt>Optimized</dt><dd>AOT</dd></div>
-        </dl>
-        <p class="hero-footnote" data-rise style="--d:420"><span aria-hidden="true">* </span>Allocated per warmed update.</p>
+            <p class="hero-lede" data-rise style="--d:180">
+              Archevolt is an entity component system, or ECS, for .NET games and simulations. You write components as
+              structs and systems as static methods. A source generator compiles them into direct calls at build time,
+              and your program keeps its own host, loop, and threads.
+            </p>
+            <div class="hero-actions" data-rise style="--d:270">
+              <a class="button" href={quickstart}>
+                Read the quickstart
+                <Icon name="arrow-right" />
+              </a>
+              <InstallCommand command={install} />
+            </div>
+            <dl class="hero-proof" data-rise style="--d:360">
+              <div><dt>to move 100,000 entities</dt><dd>22 µs</dd></div>
+              <div><dt>allocated per update after warm up</dt><dd>0 B</dd></div>
+              <div><dt>package dependencies</dt><dd>0</dd></div>
+            </dl>
           </div>
           <div class="hero-stage" data-rise style="--d:300" aria-hidden="true">
             <canvas class="hero-field" data-field></canvas>
@@ -276,69 +254,184 @@ const two = (index: number) => String(index + 1).padStart(2, "0");
       </div>
     </section>
 
-    <div class="ticker" aria-label="Highlights">
-      <div class="ticker-track">
-        {
-          [0, 1].map((copy) => (
-            <ul class="ticker-list" aria-hidden={copy === 1 ? "true" : undefined}>
-              {ticker.map((item) => (
-                <li>
-                  <Icon name="lightning" class="ticker-bolt" />
-                  {item}
-                </li>
-              ))}
-            </ul>
-          ))
-        }
-      </div>
-    </div>
-
-    <!-- 01: the system -->
-    <section class="section" aria-labelledby="system-title">
+    <!-- 01: the sample beside what the generator writes for it -->
+    <section class="section" id="generated" aria-labelledby="generated-title">
       <div class="frame">
-        <div class="sec-label" data-reveal><span>01</span>The system</div>
-        <div class="system">
-          <div class="system-copy" data-reveal>
-            <h2 class="sec-title" id="system-title">Two structs and a method. That is the whole system.</h2>
-            <p class="sec-lede">
-              Components are unmanaged structs. A system is a static method that asks for <code>ref</code> to write
-              and <code>in</code> to read. The generated loop calls <code>Motion.Move</code> directly for every
-              entity that has both components.
-            </p>
-            <ul class="system-facts">
-              <li><span>Typed access</span>concrete rows, nothing boxed or looked up by type</li>
-              <li><span>Compile time</span>queries, bundles, modules, and schedules are generated</li>
-              <li><span>Your code</span>generated declarations stay in your namespace and partial types</li>
-            </ul>
-          </div>
-          <figure class="window system-window" data-reveal data-story="system">
-            <div class="window-bar">
-              <span class="window-dots" aria-hidden="true"><span></span><span></span><span></span></span>
-              <span class="window-file">Motion.cs</span>
-              <span class="window-tag">generated loop · per entity</span>
-            </div>
-            <div class="code">
-              <Code code={heroCode} lang="csharp" theme={codeTheme} />
-              <span class="code-hot" aria-hidden="true"><span>runs for every matching row</span></span>
-            </div>
-          </figure>
-        </div>
-        <div class="targets" data-reveal data-story="targets">
-          <p class="targets-label">Runs under</p>
-          <p class="targets-row">
-            <span data-target-word>JIT</span><span class="targets-sep">/</span><span data-target-word>Trimmed</span><span class="targets-sep">/</span><span data-target-word>NativeAOT</span>
+        <div class="sec-label" data-reveal><span>01</span>Generated code</div>
+        <div class="sec-head" data-reveal>
+          <h2 class="sec-title" id="generated-title">The readable version is the fast version</h2>
+          <p class="sec-lede">
+            You do not rewrite <code>Motion.Move</code> for speed. Select a part of it to see what the generator wrote.
           </p>
-          <p class="targets-note">The same package, verified in clean consumers on each.</p>
         </div>
+        <Compare />
+        <p class="sec-foot" data-reveal>
+          Methods with <code>if</code> branches, <code>MathF.Min</code> and <code>MathF.Max</code>, and calls to your
+          own static methods can compile this way too. The{" "}
+          <a href="/docs/guides/systems#simd-kernels">systems guide</a> lists what qualifies.
+        </p>
       </div>
     </section>
 
-    <!-- 02: features as a bento of live visuals -->
-    <section class="section" aria-labelledby="features-title">
+    <!-- 02: performance -->
+    <section class="section" id="performance" aria-labelledby="perf-title">
       <div class="frame">
-        <div class="sec-label" data-reveal><span>02</span>What you get</div>
+        <div class="sec-label" data-reveal><span>02</span>Performance</div>
+        <h2 class="sec-title sec-title-wide" id="perf-title" data-reveal>Speed is a requirement</h2>
+        <div class="perf">
+          <div class="perf-hero" data-reveal>
+            <p class="perf-number">22<small>µs</small></p>
+            <p class="perf-caption">
+              to move 100,000 entities on one thread. That is 0.22 ns per entity, and it matches Bevy 0.20, which
+              takes 23.7 µs on the same machine.
+            </p>
+            <dl class="perf-minis">
+              {
+                costs.map((cost) => (
+                  <div>
+                    <dt>{segments(cost.label).map(({ code, part }) => (code ? <code>{part}</code> : part))}</dt>
+                    <dd>{cost.value}</dd>
+                  </div>
+                ))
+              }
+            </dl>
+          </div>
+          <div class="perf-chart" data-reveal data-bars>
+            <p class="perf-chart-title">
+              Moving 100,000 entities on one thread, median µs per update
+              <span>
+                Each entity adds its velocity, scaled by a time step, to a position of three floats. Archevolt and
+                Bevy each run that as one system in a schedule.
+              </span>
+            </p>
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Case</th>
+                  <th scope="col" class="num">Median µs</th>
+                </tr>
+              </thead>
+              <tbody>
+                {
+                  movement.map((row) => (
+                    <tr class:list={{ "is-reference": !row.archevolt }}>
+                      <th scope="row">
+                        <span class="bar-label">
+                          <span>{segments(row.name).map(({ code, part }) => (code ? <code>{part}</code> : part))}</span>
+                          {row.tag && <span class="bar-tag">{row.tag}</span>}
+                        </span>
+                        <span class="bar" style={`--w:${((Number(row.us) / maxUs) * 100).toFixed(2)}%`}>
+                          <span class="bar-fill" />
+                        </span>
+                      </th>
+                      <td class="num">{row.us}</td>
+                    </tr>
+                  ))
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <p class="sec-foot" data-reveal>
+          The chart shows medians of three process runs on an AMD Ryzen 9 5950X, in Release builds, from the{" "}
+          <a href={`${reports}/performance-hill-climb-round-2.md#distance-to-bevy`}>round two report</a> and the{" "}
+          <a href={`${reports}/results.md#movement-100000-entities-one-thread`}>benchmark results</a>. The system
+          cost comes from a second machine. The <a href="/docs/performance">performance page</a> lists what costs.
+        </p>
+      </div>
+    </section>
+
+    <TaglineReveal lines={["Your components stay structs.", "Your systems stay methods.", "The generator writes the rest."]} />
+
+    <!-- 03: setup, as editorial rows -->
+    <section class="section" id="setup" aria-labelledby="setup-title">
+      <div class="frame">
+        <div class="sec-label" data-reveal><span>03</span>Setup</div>
+        <h2 class="sec-title sec-title-wide" id="setup-title" data-reveal>Then wire it into a program</h2>
+        <ol class="steps">
+          {
+            steps.map((step, index) => (
+              <li class="step" data-reveal>
+                <span class="step-number" aria-hidden="true">
+                  {two(index)}
+                </span>
+                <div class="step-copy">
+                  <h3>{step.title}</h3>
+                  <p>{segments(step.body).map(({ code, part }) => (code ? <code>{part}</code> : part))}</p>
+                </div>
+                <div class="step-visual">
+                  {step.command ? (
+                    <InstallCommand command={step.command} typed />
+                  ) : (
+                    <div class="window">
+                      <div class="code">
+                        <Code code={step.code!} lang="csharp" theme={codeTheme} transformers={[lightenComments]} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </li>
+            ))
+          }
+        </ol>
+        <p class="sec-foot" data-reveal>
+          The <a href={quickstart}>quickstart</a> walks through the complete program.
+        </p>
+      </div>
+    </section>
+
+    <!-- 04: headless -->
+    <section class="section" id="headless" aria-labelledby="headless-title">
+      <div class="frame">
+        <div class="sec-label" data-reveal><span>04</span>Architecture</div>
+        <div class="sec-head" data-reveal>
+          <h2 class="sec-title" id="headless-title">Archevolt is headless</h2>
+          <p class="sec-lede">
+            No window, input, rendering, or audio. You call <code>simulation.Run()</code> from your own loop, in a game,
+            a server, or a test.
+          </p>
+        </div>
+        <div class="bento bento-pair" data-scene>
+          {
+            hosting.map((card, index) => (
+              <a class="bento-card" href={card.href} style={`--d:${index * 85}`}>
+                <div class="bento-visual">
+                  {card.key === "exec" && <ExecutionVisual />}
+                  {card.key === "aot" && <AotVisual />}
+                </div>
+                <div class="bento-body">
+                  <span class="mono-label">{card.label}</span>
+                  <h3>{card.title}</h3>
+                  <p>{card.body}</p>
+                  <span class="pill">
+                    {card.cta}
+                    <Icon name="arrow-right" />
+                  </span>
+                </div>
+              </a>
+            ))
+          }
+        </div>
+        <a class="sample" href={browserGame} data-reveal>
+          <Image src={archeoids} alt="" widths={[160, 320]} sizes="128px" loading="lazy" />
+          <span class="sample-copy">
+            <span class="sample-label">Sample · Archeoids</span>
+            <span>The same simulation runs under Silk.NET on the desktop and under WebGPU in the browser.</span>
+          </span>
+          <span class="pill pill-page">
+            Play it in your browser
+            <Icon name="arrow-right" />
+          </span>
+        </a>
+      </div>
+    </section>
+
+    <!-- 05: the other features, as a bento of live visuals -->
+    <section class="section" id="features" aria-labelledby="features-title">
+      <div class="frame">
+        <div class="sec-label" data-reveal><span>05</span>What you get</div>
         <h2 class="sec-title sec-title-wide" id="features-title" data-reveal>
-          Everything a frame needs, generated at compile time
+          Queries, storage, schedules, and messages
         </h2>
         <div class="bento" data-scene>
           {
@@ -348,9 +441,7 @@ const two = (index: number) => String(index + 1).padStart(2, "0");
                   {feature.key === "query" && <QueryVisual />}
                   {feature.key === "storage" && <StorageVisual />}
                   {feature.key === "schedule" && <ScheduleVisual />}
-                  {feature.key === "exec" && <ExecutionVisual />}
                   {feature.key === "messages" && <MessagesVisual />}
-                  {feature.key === "aot" && <AotVisual />}
                 </div>
                 <div class="bento-body">
                   <span class="mono-label">{feature.label}</span>
@@ -385,10 +476,10 @@ const two = (index: number) => String(index + 1).padStart(2, "0");
             </div>
             <div class="bento-body">
               <span class="mono-label">Guides</span>
-              <h3>{guides.length} guides, one per feature</h3>
-              <p>Components, modules, queries, schedules, resources, commands, and the rest, each with runnable code.</p>
+              <h3>A guide for every feature</h3>
+              <p>Components, modules, queries, schedules, resources, commands, and the rest.</p>
               <span class="pill">
-                Explore the docs
+                Browse the guides
                 <Icon name="arrow-right" />
               </span>
             </div>
@@ -397,155 +488,8 @@ const two = (index: number) => String(index + 1).padStart(2, "0");
       </div>
     </section>
 
-    <TaglineReveal lines={["Your components stay structs.", "Your systems stay methods.", "The generator writes the rest."]} />
-
-    <!-- 03: how it works, as editorial rows -->
-    <section class="section" aria-labelledby="steps-title">
-      <div class="frame">
-        <div class="sec-label" data-reveal><span>03</span>How it works</div>
-        <h2 class="sec-title sec-title-wide" id="steps-title" data-reveal>From package to running world in three steps</h2>
-        <ol class="steps">
-          {
-            steps.map((step, index) => (
-              <li class="step" data-reveal>
-                <span class="step-number" aria-hidden="true">
-                  {two(index)}
-                </span>
-                <div class="step-copy">
-                  <h3>{step.title}</h3>
-                  <p>{step.body}</p>
-                </div>
-                <div class="step-visual">
-                  {step.command ? (
-                    <InstallCommand command={step.command} typed />
-                  ) : (
-                    <div class="window">
-                      <div class="code">
-                        <Code code={step.code!} lang="csharp" theme={codeTheme} />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </li>
-            ))
-          }
-        </ol>
-        <p class="sec-foot" data-reveal>
-          The <a href={quickstart}>quickstart</a> puts these pieces together into one program that prints <code>1</code>.
-        </p>
-      </div>
-    </section>
-
-    <!-- 04: performance -->
-    <section class="section" aria-labelledby="perf-title">
-      <div class="frame">
-        <div class="sec-label" data-reveal><span>04</span>Performance</div>
-        <h2 class="sec-title sec-title-wide" id="perf-title" data-reveal>
-          Generated loops that keep pace with handwritten ones
-        </h2>
-        <div class="perf">
-          <div class="perf-hero" data-reveal>
-            <p class="perf-number">0 B</p>
-            <p class="perf-caption">managed allocations per warmed update, with one worker or four</p>
-            <dl class="perf-minis">
-              <div><dt>for a <code>Changed&lt;T&gt;</code> scan with nothing changed, at 1,000 or 100,000 entities</dt><dd>0.16 µs</dd></div>
-              <div><dt>package dependencies in the runtime</dt><dd>0</dd></div>
-            </dl>
-          </div>
-          <div class="perf-chart" data-reveal data-bars>
-            <p class="perf-chart-title">
-              Moving 100,000 entities, median µs per update
-              <span>Archevolt's times include schedule dispatch, resource access, lease checks, and query traversal.</span>
-            </p>
-            <table>
-              <thead>
-                <tr>
-                  <th scope="col">Case</th>
-                  <th scope="col" class="num">Median µs</th>
-                  <th scope="col" class="num">ns per entity</th>
-                </tr>
-              </thead>
-              <tbody>
-                {
-                  movement.map((row) => (
-                    <tr class:list={{ "is-baseline": row.baseline }}>
-                      <th scope="row">
-                        <span class="bar-label">
-                          {segments(row.name).map(({ code, part }) => (code ? <code>{part}</code> : part))}
-                          {row.baseline && <span class="bar-tag">baseline, no scheduler</span>}
-                        </span>
-                        <span class="bar" style={`--w:${((row.us / maxUs) * 100).toFixed(2)}%`}>
-                          <span class="bar-fill" />
-                        </span>
-                      </th>
-                      <td class="num" data-count={row.us.toFixed(2)}>{row.us.toFixed(2)}</td>
-                      <td class="num">{row.ns}</td>
-                    </tr>
-                  ))
-                }
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <p class="sec-foot" data-reveal>
-          Medians of three process runs on an AMD Ryzen 9 5950X, Windows 11, Release build, 2 November 2026. The
-          numbers come from one machine. They are not a regression limit or a ranking.{" "}
-          <a href="/docs/performance">Read the full performance report</a>
-        </p>
-      </div>
-    </section>
-
-    <!-- 05: the sample -->
-    <section class="section" aria-labelledby="sample-title">
-      <div class="frame">
-        <div class="sec-label" data-reveal><span>05</span>Sample</div>
-        <div class="arcade" data-reveal>
-          <div class="arcade-copy">
-            <h2 class="sec-title" id="sample-title">Every ship, rock, bullet, and particle is an entity</h2>
-            <p>
-              <a href="https://stephanvs.github.io/archevolt/">Archeoids</a> is a playable Asteroids style game.
-              Archevolt runs the gameplay, and Silk.NET handles the window, input, and rendering.
-              Read it for spawn bundles, deferred commands, independent message
-              readers, and invulnerability tags working together.
-            </p>
-            <InstallCommand command="dotnet run --project samples/Archeoids -c Release" />
-            <a class="button" href="https://stephanvs.github.io/archevolt/">
-              Play Archeoids in your browser
-              <Icon name="arrow-right" />
-            </a>
-            <a class="pill pill-light" href="/docs/samples/archeoids">
-              Explore the Archeoids sample
-              <Icon name="arrow-right" />
-            </a>
-          </div>
-          <div class="arcade-screen" data-story="arcade">
-            <Image
-              src={archeoids}
-              alt="Archeoids gameplay with a cyan ship, drifting asteroids, and a score and lives HUD."
-              widths={[640, 1100, 1600]}
-              sizes="(min-width: 1024px) 640px, 100vw"
-              loading="lazy"
-            />
-            {
-              callouts.map((callout, index) => (
-                <span
-                  class:list={["callout", { "is-end": callout.align === "end" }]}
-                  style={`left:${callout.x}%;top:${callout.y}%`}
-                  data-callout={index}
-                  aria-hidden="true"
-                >
-                  <span class="callout-ring" />
-                  <span class="callout-tag">entity · {callout.label}</span>
-                </span>
-              ))
-            }
-          </div>
-        </div>
-      </div>
-    </section>
-
     <!-- 06: FAQ -->
-    <section class="section" aria-labelledby="faq-title">
+    <section class="section" id="faq" aria-labelledby="faq-title">
       <div class="frame faq-layout">
         <div>
           <div class="sec-label" data-reveal><span>06</span>FAQ</div>
@@ -562,7 +506,15 @@ const two = (index: number) => String(index + 1).padStart(2, "0");
                     <Icon name="plus" />
                   </span>
                 </summary>
-                <p>{segments(faq.a).map(({ code, part }) => (code ? <code>{part}</code> : part))}</p>
+                <p>
+                  {segments(faq.a).map(({ code, part }) => (code ? <code>{part}</code> : part))}
+                  {faq.more && (
+                    <>
+                      {" "}
+                      <a href={faq.more.href}>{faq.more.label}</a>
+                    </>
+                  )}
+                </p>
               </details>
             ))
           }
@@ -578,8 +530,8 @@ const two = (index: number) => String(index + 1).padStart(2, "0");
             <path d="M78 4 L18 128 H56 L40 216 L104 84 H64 Z" pathLength="1"></path>
           </svg>
           <p class="mono-label">Get started</p>
-          <h2 id="final-title">Run your first system</h2>
-          <p class="final-lede">Two structs, one method, and a schedule. The quickstart walks through the whole program.</p>
+          <h2 id="final-title">Build your first simulation</h2>
+          <p class="final-lede">Getting started is easy. Add the package and follow the quickstart.</p>
           <div class="hero-actions">
             <a class="button" href={quickstart}>
               Read the quickstart
