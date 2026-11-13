@@ -11,21 +11,23 @@ The measured warmed, fixed-capacity updates allocate zero managed bytes, with on
 The numbers come from one machine and one run of the suite. They are not a regression limit, and they do not rank Archevolt against another ECS.
 :::
 
-Every table was measured on 2 November 2026, at commit `8029e7f`, on an AMD Ryzen 9 5950X with Windows 11 Pro, .NET 11.0.0-rc.3, a Release build, and BenchmarkDotNet 0.16.0-preview.2 with its default job. The machine was otherwise idle. Each value is the median of three process runs in microseconds, with the fastest and slowest run in brackets.
+Unless a section says otherwise, every table was measured on 2 November 2026, at commit `8029e7f`, on an AMD Ryzen 9 5950X with Windows 11 Pro, .NET 11.0.0-rc.3, a Release build, and BenchmarkDotNet 0.16.0-preview.2 with its default job. The machine was otherwise idle. Each value is the median of three process runs in microseconds, with the fastest and slowest run in brackets.
 
-That source tree matches release `v0.5.5`. Later code runs single-work-item batches on the owner thread without waking idle workers. The [4 November dispatch and partitioning study](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/query-partition-threshold.md) measures that change separately. The tables here retain the earlier checkpoint and do not measure the updated dispatch path. Later still, worker threads spin briefly between batches instead of blocking at once. The [5 November report](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/performance-hill-climb-report.md) measures that change. Its [second round](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/performance-hill-climb-round-2.md) measures `[Each]` methods compiled into [SIMD kernels](/guides/systems#simd-kernels). It measured the movement `[Each]` from the table below at about 22 µs, against about 96 µs before that change on the same day. The [10 November report](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/each-kernels.md) measures kernels for methods with branches and helper calls, and a faster loop for methods that are not kernels. [`[Each]` methods by shape](#each-methods-by-shape) has its numbers. The [11 November report](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/system-overhead.md) measures what a schedule pays to run a system before the system visits an entity. [What a system costs before it does work](#what-a-system-costs-before-it-does-work) has its numbers.
+That source tree matches release `v0.5.5`. Later code runs single-work-item batches on the owner thread without waking idle workers. The [4 November dispatch and partitioning study](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/query-partition-threshold.md) measures that change separately. The tables here retain the earlier checkpoint and do not measure the updated dispatch path. Later still, worker threads spin briefly between batches instead of blocking at once. The [5 November report](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/performance-hill-climb-report.md) measures that change. Its [second round](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/performance-hill-climb-round-2.md) measures `[Each]` methods compiled into [SIMD kernels](/guides/systems#simd-kernels). Three rows on this page carry that round's values instead of the checkpoint's: the `[Each]` row under [Dense movement at 100,000 entities](#dense-movement-at-100000-entities) and the two write rows under [Change filters](#change-filters). That round ran on 5 November 2026 on the same machine while it was in normal use, so those ranges are wider. The [10 November report](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/each-kernels.md) measures kernels for methods with branches and helper calls, and a faster loop for methods that are not kernels. [`[Each]` methods by shape](#each-methods-by-shape) has its numbers. The [11 November report](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/system-overhead.md) measures what a schedule pays to run a system before the system visits an entity. [What a system costs before it does work](#what-a-system-costs-before-it-does-work) has its numbers.
 
 ## Dense movement at 100,000 entities
 
-All cases use the same `Position` and `Velocity` structs, initial values, and per-row arithmetic, with untracked components. The `Vector256` case writes that arithmetic with explicit SIMD. The handwritten loop has no scheduler. Archevolt's numbers include schedule dispatch, resource access, lease checks, and query traversal.
+All cases use the same `Position` and `Velocity` structs, initial values, and per-row arithmetic, with untracked components. The `Vector256` case writes that arithmetic with explicit SIMD. The handwritten loop has no scheduler. Archevolt's numbers include schedule dispatch, resource access, lease checks, and query traversal. The generator compiles the `[Each]` method into a [SIMD kernel](/guides/systems#simd-kernels), which is why it measures close to the `Vector256` case.
 
 | Case | Median µs [range] | ns per entity |
 | --- | ---: | ---: |
 | Handwritten loop | 83.06 [82.94, 83.41] | 0.831 |
-| Generated `[Each]` | 94.63 [93.96, 94.65] | 0.946 |
+| Generated `[Each]` | 22.04 [21.64, 40.03] | 0.220 |
 | Generated `[EachBlock]`, indexed loop | 83.06 [82.99, 83.17] | 0.831 |
 | Generated `[EachBlock]`, `Vector256` | 20.96 [20.91, 21.07] | 0.210 |
 | Named query, `foreach` over rows | 83.16 [82.48, 84.21] | 0.832 |
+
+The `[Each]` row is from 5 November 2026. Another batch that day measured 21.41 [20.94, 22.16].
 
 A named query's time depends on how the JIT lays out its loop in each process. Over the [traversal matrix](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/results.md#traversal-matrix), the same 100,000-entity named query measured about 82 µs in some processes and about 94 µs in others.
 
@@ -71,12 +73,14 @@ A build without a profile pays more, because the compiler inlines less. As a Nat
 
 Partitioned `[Each]` and `[EachBlock]` systems split each table into row ranges across workers. Named queries run on one thread.
 
-| Entities | Workers | `[Each]` µs | `[EachBlock]`, indexed loop µs | `[EachBlock]`, `Vector256` µs |
-| ---: | ---: | ---: | ---: | ---: |
-| 1,000 | 1 | 1.062 [1.061, 1.067] | 0.946 [0.936, 0.950] | 0.227 [0.224, 0.236] |
-| 1,000 | 4 | 15.12 [15.03, 15.16] | 14.83 [14.75, 15.12] | 14.15 [13.91, 14.38] |
-| 100,000 | 1 | 94.69 [94.19, 94.92] | 82.82 [82.38, 84.48] | 20.94 [20.93, 21.74] |
-| 100,000 | 4 | 51.35 [47.38, 51.44] | 44.86 [44.42, 46.31] | 22.62 [22.53, 22.97] |
+| Entities | Workers | `[EachBlock]`, indexed loop µs | `[EachBlock]`, `Vector256` µs |
+| ---: | ---: | ---: | ---: |
+| 1,000 | 1 | 0.946 [0.936, 0.950] | 0.227 [0.224, 0.236] |
+| 1,000 | 4 | 14.83 [14.75, 15.12] | 14.15 [13.91, 14.38] |
+| 100,000 | 1 | 82.82 [82.38, 84.48] | 20.94 [20.93, 21.74] |
+| 100,000 | 4 | 44.86 [44.42, 46.31] | 22.62 [22.53, 22.97] |
+
+The table leaves out `[Each]`, because the checkpoint measured it before SIMD kernels. On 5 November 2026, with kernels and the dispatch changes described below, two batches measured `[Each]` with one worker at 0.237 and 0.305 µs for 1,000 entities, and at 21.41 and 22.04 µs for 100,000. With four workers they measured 0.923 and 1.089 µs for 1,000 entities, and 11.96 and 8.549 µs for 100,000.
 
 In this checkpoint, at 1,000 entities, a four-worker update spent 14 to 16 µs, almost all of it dispatching work to the worker pool. The later dispatch change avoids waking workers for a single work item; it adds no row-count threshold for partitioned systems. With workers that spin between batches, the [5 November report](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/performance-hill-climb-report.md) measured the same four-worker update at about 1.5 µs when updates run back to back, and about 32 µs when the calling thread sleeps 2 ms between updates. Measure small worlds with one worker before enabling parallel execution. At 1,000,000 entities, four-worker times varied between processes by more than 100 µs. The [results](https://github.com/Stephanvs/archevolt/blob/main/benchmarks/results.md#movement-by-size-and-worker-count) list them.
 
@@ -99,12 +103,12 @@ At 100,000 entities, `Despawn` and `Get<T>` vary by process. A process of a slow
 
 | Case | 1,000 entities µs | 100,000 entities µs |
 | --- | ---: | ---: |
-| Write a tracked component on every entity | 1.116 [1.109, 1.127] | 103.3 [97.62, 103.3] |
+| Write a tracked component on every entity | 0.327 [0.326, 0.445] | 35.39 [29.49, 37.26] |
 | `Changed<T>` scan with nothing changed | 0.164 [0.161, 0.164] | 0.169 [0.163, 0.195] |
-| Write everything, then a `Changed<T>` scan | 2.010 [2.009, 2.017] | 187.1 [171.6, 204.2] |
+| Write everything, then a `Changed<T>` scan | 1.427 [1.268, 1.747] | 137.0 [103.0, 141.5] |
 | Write one of 16 archetypes, then a `Changed<T>` scan | 0.616 [0.615, 0.634] | 10.88 [10.87, 11.02] |
 
-A `Changed<T>` scan with nothing changed takes about 0.16 µs at both sizes, because it [skips every archetype](/guides/change-tracking#skipping-unchanged-archetypes) without reading a row. A five-process rerun measured the tracked write at 95.84 µs and the write-then-scan case at 166.4 µs at 100,000 entities.
+A `Changed<T>` scan with nothing changed takes about 0.16 µs at both sizes, because it [skips every archetype](/guides/change-tracking#skipping-unchanged-archetypes) without reading a row. The two rows that write every entity are from 5 November 2026. Another batch that day measured the tracked write at 31.02 µs and the write-then-scan case at 126.1 µs at 100,000 entities.
 
 ## Things that cost
 
