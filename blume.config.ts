@@ -4,7 +4,7 @@ import { filesystem, githubReleases } from "blume/sources";
 export default defineConfig({
   title: "Archevolt",
   description:
-    "Build fast simulations in plain C#. A headless ECS for .NET, with a source generator that compiles your systems at build time.",
+    "Blazing fast simulations in plain C#. A headless ECS for .NET, with a source generator that compiles your systems at build time.",
   content: {
     sources: [
       filesystem({ root: "docs" }),
