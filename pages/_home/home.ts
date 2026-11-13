@@ -4,8 +4,9 @@
  *
  * - Hero: a canvas "world" of entities streaming through four archetype tables.
  *   Batches migrate between tables, labelled with the component they gain or lose.
+ * - Code comparison: picking a part of the sample lights the lines the generator wrote for it.
  * - Stories: each feature visual acts out what it does on a loop, only while visible.
- * - Reveals, tagline words, typed commands, counters, and copy buttons.
+ * - Reveals, tagline words, typed commands, and copy buttons.
  */
 
 type Teardown = () => void;
@@ -13,7 +14,6 @@ type Teardown = () => void;
 const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
-const easeOut = (t: number) => 1 - (1 - t) ** 3;
 const toggle = (element: Element | null | undefined, name: string, on: boolean) => {
   if (element && element.classList.contains(name) !== on) element.classList.toggle(name, on);
 };
@@ -30,6 +30,7 @@ export function mountHome(): Teardown {
     () => cancelAnimationFrame(frame),
     mountReveals(root, reduced),
     mountCopy(root),
+    mountCompare(root, reduced),
     mountTagline(root, reduced),
     mountField(root, reduced),
     mountStories(root, reduced),
@@ -37,7 +38,7 @@ export function mountHome(): Teardown {
   return () => teardowns.forEach((teardown) => teardown());
 }
 
-/* Reveals, counters, and typed commands */
+/* Reveals and typed commands */
 
 function mountReveals(root: HTMLElement, reduced: boolean): Teardown {
   const timers: number[] = [];
@@ -48,7 +49,6 @@ function mountReveals(root: HTMLElement, reduced: boolean): Teardown {
     if (element.matches("[data-scene]")) {
       timers.push(window.setTimeout(() => element.classList.add("is-settled"), 1600));
     }
-    if (!reduced && element.matches("[data-bars]")) countUp(element);
     element.querySelectorAll<HTMLElement>("[data-type-target]").forEach((code) => {
       if (!reduced) typeCommand(code, timers);
     });
@@ -75,21 +75,6 @@ function mountReveals(root: HTMLElement, reduced: boolean): Teardown {
     observer.disconnect();
     timers.forEach((timer) => window.clearTimeout(timer));
   };
-}
-
-function countUp(scope: HTMLElement) {
-  const cells = [...scope.querySelectorAll<HTMLElement>("[data-count]")];
-  const start = performance.now();
-  const duration = 1100;
-  const step = (now: number) => {
-    const k = easeOut(clamp01((now - start) / duration));
-    for (const cell of cells) {
-      const target = Number(cell.dataset.count);
-      cell.textContent = (target * k).toFixed(2);
-    }
-    if (k < 1) requestAnimationFrame(step);
-  };
-  requestAnimationFrame(step);
 }
 
 function typeCommand(code: HTMLElement, timers: number[]) {
@@ -133,6 +118,79 @@ function mountCopy(root: HTMLElement): Teardown {
   };
   root.addEventListener("click", onClick);
   return () => root.removeEventListener("click", onClick);
+}
+
+/*
+ * Code comparison. A [data-compare] root holds buttons [data-pick="key"]. Picking one shows the matching
+ * [data-panel="key"] and lights the lines named in the button's data-lit, { "name": [line, ...] }, inside
+ * each [data-code="name"]. A click on a line with data-part="key" picks that button. A [data-scroll] box
+ * scrolls to its first lit line.
+ */
+
+function mountCompare(root: HTMLElement, reduced: boolean): Teardown {
+  const controller = new AbortController();
+
+  for (const compare of root.querySelectorAll<HTMLElement>("[data-compare]")) {
+    const picks = [...compare.querySelectorAll<HTMLElement>("[data-pick]")];
+
+    const select = (pick: HTMLElement, smooth: boolean) => {
+      for (const other of picks) other.setAttribute("aria-pressed", String(other === pick));
+      for (const panel of compare.querySelectorAll<HTMLElement>("[data-panel]")) {
+        panel.hidden = panel.dataset.panel !== pick.dataset.pick;
+      }
+      const lit = JSON.parse(pick.dataset.lit ?? "{}") as Record<string, number[]>;
+      for (const code of compare.querySelectorAll<HTMLElement>("[data-code]")) {
+        const lines = lit[code.dataset.code ?? ""] ?? [];
+        for (const line of code.querySelectorAll<HTMLElement>("[data-line]")) {
+          toggle(line, "is-lit", lines.includes(Number(line.dataset.line)));
+        }
+      }
+      for (const box of compare.querySelectorAll<HTMLElement>("[data-scroll]")) showLitLines(box, smooth && !reduced);
+    };
+
+    compare.addEventListener(
+      "click",
+      (event) => {
+        const target = event.target as Element;
+        const part = target.closest<HTMLElement>("[data-part]")?.dataset.part;
+        const pick = target.closest<HTMLElement>("[data-pick]") ?? picks.find((item) => item.dataset.pick === part);
+        if (pick) select(pick, true);
+      },
+      { signal: controller.signal },
+    );
+
+    const pressed = picks.find((pick) => pick.getAttribute("aria-pressed") === "true");
+    if (pressed) select(pressed, false);
+  }
+
+  return () => controller.abort();
+}
+
+/** Scrolls `box` so that its first lit line sits two lines below the top. */
+function showLitLines(box: HTMLElement, smooth: boolean) {
+  const lit = [...box.querySelectorAll<HTMLElement>(".is-lit")];
+  if (lit.length === 0) return;
+  const bounds = box.getBoundingClientRect();
+  const top = box.scrollTop + lit[0].getBoundingClientRect().top - bounds.top - 48;
+  const starts = lit.map(textStart).filter((start): start is number => start !== undefined);
+  const indent = starts.length > 0 ? box.scrollLeft + Math.min(...starts) - bounds.left : 0;
+  // Scroll sideways only when indentation takes up much of the box, and keep a quarter of the width for it.
+  const left = indent > bounds.width * 0.4 ? indent - bounds.width * 0.25 : 0;
+  box.scrollTo({ top: Math.max(top, 0), left, behavior: smooth ? "smooth" : "auto" });
+}
+
+/** The viewport x of the first character of `line` that is not white space. */
+function textStart(line: HTMLElement): number | undefined {
+  const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const index = node.textContent?.search(/\S/) ?? -1;
+    if (index < 0) continue;
+    const range = document.createRange();
+    range.setStart(node, index);
+    range.setEnd(node, index + 1);
+    return range.getBoundingClientRect().left;
+  }
+  return undefined;
 }
 
 /* Tagline: words light up one at a time as they cross a trigger line */
@@ -381,10 +439,14 @@ function mountField(root: HTMLElement, reduced: boolean): Teardown {
       ctx.fillRect(12, top + header / 2 - 3, 6, 6);
       ctx.fillStyle = textColor;
       ctx.textAlign = "left";
-      ctx.fillText(entry.sig.join(" · "), 26, top + header / 2 + 0.5);
+      const signature = entry.sig.join(" · ");
+      ctx.fillText(signature, 26, top + header / 2 + 0.5);
       ctx.textAlign = "right";
-      const note = entry.speed === 0 ? "no Velocity, skipped by Move · " : "";
-      ctx.fillText(`${note}${entry.count.toLocaleString("en-US")} rows`, width - 12, top + header / 2 + 0.5);
+      const rows = `${entry.count.toLocaleString("en-US")} rows`;
+      const note = entry.speed === 0 ? `no Velocity, skipped by Move · ${rows}` : rows;
+      // On a narrow canvas the note would run into the signature, so only the row count is drawn.
+      const fits = 26 + ctx.measureText(signature).width + 16 + ctx.measureText(note).width <= width - 12;
+      ctx.fillText(fits ? note : rows, width - 12, top + header / 2 + 0.5);
     });
 
     // Entities, batched per colour
@@ -498,43 +560,10 @@ function mountField(root: HTMLElement, reduced: boolean): Teardown {
 
 interface Story {
   period: number;
-  init?: (element: HTMLElement) => Teardown | void;
   frame: (element: HTMLElement, t: number) => void;
 }
 
 const stories: Record<string, Story> = {
-  system: {
-    period: 3.4,
-    init(element) {
-      // Pin the highlight to the line inside Motion.Move that the generated loop calls.
-      const place = () => {
-        const code = element.querySelector<HTMLElement>(".code");
-        const line = [...element.querySelectorAll<HTMLElement>(".line")].find((item) => item.textContent?.includes("position with"));
-        if (!code || !line) return;
-        const codeBox = code.getBoundingClientRect();
-        const lineBox = line.getBoundingClientRect();
-        code.style.setProperty("--hot-top", `${lineBox.top - codeBox.top - 2}px`);
-        code.style.setProperty("--hot-height", `${lineBox.height + 4}px`);
-      };
-      place();
-      document.fonts?.ready.then(place);
-      window.addEventListener("resize", place, { passive: true });
-      return () => window.removeEventListener("resize", place);
-    },
-    frame(element, t) {
-      toggle(element, "is-hot", t > 0.3 && t < 1.9);
-    },
-  },
-
-  targets: {
-    period: 3.6,
-    frame(element, t) {
-      const words = element.querySelectorAll("[data-target-word]");
-      const active = Math.floor(t / 1.2);
-      words.forEach((word, index) => toggle(word, "is-hot", index === active));
-    },
-  },
-
   query: {
     period: 6.4,
     frame(element, t) {
@@ -682,15 +711,6 @@ const stories: Record<string, Story> = {
       });
     },
   },
-
-  arcade: {
-    period: 6.2,
-    frame(element, t) {
-      element.querySelectorAll("[data-callout]").forEach((callout, k) => {
-        toggle(callout, "is-on", t >= 0.4 + k * 1.0 && t < 5.2);
-      });
-    },
-  },
 };
 
 function mountStories(root: HTMLElement, reduced: boolean): Teardown {
@@ -699,13 +719,8 @@ function mountStories(root: HTMLElement, reduced: boolean): Teardown {
     .filter((entry) => entry.story);
 
   // Every story starts and rests on the design.
-  const cleanups: Teardown[] = [];
-  entries.forEach((entry) => {
-    const cleanup = entry.story.init?.(entry.element);
-    if (cleanup) cleanups.push(cleanup);
-    entry.story.frame(entry.element, 0);
-  });
-  if (reduced) return () => cleanups.forEach((cleanup) => cleanup());
+  entries.forEach((entry) => entry.story.frame(entry.element, 0));
+  if (reduced) return () => {};
 
   const ready = (element: HTMLElement) => {
     const scene = element.closest("[data-scene], [data-reveal]");
@@ -761,7 +776,6 @@ function mountStories(root: HTMLElement, reduced: boolean): Teardown {
   document.addEventListener("visibilitychange", onVisibility);
 
   return () => {
-    cleanups.forEach((cleanup) => cleanup());
     if (frame) cancelAnimationFrame(frame);
     observer.disconnect();
     window.clearInterval(poke);

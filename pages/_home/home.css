@@ -1,7 +1,7 @@
 /*
  * Landing page styles. Everything is scoped under .home so the docs pages are untouched.
  * Light and dark tokens follow Blume's [data-theme] switch. "Islands" (code windows,
- * feature cards, the arcade panel, the final call to action) stay dark in both themes.
+ * feature cards, the final call to action) stay dark in both themes.
  */
 
 .home {
@@ -12,6 +12,8 @@
   --h-muted: var(--blume-muted-foreground);
   --h-line: color-mix(in oklab, var(--blume-foreground) 10%, transparent);
   --h-line-strong: color-mix(in oklab, var(--blume-foreground) 22%, transparent);
+  /* The edge of a control and the fill of a reference bar: 3:1 against the page and the surface. */
+  --h-edge: color-mix(in oklab, var(--blume-foreground) 50%, transparent);
   --h-surface: #f5f5f4;
   --h-brand: #04727d;
   --h-brand-hover: #035c65;
@@ -82,12 +84,15 @@
   font-size: 0.875em;
 }
 
+/* Inline code takes the foreground color: muted text on the tint would fall below 4.5:1. */
+
 .home p code,
 .home dt code,
 .home th code {
   padding: 2px 4px;
   border-radius: 4px;
   background: var(--h-line);
+  color: var(--h-fg);
 }
 
 .home .icon {
@@ -128,6 +133,7 @@
 
 .home .section {
   border-top: 1px solid var(--h-line);
+  scroll-margin-top: 64px;
 }
 
 .home .section > .frame,
@@ -228,6 +234,18 @@
   text-wrap: pretty;
 }
 
+/* A title with a lede under it, above the section's content. */
+
+.home .sec-head {
+  margin-bottom: 48px;
+}
+
+@media (min-width: 1024px) {
+  .home .sec-head {
+    margin-bottom: 64px;
+  }
+}
+
 .home .sec-foot {
   max-width: 720px;
   margin: 40px 0 0;
@@ -315,15 +333,29 @@
   transition: transform 500ms var(--ease);
 }
 
-.home .pill-light:hover,
 .home .bento-card:hover .pill {
   border-color: var(--i-cyan);
   background: var(--i-cyan);
   color: #041416;
 }
 
-.home .pill-light:hover .icon,
 .home .bento-card:hover .pill .icon {
+  transform: translateX(4px);
+}
+
+/* The same pill on the page background, not on a dark island. */
+
+.home .pill-page {
+  border-color: var(--h-edge);
+  color: var(--h-fg);
+}
+
+.home a:hover > .pill-page {
+  border-color: var(--h-brand);
+  color: var(--h-brand);
+}
+
+.home a:hover > .pill-page .icon {
   transform: translateX(4px);
 }
 
@@ -576,9 +608,12 @@
   border-block: 1px solid var(--h-line);
 }
 
+/* The figure sits above its label. Both start at the top, so figures line up when labels wrap differently. */
+
 .home .hero-proof > div {
   display: flex;
   flex-direction: column-reverse;
+  justify-content: flex-end;
   gap: 4px;
   padding: 16px 12px;
 }
@@ -593,25 +628,7 @@
   font-size: 0.75rem;
   line-height: 1rem;
   letter-spacing: 0.04em;
-}
-
-.home .hero-proof sup {
-  margin-left: 2px;
-  color: var(--h-brand);
-  font-size: 0.75rem;
-  line-height: 0;
-}
-
-.home .hero-footnote {
-  margin: 12px 0 0;
-  color: var(--h-muted);
-  font-family: var(--h-mono);
-  font-size: 0.75rem;
-  line-height: 1rem;
-}
-
-.home .hero-footnote span {
-  color: var(--h-brand);
+  text-wrap: balance;
 }
 
 .home .hero-proof dd {
@@ -663,93 +680,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Ticker */
-
-.home .ticker {
-  overflow: hidden;
-  border-bottom: 1px solid var(--h-line);
-  background: var(--h-surface);
-}
-
-.home .ticker-track {
-  display: flex;
-  width: max-content;
-  animation: home-marquee 48s linear infinite;
-}
-
-.home .ticker:hover .ticker-track {
-  animation-play-state: paused;
-}
-
-.home .ticker-list {
-  display: flex;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.home .ticker-list li {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 24px;
-  font-family: var(--h-mono);
-  font-size: 0.875rem;
-  line-height: 1.25rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.home .ticker-bolt {
-  color: var(--f-4);
-}
-
-@keyframes home-marquee {
-  to {
-    transform: translateX(-50%);
-  }
-}
-
-/* 01 The system */
-
-.home .system {
-  display: grid;
-  gap: 48px;
-}
-
-@media (min-width: 1024px) {
-  .home .system {
-    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-    gap: 64px;
-    align-items: center;
-  }
-}
-
-.home .system-facts {
-  margin: 32px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.home .system-facts li {
-  display: grid;
-  gap: 4px;
-  padding: 16px 0;
-  border-top: 1px solid var(--h-line);
-  color: var(--h-muted);
-  font-size: 1rem;
-  line-height: 1.5rem;
-}
-
-.home .system-facts span {
-  color: var(--h-fg);
-  font-family: var(--h-mono);
-  font-size: 0.75rem;
-  line-height: 1rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
+/* Code windows */
 
 .home .window {
   min-width: 0;
@@ -816,116 +747,192 @@
   line-height: 1.5rem;
 }
 
-.home .code-hot {
-  position: absolute;
-  top: var(--hot-top, 0);
-  right: 0;
-  left: 0;
-  height: var(--hot-height, 1.5rem);
-  background: color-mix(in oklab, var(--i-cyan) 14%, transparent);
-  box-shadow: inset 2px 0 0 var(--i-cyan);
-  opacity: 0;
-  transition: opacity 600ms var(--e2);
+/* Code comparison: the sample beside the file the generator writes for it */
+
+.home .compare {
+  display: grid;
+  gap: 24px;
 }
 
-.home .code-hot span {
-  display: none;
-  position: absolute;
-  top: 50%;
-  right: 16px;
-  padding: 0 8px;
-  border-radius: 4px;
-  background: var(--i-cyan);
-  color: #041416;
-  font-family: var(--h-mono);
-  font-size: 0.75rem;
-  line-height: 1.25rem;
-  transform: translate(8px, -50%);
-  opacity: 0;
-  transition:
-    opacity 600ms var(--e2),
-    transform 800ms var(--e);
+.home .compare-source {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
 }
 
-.home .system-window.is-hot .code-hot {
-  opacity: 1;
+.home .compare-parts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
 }
 
-.home .window-tag {
-  transition: color 300ms var(--ease);
-}
+/* Stacked, the buttons fit in one row from tablet width. Side by side, they go back to two rows. */
 
-.home .system-window.is-hot .window-tag {
-  color: var(--i-amber);
-}
-
-.home .system-window.is-hot .code-hot span {
-  opacity: 1;
-  transform: translate(0, -50%);
-}
-
-@media (max-width: 767px) {
-  .home .code-hot span {
-    display: none;
+@media (min-width: 640px) {
+  .home .compare-parts {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
-.home .targets {
-  margin-top: 80px;
+@media (min-width: 1280px) {
+  .home .compare {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: 32px;
+    align-items: start;
+  }
+
+  .home .compare-parts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .home .compare-generated {
+    position: sticky;
+    top: 96px;
+  }
 }
 
-.home .targets-label,
-.home .targets-note {
-  margin: 0;
-  color: var(--h-muted);
-  font-family: var(--h-mono);
+.home .compare-part {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px 16px;
+  border: 1px solid var(--h-edge);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--h-fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 300ms var(--ease),
+    background-color 300ms var(--ease),
+    box-shadow 300ms var(--ease),
+    transform 500ms var(--ease);
+}
+
+.home .compare-part:hover {
+  border-color: var(--h-brand);
+}
+
+.home .compare-part:active {
+  transform: scale(0.98);
+}
+
+/* The selected part has a heavier edge as well as a tint, so the state does not rest on color alone. */
+
+.home .compare-part[aria-pressed="true"] {
+  border-color: var(--h-brand);
+  background: color-mix(in oklab, var(--h-brand) 10%, transparent);
+  box-shadow: 0 0 0 1px var(--h-brand);
+}
+
+.home .compare-part code {
+  color: var(--h-brand);
   font-size: 0.75rem;
   line-height: 1rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  overflow-wrap: anywhere;
 }
 
-.home .targets-note {
-  letter-spacing: 0.04em;
-  text-transform: none;
+.home .compare-part span {
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 600;
+  text-wrap: balance;
 }
 
-.home .targets-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 16px;
-  margin: 12px 0 16px;
-  font-size: 2.25rem;
-  line-height: 1;
-  font-weight: 700;
-  letter-spacing: -0.045em;
-  text-transform: uppercase;
+/* Each line spans the window, so a lit line is lit edge to edge. */
+
+.home .compare-code pre.astro-code .line {
+  display: inline-block;
+  min-width: calc(100% + 48px);
+  margin-inline: -24px;
+  padding-inline: 24px;
+  vertical-align: top;
+  transition:
+    background-color 300ms var(--ease),
+    box-shadow 300ms var(--ease);
 }
 
-.home .targets-row [data-target-word] {
-  transition: color 600ms var(--e2);
+.home .compare-code pre.astro-code .line.is-lit {
+  background: color-mix(in oklab, var(--i-cyan) 16%, transparent);
+  box-shadow: inset 3px 0 0 var(--i-cyan);
 }
 
-.home .targets-row [data-target-word].is-hot {
-  color: var(--h-brand);
+.home .compare-code pre.astro-code .line[data-part] {
+  cursor: pointer;
 }
 
-.home .targets-sep {
-  color: var(--h-line-strong);
-  font-weight: 400;
+.home .compare-code pre.astro-code .line[data-part]:hover:not(.is-lit) {
+  background: color-mix(in oklab, var(--i-cyan) 8%, transparent);
 }
 
-@media (min-width: 768px) {
-  .home .targets-row {
-    font-size: 4.5rem;
-    gap: 0 24px;
+/* The sample wraps its long lines. A wrapped line continues four characters past where the line began. */
+
+.home .compare-source pre.astro-code {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.home .compare-source pre.astro-code .line {
+  padding-left: calc(24px + (var(--indent, 0) + 4) * 1ch);
+  text-indent: calc((var(--indent, 0) + 4) * -1ch);
+}
+
+.home .compare-notes {
+  display: grid;
+  border-bottom: 1px solid var(--i-line);
+}
+
+/* The notes share one grid cell, so the window keeps the height of the longest note. */
+
+.home .compare-note {
+  grid-area: 1 / 1;
+  margin: 0;
+  padding: 12px 16px;
+  color: var(--i-bright);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  text-wrap: pretty;
+  transition: opacity 300ms var(--ease);
+}
+
+.home .compare-note[hidden] {
+  display: block;
+  visibility: hidden;
+  opacity: 0;
+}
+
+.home .compare-note code {
+  background: var(--i-cell);
+  color: var(--i-bright);
+}
+
+.home .compare-scroll {
+  max-height: 420px;
+  overflow: auto;
+}
+
+@media (min-width: 1280px) {
+  .home .compare-scroll {
+    max-height: 560px;
   }
 }
 
+.home .compare-scroll:focus-visible {
+  outline: 2px solid var(--i-cyan);
+  outline-offset: -2px;
+}
 
+.home .compare-scroll pre.astro-code {
+  width: max-content;
+  min-width: 100%;
+  overflow: visible;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+}
 
-/* 02 Bento of live visuals */
+/* Bento of live visuals */
 
 .home .bento {
   display: grid;
@@ -937,8 +944,7 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .home .bento-card.is-wide,
-  .home .bento-guides {
+  .home .bento-card.is-wide {
     grid-column: span 2;
   }
 }
@@ -948,8 +954,8 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .home .bento-guides {
-    grid-column: span 1;
+  .home .bento-pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -1014,6 +1020,69 @@
 .home .bento-body p code {
   background: var(--i-cell);
   color: var(--i-bright);
+}
+
+/* The one mention of the sample game, a row under the pair of cards */
+
+.home .sample {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid var(--h-line);
+  border-radius: 16px;
+  color: var(--h-fg);
+  text-decoration: none;
+  transition: border-color 300ms var(--ease);
+}
+
+.home .sample:hover {
+  border-color: var(--h-brand);
+}
+
+.home .sample img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.home .sample-copy {
+  display: grid;
+  gap: 4px;
+  font-size: 1rem;
+  line-height: 1.5rem;
+  text-wrap: pretty;
+}
+
+.home .sample-label {
+  color: var(--h-muted);
+  font-family: var(--h-mono);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.home .sample .pill {
+  grid-column: 1 / -1;
+  align-self: center;
+  justify-self: start;
+}
+
+@media (min-width: 640px) {
+  .home .sample {
+    grid-template-columns: 128px minmax(0, 1fr) auto;
+    gap: 24px;
+  }
+
+  .home .sample .pill {
+    grid-column: auto;
+    margin-right: 12px;
+  }
 }
 
 /* Visuals: shared */
@@ -1739,7 +1808,7 @@
   color: var(--h-brand);
 }
 
-/* 03 Steps */
+/* Setup steps */
 
 .home .steps {
   margin: 0;
@@ -1791,7 +1860,7 @@
   min-width: 0;
 }
 
-/* 04 Performance */
+/* Performance */
 
 .home .perf {
   display: grid;
@@ -1815,9 +1884,19 @@
   letter-spacing: -0.06em;
 }
 
+.home .perf-number small {
+  margin-left: 8px;
+  font-size: 2.25rem;
+  letter-spacing: -0.03em;
+}
+
 @media (min-width: 1024px) {
   .home .perf-number {
     font-size: 8rem;
+  }
+
+  .home .perf-number small {
+    font-size: 3rem;
   }
 }
 
@@ -1923,16 +2002,19 @@
 }
 
 .home .bar-label {
-  display: block;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
 }
 
 .home .bar-tag {
-  margin-left: 8px;
   color: var(--h-muted);
   font-family: var(--h-mono);
   font-size: 0.75rem;
   line-height: 1rem;
   font-weight: 400;
+  white-space: nowrap;
 }
 
 .home .bar {
@@ -1950,8 +2032,14 @@
   transform-origin: left center;
 }
 
-.home .is-baseline .bar-fill {
-  background: var(--h-line-strong);
+/* Archevolt's row carries the brand color and a heavier name. The references are neutral. */
+
+.home .is-reference .bar-fill {
+  background: var(--h-edge);
+}
+
+.home .perf-chart tbody tr:not(.is-reference) th {
+  font-weight: 700;
 }
 
 .home .num {
@@ -1961,122 +2049,7 @@
   white-space: nowrap;
 }
 
-/* 05 Arcade */
-
-.home .arcade {
-  display: grid;
-  gap: 40px;
-  padding: 24px;
-  border: 1px solid var(--i-cell);
-  border-radius: 24px;
-  background: var(--i-deep);
-  color: var(--i-bright);
-}
-
-@media (min-width: 768px) {
-  .home .arcade {
-    padding: 48px;
-  }
-}
-
-@media (min-width: 1024px) {
-  .home .arcade {
-    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-    gap: 48px;
-    align-items: center;
-  }
-}
-
-.home .arcade-copy {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 24px;
-  min-width: 0;
-}
-
-.home .arcade-copy p {
-  margin: 0;
-  color: var(--i-text);
-  font-size: 1.125rem;
-  line-height: 1.75rem;
-  text-wrap: pretty;
-}
-
-.home .arcade-screen {
-  position: relative;
-  display: block;
-  overflow: hidden;
-  border: 1px solid var(--i-line);
-  border-radius: 12px;
-}
-
-.home .arcade-screen img {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-.home .callout {
-  position: absolute;
-  width: 0;
-  height: 0;
-}
-
-.home .callout-ring {
-  position: absolute;
-  top: -16px;
-  left: -16px;
-  width: 32px;
-  height: 32px;
-  border: 1.5px solid var(--i-amber);
-  border-radius: 9999px;
-  opacity: 0;
-  transform: scale(0.6);
-  transition:
-    opacity 400ms var(--e2),
-    transform 800ms var(--e);
-}
-
-.home .callout-tag {
-  position: absolute;
-  top: -10px;
-  left: 24px;
-  padding: 2px 8px;
-  border: 1px solid var(--i-amber);
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.8);
-  color: var(--i-amber);
-  font-family: var(--h-mono);
-  font-size: 10px;
-  line-height: 16px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  opacity: 0;
-  transform: translateX(-8px);
-  filter: blur(4px);
-  transition:
-    opacity 400ms var(--e2),
-    transform 800ms var(--e),
-    filter 500ms var(--e2);
-}
-
-.home .callout.is-end .callout-tag {
-  top: -40px;
-  right: -16px;
-  left: auto;
-  transform: translateY(8px);
-}
-
-.home .callout.is-on .callout-ring,
-.home .callout.is-on .callout-tag {
-  opacity: 1;
-  transform: none;
-  filter: none;
-}
-
-/* 06 FAQ */
+/* FAQ */
 
 @media (min-width: 1024px) {
   .home .faq-layout {
@@ -2139,7 +2112,7 @@
   place-items: center;
   width: 24px;
   height: 24px;
-  border: 1px solid var(--h-line-strong);
+  border: 1px solid var(--h-edge);
   border-radius: 9999px;
   font-size: 12px;
   transition: transform 500ms var(--ease);
@@ -2157,6 +2130,14 @@
   font-size: 1rem;
   line-height: 1.5rem;
   text-wrap: pretty;
+}
+
+.home .faq-item p a {
+  color: var(--h-fg);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--h-brand);
+  text-underline-offset: 4px;
 }
 
 /* Final call to action */
@@ -2224,6 +2205,14 @@
 .home .final-panel .hero-actions {
   position: relative;
   margin-top: 40px;
+}
+
+/* The panel's padding leaves a phone too little room for the whole command at the usual size. */
+
+@media (max-width: 479px) {
+  .home .final-panel .install {
+    font-size: 0.75rem;
+  }
 }
 
 /* Motion: entrances, enabled once the script runs */

@@ -2,10 +2,9 @@
 import arrowRight from "@phosphor-icons/core/assets/bold/arrow-right-bold.svg?raw";
 import check from "@phosphor-icons/core/assets/bold/check-bold.svg?raw";
 import copy from "@phosphor-icons/core/assets/bold/copy-bold.svg?raw";
-import lightning from "@phosphor-icons/core/assets/fill/lightning-fill.svg?raw";
 import plus from "@phosphor-icons/core/assets/bold/plus-bold.svg?raw";
 
-const icons = { "arrow-right": arrowRight, check, copy, lightning, plus } as const;
+const icons = { "arrow-right": arrowRight, check, copy, plus } as const;
 
 interface Props {
   name: keyof typeof icons;
